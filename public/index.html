@@ -314,12 +314,13 @@ async function fetchProducts(force) {
     try {
       setStatus("Fetching products from the API…");
       const res = await fetch(UPSTREAM, { cache: "no-store", signal: AbortSignal.timeout(45000) });
-      if (res.ok) { const text = await res.text(); JSON.parse(text); return text; }
+      if (res.ok) { const text = await res.text(); JSON.parse(text); viaSource = "live API"; return text; }
     } catch (e) { console.warn("Direct API fetch failed, using the server copy", e); directError = e.name === "SyntaxError" ? "the API's response was cut off (incomplete JSON)" : e.message; }
   }
   try { return await fetchVia(API, force); }
   catch (e) { throw new Error(`direct: ${directError || "n/a"}; server: ${e.message}`); }
 }
+let viaSource = "live API";
 async function fetchVia(API, force) {
   let last;
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -327,6 +328,9 @@ async function fetchVia(API, force) {
       setStatus(`Direct load failed, trying the server copy (attempt ${attempt} of 2)…`);
       const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store", signal: AbortSignal.timeout(60000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
+      viaSource = res.headers.get("x-source") === "snapshot"
+        ? `backup copy from ${new Date(res.headers.get("x-fetched-at")).toLocaleString()} (the live API is cutting its response off right now)`
+        : `live API via server, fetched ${new Date(res.headers.get("x-fetched-at") || Date.now()).toLocaleTimeString()}`;
       return await res.text();
     } catch (e) {
       last = e;
@@ -340,8 +344,8 @@ async function load(force) {
   try {
     const text = await fetchProducts(force);
     const data = JSON.parse(text);
-    ingest(data, "live API");
-    saveSnapshot(text);
+    ingest(data, viaSource);
+    if (!viaSource.startsWith("backup")) saveSnapshot(text);
   } catch (e) {
     console.error(e);
     const snap = await loadSnapshot();

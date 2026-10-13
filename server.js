@@ -12,7 +12,11 @@ const CACHE_MS = 5 * 60 * 1000; // the upstream is slow and sometimes cuts off; 
 const PUBLIC = path.join(__dirname, "public");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
 
-let cache = { at: 0, body: null };
+// Backup copy of the product list (from the user's 2026-10-13 upload), served only when the
+// live API can't be read and nothing fresher has been fetched yet.
+const SNAPSHOT = path.join(__dirname, "data-snapshot.json");
+const SNAPSHOT_AT = "2026-10-13T17:40:23Z";
+let cache = { at: 0, body: null, snapshot: false };
 let inflight = null;
 
 // Some upstream protection rejects bare server requests, so look like a normal browser call.
@@ -105,13 +109,18 @@ async function fetchUpstream() {
 
 async function products(force) {
   if (!force && cache.body && Date.now() - cache.at < CACHE_MS) return cache.body;
+  // Already on the backup copy: answer right away and let the background loop keep trying.
+  if (!force && cache.snapshot) return cache.body;
   // Share one upstream call between concurrent requests.
-  inflight ||= fetchUpstream().then(body => { cache = { at: Date.now(), body }; }).finally(() => { inflight = null; });
+  inflight ||= fetchUpstream().then(body => { cache = { at: Date.now(), body, snapshot: false }; }).finally(() => { inflight = null; });
   try {
     await inflight;
   } catch (e) {
     // Upstream down or slow: serve the last good copy rather than failing the page.
-    if (!cache.body) throw e;
+    if (!cache.body) {
+      try { cache = { at: Date.parse(SNAPSHOT_AT), body: fs.readFileSync(SNAPSHOT, "utf8"), snapshot: true }; }
+      catch { throw e; }
+    }
     console.warn(`Serving cached products from ${new Date(cache.at).toISOString()}: ${e.message}`);
   }
   return cache.body;
@@ -122,7 +131,8 @@ http.createServer(async (req, res) => {
   if (url.pathname === "/api/products") {
     try {
       const body = await products(url.searchParams.has("refresh"));
-      res.writeHead(200, { "content-type": "application/json", "x-fetched-at": new Date(cache.at).toISOString() });
+      res.writeHead(200, { "content-type": "application/json", "x-fetched-at": new Date(cache.at).toISOString(),
+        "x-source": cache.snapshot ? "snapshot" : "live", "access-control-expose-headers": "x-fetched-at, x-source" });
       res.end(body);
     } catch (e) {
       console.error(`/api/products failed: ${e.message}`);
@@ -144,4 +154,8 @@ http.createServer(async (req, res) => {
   console.log(`Dashboard on :${PORT}`);
   // Warm the cache at boot so the first visitor after a restart doesn't wait on the upstream API.
   products(true).then(() => console.log("Products cache warmed"), e => console.warn(`Warm-up failed: ${e.message}`));
+  // Keep trying in the background so a good copy is ready whenever the API answers in full.
+  setInterval(() => {
+    if (cache.snapshot || Date.now() - cache.at > CACHE_MS) products(true).catch(() => {});
+  }, 2 * 60 * 1000).unref();
 });
