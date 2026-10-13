@@ -24,15 +24,20 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Plain https + gzip instead of fetch: the upstream sometimes drops the connection mid-body
 // ("terminated"), and a compressed transfer is ~4x smaller, so it finishes before that happens.
-function getOnce() {
+function getOnce(gzip) {
   return new Promise((resolve, reject) => {
-    const req = (API.startsWith("https:") ? https : http).get(API, { headers: { ...HEADERS, "accept-encoding": "gzip, deflate", connection: "close" }, timeout: 45000 }, res => {
+    const headers = { ...HEADERS, "accept-encoding": gzip ? "gzip, deflate" : "identity", connection: "close" };
+    const req = (API.startsWith("https:") ? https : http).get(API, { headers, timeout: 45000 }, res => {
+      let raw = 0;
+      res.on("data", c => { raw += c.length; });
+      const info = () => `status ${res.statusCode}, ${raw} bytes received of ${res.headers["content-length"] || "unknown"}, encoding ${res.headers["content-encoding"] || "none"}, server ${res.headers.server || "?"}`;
       const enc = res.headers["content-encoding"];
       const stream = enc === "gzip" ? res.pipe(zlib.createGunzip()) : enc === "deflate" ? res.pipe(zlib.createInflate()) : res;
       const chunks = [];
       stream.on("data", c => chunks.push(c));
-      stream.on("error", reject);
-      res.on("aborted", () => reject(new Error("upstream closed the connection mid-response")));
+      stream.on("error", e => reject(new Error(`${e.message} (${info()})`)));
+      res.on("aborted", () => reject(new Error(`upstream closed the connection mid-response (${info()})`)));
+      res.on("error", e => reject(new Error(`${e.message} (${info()})`)));
       stream.on("end", () => {
         const body = Buffer.concat(chunks).toString("utf8");
         if (res.statusCode !== 200) return reject(new Error(`Upstream HTTP ${res.statusCode}: ${body.slice(0, 200).replace(/\s+/g, " ")}`));
@@ -49,7 +54,8 @@ async function fetchUpstream() {
   let last;
   for (let attempt = 1; attempt <= 6; attempt++) {
     try {
-      const t = Date.now(), body = await getOnce();
+      // Alternate gzip and plain transfers in case one of them is what the upstream trips on.
+      const t = Date.now(), body = await getOnce(attempt % 2 === 1);
       console.log(`Products fetched in ${Date.now() - t}ms (${body.length} bytes, attempt ${attempt})`);
       return body;
     } catch (e) {

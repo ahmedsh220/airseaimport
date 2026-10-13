@@ -304,7 +304,17 @@ const idb = (mode, fn) => new Promise((resolve, reject) => {
 const saveSnapshot = text => idb("readwrite", s => s.put({ at: Date.now(), text }, "products")).catch(() => {});
 const loadSnapshot = () => idb("readonly", s => s.get("products")).catch(() => null);
 
+const UPSTREAM = "https://hub.fragrancewholesalerusa.com/api/open/products";
 async function fetchProducts(force) {
+  let last;
+  try { return await fetchVia(API, force); } catch (e) { last = e; }
+  // Our server couldn't get it: try the API straight from the browser (works if the API allows it).
+  if (API !== UPSTREAM) {
+    try { const res = await fetch(UPSTREAM, { cache: "no-store" }); if (res.ok) return await res.text(); } catch {}
+  }
+  throw last;
+}
+async function fetchVia(API, force) {
   let last;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
