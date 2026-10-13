@@ -18,65 +18,69 @@
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
-           padding: 14px 24px; background: var(--panel); }
+           padding: 14px 24px 0; background: var(--panel); }
   header h1 { margin: 0; font-size: 18px; }
   .meta { color: var(--muted); font-size: 12px; }
+  nav.pages { display: flex; flex-wrap: wrap; gap: 2px; padding: 10px 24px 0; background: var(--panel); }
+  nav.pages button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px;
+                     font-weight: 600; color: var(--muted); }
+  nav.pages button.active { color: var(--accent); border-bottom-color: var(--accent); background: none; }
   .filters { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
              padding: 10px 24px; background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
   .filters .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .filters label.t { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  main { padding: 20px 24px 48px; max-width: 1440px; margin: 0 auto; }
+  label.t { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  main { padding: 20px 24px 48px; max-width: 1480px; margin: 0 auto; }
   button, input, select { font: inherit; color: var(--text); background: var(--panel);
          border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
   button { cursor: pointer; } button:hover { border-color: var(--accent); }
-  button.active, .seg button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
   .seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; }
   .seg button:first-child { border-radius: 6px 0 0 6px; margin: 0; } .seg button:last-child { border-radius: 0 6px 6px 0; }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
-  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
-         cursor: pointer; text-align: left; transition: border-color .1s, background .1s; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; cursor: pointer; text-align: left; }
   .kpi:hover { border-color: var(--accent); }
   .kpi.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
   .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
   .kpi .value { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
   .kpi .sub { color: var(--muted); font-size: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; margin-top: 20px; }
   .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
   .card h2 { margin: 0 0 4px; font-size: 15px; }
   p.hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
-  .chart { position: relative; height: 300px; }
+  .chart { position: relative; height: 320px; }
   .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
   .toolbar input[type=search] { flex: 1; min-width: 220px; }
-  .tablewrap { overflow: auto; max-height: 620px; border: 1px solid var(--border); border-radius: 8px; }
+  .tablewrap { overflow: auto; max-height: 640px; border: 1px solid var(--border); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
   th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
   th.l, td.l { text-align: left; }
-  td.prod { text-align: left; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
-  td.prod b { font-weight: 600; margin-right: 6px; }
-  td.prod span { color: var(--muted); }
+  td.prod { text-align: left; max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+  td.prod b { font-weight: 600; margin-right: 6px; } td.prod span { color: var(--muted); }
   th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; font-weight: 600; z-index: 1; }
   th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover td { background: var(--accent-soft); }
+  tbody tr { cursor: pointer; } tbody tr:hover td { background: var(--accent-soft); }
   .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
   .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--accent-soft); color: var(--accent);
           border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12px; }
   .chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
+  details.assume { margin-bottom: 12px; } details.assume summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .assume table { width: auto; margin-top: 8px; } .assume td, .assume th { padding: 4px 8px; }
+  .assume input[type=number] { width: 80px; padding: 3px 6px; }
   #status { padding: 40px; text-align: center; color: var(--muted); }
   #status .err { color: var(--bad); margin-bottom: 12px; }
   dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
-           width: min(860px, calc(100vw - 32px)); max-height: 86vh; padding: 0; }
+           width: min(900px, calc(100vw - 32px)); max-height: 86vh; padding: 0; }
   dialog::backdrop { background: rgb(0 0 0 / .4); }
   dialog .head { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 16px 20px;
-                 border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
+                 border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 2; }
   dialog .body { padding: 16px 20px; }
   dialog h3 { margin: 0; font-size: 16px; } dialog h4 { margin: 18px 0 8px; font-size: 13px; }
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
   .facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
   .facts span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-  @media (max-width: 600px) { main, header, .filters { padding-left: 16px; padding-right: 16px; } .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 600px) { main, header, .filters, nav.pages { padding-left: 16px; padding-right: 16px; } }
 </style>
 </head>
 <body>
@@ -92,6 +96,7 @@
     <button id="csv">Export table CSV</button>
   </div>
 </header>
+<nav class="pages" id="pages"></nav>
 
 <div class="filters">
   <div class="group">
@@ -110,10 +115,8 @@
     <input type="date" id="from" aria-label="From"> <span class="muted">to</span> <input type="date" id="to" aria-label="To">
   </div>
   <div class="group">
-    <label class="t" for="cat">Category</label>
-    <select id="cat"><option value="">All</option></select>
-    <label class="t" for="tier">Tier</label>
-    <select id="tier"><option value="">All</option></select>
+    <label class="t" for="cat">Category</label><select id="cat"><option value="">All</option></select>
+    <label class="t" for="tier">Tier</label><select id="tier"><option value="">All</option></select>
   </div>
   <div class="group"><span class="muted" id="inRange"></span></div>
 </div>
@@ -122,41 +125,19 @@
   <div id="status">Fetching products…</div>
   <div id="app" hidden>
     <section class="kpis" id="kpis"></section>
-
-    <section class="card" id="tableCard" style="margin-bottom:20px">
+    <section class="card" id="tableCard">
       <div class="tabs" id="tabs"></div>
       <p class="hint" id="tabHint"></p>
+      <div id="assumeSlot"></div>
       <div class="toolbar">
         <input type="search" id="q" placeholder="Look up SKU, product name, UPC…">
-        <select id="vendorPick" hidden></select>
+        <select id="picker" hidden></select>
         <span id="chipSlot"></span>
         <span class="muted" id="count"></span>
       </div>
       <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
     </section>
-
-    <section class="grid">
-      <div class="card">
-        <h2>Projected sales by channel (next 60 days)</h2>
-        <p class="hint">Sum of the *_60_days projections. Click a bar to list SKUs for that channel.</p>
-        <div class="chart"><canvas id="chChannels"></canvas></div>
-      </div>
-      <div class="card">
-        <h2>Top 15 sellers (last 90 days)</h2>
-        <p class="hint">Units sold. Click a bar for product detail.</p>
-        <div class="chart"><canvas id="chTop"></canvas></div>
-      </div>
-      <div class="card">
-        <h2>Stock health</h2>
-        <p class="hint">SKUs by days of cover (on hand ÷ 90-day daily sales rate). Click a bar to filter.</p>
-        <div class="chart"><canvas id="chCover"></canvas></div>
-      </div>
-      <div class="card">
-        <h2>Cheapest vendor wins</h2>
-        <p class="hint">How often each vendor has the lowest price on a SKU. Click a bar for its price list.</p>
-        <div class="chart"><canvas id="chVendors"></canvas></div>
-      </div>
-    </section>
+    <section class="grid" id="charts"></section>
   </div>
 </main>
 
@@ -166,20 +147,40 @@
 <script>
 const API = location.protocol.startsWith("http") ? "/api/products" : "https://hub.fragrancewholesalerusa.com/api/open/products";
 
-const CHANNELS = { amaz: "Amazon", tt: "TikTok", wmt: "Walmart", shn: "Shein", joma: "Jomashop", noc: "NocNoc",
-  fair: "Faire", temu: "Temu", wholesale: "Wholesale", shopify: "Shopify", ebay: "eBay", posh: "Poshmark",
-  whatnot: "Whatnot", seebiz: "SeeBiz" };
+// 60-day projection columns, keyed by the API prefix.
+const CHANNELS = { tt: "TikTok", amaz: "Amazon", wmt: "Walmart", fair: "Faire", wholesale: "Wholesale", noc: "NocNoc",
+  joma: "Jomashop", shn: "Shein", temu: "Temu", ebay: "eBay", shopify: "Shopify", whatnot: "Whatnot", posh: "Poshmark", seebiz: "SeeBiz" };
 const VENDORS = { perfume_trading_center: "Perfume Trading Center", perfume_plus: "Perfume Plus", al_hussein: "Al Hussein",
   br: "B&R", edge: "Edge", fragsense: "Fragsense", french_perfumes: "French Perfumes", giftexpress: "GiftExpress",
   legacy: "Legacy", lux: "Lux", perfume_center_america: "Perfume Center America", perfume_of_the_world: "Perfume of the World",
-  azmere: "Azmere", tahir: "Tahir", nandanson: "Nandanson", bs: "BS", mb: "MB", universal: "Universal", tjs: "TJs" };
+  azmere: "Azmere", tahir: "Tahir", nandanson: "Nandanson", bs: "BS", mb: "MB", universal: "Universal", tjs: "TJs",
+  et_perfumes: "ET Perfumes", miami_trading: "Miami Trading", cosmo: "Cosmo" };
 const vendorDateKey = k => k === "perfume_trading_center" ? "perfume_trading_center__date" : k + "_date";
+// Listing platforms with a live price in the API. fee = marketplace fee share, ship = we pay shipping.
+const PLATFORM_DEFAULTS = {
+  // TikTok 27% matches the profit_value the API reports (sell − 27% − final_cost). Others are placeholders to confirm.
+  tiktok: { label: "TikTok", ch: "tt", fee: 27, ship: false },
+  amazon: { label: "Amazon", ch: "amaz", fee: 15, ship: false },
+  nocnoc: { label: "NocNoc", ch: "noc", fee: 15, ship: false },
+  shopify: { label: "Shopify", ch: "shopify", fee: 3, ship: false },
+};
+const MIN_MARGIN_DEFAULT = 18;
+let PLATFORMS = loadAssumptions();
+function loadAssumptions() {
+  const base = JSON.parse(JSON.stringify(PLATFORM_DEFAULTS));
+  try { const s = JSON.parse(localStorage.getItem("asi-platforms-v2") || "{}"); for (const k in s) if (base[k]) Object.assign(base[k], s[k]); } catch {}
+  return base;
+}
+let MIN_MARGIN = (() => { try { return +localStorage.getItem("asi-minmargin") || MIN_MARGIN_DEFAULT; } catch { return MIN_MARGIN_DEFAULT; } })();
+function saveAssumptions() {
+  try { localStorage.setItem("asi-platforms-v2", JSON.stringify(PLATFORMS)); localStorage.setItem("asi-minmargin", MIN_MARGIN); } catch {}
+}
 
-const num = v => { if (v === null || v === undefined || v === "" || v === false || v === true) return null;
+const num = v => { if (v === null || v === undefined || v === "" || typeof v === "boolean") return null;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,]/g, "")); return isFinite(n) ? n : null; };
 const n0 = v => num(v) ?? 0;
 const pos = v => { const n = num(v); return n != null && n > 0 ? n : null; };
-// API dates come as ISO, "YYYY-MM-DD HH:MM:SS" or "MM/DD/YYYY".
+const json = v => { if (!v) return null; if (typeof v === "object") return v; try { return JSON.parse(v); } catch { return null; } };
 function parseDate(v) {
   if (!v) return null;
   const s = String(v), us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
@@ -188,38 +189,85 @@ function parseDate(v) {
 }
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fmtInt = v => v == null ? "—" : Math.round(v).toLocaleString();
+const fmt1 = v => v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
 const fmtUsd = v => v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2 });
 const fmtPct = v => v == null ? "—" : (v * 100).toFixed(1) + "%";
 const fmtDate = v => { const d = v instanceof Date ? v : parseDate(v); return d ? d.toLocaleDateString() : "—"; };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const $ = id => document.getElementById(id);
+const sum = (list, f) => list.reduce((a, r) => a + (f(r) || 0), 0);
 
-let all = [], rows = [], charts = {}, view = "all", sortKey = null, sortAsc = false, vendor = "", channel = "", coverBucket = null;
-
+// ---------- per-product metrics ----------
 function enrich(p) {
-  const qoh = n0(p.live_qoh ?? p.qoh);
-  const cost = pos(p.actual_cost) ?? pos(p.cost) ?? pos(p.purchase_cost);
-  const s90 = n0(p.sales_90_days), daily = s90 / 90;
+  const qoh = n0(p.live_qoh ?? p.qoh), onOrder = n0(p.in_progress), caseQty = pos(p.qty_in_case);
+  // Purchase cost: actual_cost when set, else purchase_cost, else cost. Landed = final_cost from the API.
+  const cost = pos(p.actual_cost) ?? pos(p.purchase_cost) ?? pos(p.cost);
+  const land = pos(p.final_cost) ?? (cost != null ? cost + n0(p.box_cost) : null);
+  const s90 = n0(p.sales_90_days), dayAvg = s90 / 90, hiDayAvg = n0(p.sales_highest_avg_90_days) / 90;
   const ch = {}; let ch60 = 0;
   for (const k in CHANNELS) { const v = n0(p[k + "_60_days"]); ch[k] = v; ch60 += v; }
   const prices = [];
   for (const k in VENDORS) { const v = pos(p[k]); if (v != null) prices.push({ k, price: v, date: parseDate(p[vendorDateKey(k)]) }); }
   prices.sort((a, b) => a.price - b.price);
   const best = prices[0] || null;
+  const need = days => dayAvg > 0 ? Math.max(0, Math.ceil(dayAvg * days - qoh - onOrder)) : 0;
+  const order120 = need(120);
   const ret = n0(p.returns_90_days), sepCount = n0(p.sales_sep_count), sepRev = n0(p.sales_sep_sale_price), sepShip = n0(p.sales_sep_shipping_price_we_paid);
-  return { ...p, _qoh: qoh, _cost: cost, _s90: s90, _cover: daily > 0 ? Math.max(0, qoh) / daily : null, _ch: ch, _ch60: ch60,
-    _value: cost != null ? cost * Math.max(0, qoh) : 0, _prices: prices, _best: best?.price ?? null, _bestVendor: best?.k ?? null,
-    _saving: cost != null && best ? cost - best.price : null, _vendorCount: prices.length,
-    _returns: ret, _returnRate: s90 > 0 ? ret / s90 : null, _inProg: n0(p.in_progress),
-    _reorderQty: daily > 0 ? Math.max(0, Math.ceil(Math.max(ch60, daily * 60) - qoh - n0(p.in_progress))) : 0,
+  const customers = json(p.qb_customer_sales) || {};
+  const r = { ...p, _qoh: qoh, _inProg: onOrder, _caseQty: caseQty, _cost: cost, _land: land, _ship: pos(p.ship_cost),
+    _s90: s90, _dayAvg: dayAvg, _hiDayAvg: hiDayAvg, _monthly: dayAvg * 30,
+    _cover: dayAvg > 0 ? Math.max(0, qoh) / dayAvg : null, _stock28: dayAvg * 28,
+    _trigger28: dayAvg > 0 && qoh + onOrder < dayAvg * 28, _order120: order120, _order150: need(150),
+    _cases120: caseQty && order120 ? Math.ceil(order120 / caseQty) : null, _needMonth: need(30),
+    _ch: ch, _ch60: ch60, _value: land != null ? land * Math.max(0, qoh) : 0,
+    _prices: prices, _best: best?.price ?? null, _bestVendor: best?.k ?? null, _vendorCount: prices.length,
+    _saving: cost != null && best ? cost - best.price : null,
+    _returns: ret, _returnRate: s90 > 0 ? ret / s90 : null,
     _sepCount: sepCount, _sepRev: sepRev, _sepShip: sepShip,
-    _sepMargin: sepCount && cost != null ? sepRev + sepShip - cost * sepCount : null,
+    _sepMargin: sepCount && land != null ? sepRev + sepShip - land * sepCount : null,
+    _customers: Object.fromEntries(Object.entries(customers).map(([k, v]) => [k, n0(v)])),
     _dates: { updated_at: parseDate(p.updated_at), last_ordered_date: parseDate(p.last_ordered_date),
       first_added_date: parseDate(p.first_added_date), in_progress_date: parseDate(p.in_progress_date),
       vendor_date: prices.map(x => x.date).filter(Boolean) } };
+  r._sepMarginPct = r._sepMargin != null && sepRev ? r._sepMargin / sepRev : null;
+  r._listing = listingPrices(p);
+  computeProfit(r);
+  return r;
+}
+function listingPrices(p) {
+  const igloo = json(p.igloo) || {}, tt = json(p.igloo_tiktok), az = json(p.igloo_amazon), noc = json(p.igloo_nocnoc), sh = json(p.igloo_shopify);
+  const ttSku = tt?.skus?.[0];
+  return {
+    tiktok: { price: pos(igloo.tiktok?.sell_price) ?? pos(p.tiktok_same_price), list: pos(ttSku?.price?.tax_exclusive_price),
+      compLow: pos(igloo.tiktok?.comp_low), compBest: pos(igloo.tiktok?.comp_best), stock: ttSku?.inventory?.[0]?.quantity ?? null },
+    amazon: { price: pos(az?.price), stock: num(az?.quantity), status: az?.status },
+    nocnoc: { price: pos(noc?.price), stock: num(noc?.available_quantity) },
+    shopify: { price: pos(sh?.price), list: pos(sh?.compare_at_price), stock: num(sh?.inventory_quantity) },
+  };
+}
+// Profit per unit = price − fee% × price − landed cost − shipping we pay.
+function computeProfit(r) {
+  r._pf = {};
+  let units = 0, profit60 = 0, rev60 = 0;
+  for (const [k, cfg] of Object.entries(PLATFORMS)) {
+    const L = r._listing[k], price = L.price;
+    if (price == null || r._land == null) { r._pf[k] = { price, profit: null, margin: null }; continue; }
+    const fee = price * cfg.fee / 100, ship = cfg.ship ? (r._ship ?? 0) : 0;
+    const profit = price - fee - r._land - ship, proj = r._ch[cfg.ch] || 0;
+    r._pf[k] = { price, fee, ship, profit, margin: profit / price, proj, profit60: profit * proj };
+    units += proj; profit60 += profit * proj; rev60 += price * proj;
+  }
+  const ms = Object.values(r._pf).filter(x => x.margin != null);
+  r._pfListings = ms.length;
+  r._pfMin = ms.length ? Math.min(...ms.map(x => x.margin)) : null;
+  r._pfBestPlat = ms.length ? Object.keys(r._pf).filter(k => r._pf[k].margin != null).sort((a, b) => r._pf[b].margin - r._pf[a].margin)[0] : null;
+  r._profit60 = units ? profit60 : null; r._rev60 = units ? rev60 : null;
+  r._margin60 = rev60 ? profit60 / rev60 : null;
+  for (const k in PLATFORMS) { r["_pm_" + k] = r._pf[k].margin; r["_pp_" + k] = r._pf[k].profit; r["_pr_" + k] = r._pf[k].price; }
 }
 
 // ---------- loading ----------
+let all = [], rows = [], charts = {}, page = "sales", view = null, sortKey = null, sortAsc = false, pick = "", channel = "", coverBucket = null, tableList = [];
 async function load(force) {
   setStatus("Fetching products…");
   try {
@@ -247,7 +295,6 @@ function fillSelect(id, values) {
 }
 function setStatus(html) { const s = $("status"); s.innerHTML = html; s.hidden = false; }
 
-// ---------- global filters ----------
 function setPreset(p) {
   const t = new Date(), today = dayKey(t);
   if (p === "all") { $("from").value = ""; $("to").value = ""; }
@@ -256,7 +303,6 @@ function setPreset(p) {
   markPreset(p); apply();
 }
 function markPreset(p) { document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("active", b.dataset.p === p)); }
-
 function apply() {
   const field = $("dateField").value, from = $("from").value, to = $("to").value, cat = $("cat").value, tier = $("tier").value;
   const inRange = d => d && (!from || dayKey(d) >= from) && (!to || dayKey(d) <= to);
@@ -268,181 +314,324 @@ function apply() {
     return Array.isArray(d) ? d.some(inRange) : inRange(d);
   });
   $("inRange").textContent = `${rows.length.toLocaleString()} of ${all.length.toLocaleString()} products match`;
-  renderKpis(); renderCharts(); renderTabs(); renderTable();
+  render();
 }
 
-// ---------- views (tiles + tabs share these) ----------
+// ---------- cell formatters ----------
 const P = ["_prod", "Product"];
 const coverPill = v => { if (v == null) return "<span class=muted>—</span>";
-  const c = v < 14 ? "bad" : v < 30 ? "warn" : v < 180 ? "good" : "muted"; return `<span class="pill ${c}">${Math.round(v)}d</span>`; };
-const savePill = v => v == null ? "—" : `<span class="${v > 0.005 ? "good" : v < -0.005 ? "bad" : ""}">${fmtUsd(v)}</span>`;
+  const c = v < 14 ? "bad" : v < 28 ? "warn" : v < 180 ? "good" : "muted"; return `<span class="pill ${c}">${Math.round(v)}d</span>`; };
+const money = v => v == null ? "—" : `<span class="${v > 0.005 ? "good" : v < -0.005 ? "bad" : ""}">${fmtUsd(v)}</span>`;
+const marginPill = v => v == null ? "<span class=muted>—</span>"
+  : `<span class="pill ${v < 0 ? "bad" : v * 100 < MIN_MARGIN ? "warn" : "good"}">${fmtPct(v)}</span>`;
 const vName = k => VENDORS[k] || "—";
-const STD = [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt],
-  ["_cover", "Days cover", coverPill], ["_best", "Best vendor price", fmtUsd], ["_bestVendor", "Best vendor", vName], ["pricing_category", "Tier"]];
-const COVER = [["Out (selling)", r => r._qoh <= 0 && r._s90 > 0, "--bad"], ["< 30 days", r => r._qoh > 0 && r._cover != null && r._cover < 30, "--warn"],
-  ["30–90 days", r => r._cover != null && r._cover >= 30 && r._cover < 90, "--good"], ["90–180 days", r => r._cover != null && r._cover >= 90 && r._cover < 180, "--accent"],
+const yes = v => v ? `<span class="pill bad">order</span>` : "";
+const COVER = [["Out (selling)", r => r._qoh <= 0 && r._s90 > 0, "--bad"], ["< 28 days", r => r._qoh > 0 && r._cover != null && r._cover < 28, "--warn"],
+  ["28–90 days", r => r._cover != null && r._cover >= 28 && r._cover < 90, "--good"], ["90–180 days", r => r._cover != null && r._cover >= 90 && r._cover < 180, "--accent"],
   ["180+ days", r => r._cover != null && r._cover >= 180, "--muted"], ["No sales", r => r._qoh > 0 && r._s90 === 0, "--border"]];
 
+// Wholesale/QuickBooks customers are grouped; online platforms keep their own bar.
+const customerGroup = name => /ONLINE|\(ASI\)|WHATNOT/i.test(name) ? name.replace(/ ONLINE.*| \(ASI\)/gi, "").replace(/\/.*/, "").trim() : "Wholesale customers";
+
+// ---------- pages ----------
+const PAGES = {
+  sales: {
+    label: "Sales & Inventory",
+    tiles: [
+      ["top", "Sold (90 days)", r => fmtInt(sum(r, x => x._s90)), r => `${fmt1(sum(r, x => x._dayAvg))} / day`],
+      ["channels", "Projected (60 days)", r => fmtInt(sum(r, x => x._ch60)), () => "all platforms"],
+      ["reorder", "Reorder now", r => fmtInt(r.filter(x => x._trigger28).length), () => "under 28 days of stock"],
+      ["reorder", "Units to order", r => fmtInt(sum(r.filter(x => x._trigger28), x => x._order120)), r => `${fmtInt(sum(r.filter(x => x._trigger28), x => x._cases120))} cases (120-day max)`],
+      ["out", "Out of stock", r => fmtInt(r.filter(x => x._qoh <= 0 && x._s90 > 0).length), () => "0 on hand, still selling"],
+      ["stock", "Units on hand", r => fmtInt(sum(r, x => Math.max(0, x._qoh))), r => `${fmtInt(r.filter(x => x._qoh > 0).length)} SKUs in stock`],
+      ["stock", "Stock value", r => fmtUsd(sum(r, x => x._value)), () => "on hand × landed cost"],
+      ["customers", "Top platform", r => topCustomer(r)[0] || "—", r => `${fmtInt(topCustomer(r)[1])} units sold`],
+    ],
+    views: ["reorder", "top", "out", "stock", "channels", "customers"],
+    charts: ["chCustomers", "chTop", "chCover", "chChannels"],
+  },
+  profit: {
+    label: "Profit & Margin",
+    tiles: [
+      ["margins", "Projected 60-day profit", r => fmtUsd(sum(r, x => x._profit60)), r => `on ${fmtUsd(sum(r, x => x._rev60))} revenue`],
+      ["margins", "Blended margin", r => { const rev = sum(r, x => x._rev60); return fmtPct(rev ? sum(r, x => x._profit60) / rev : null); }, () => "weighted by 60-day projection"],
+      ["low", `Below ${MIN_MARGIN}% margin`, r => fmtInt(r.filter(lowMargin).length), () => "at least one platform"],
+      ["losing", "Losing money", r => fmtInt(r.filter(x => x._pfMin != null && x._pfMin < 0).length), () => "negative profit on a platform"],
+      ["sept", "September revenue", r => fmtUsd(sum(r, x => x._sepRev)), r => `margin ${fmtUsd(sum(r, x => x._sepMargin ?? 0))}`],
+    ],
+    views: ["margins", "platform", "low", "losing", "sept"],
+    charts: ["chPlatformProfit", "chMarginDist"],
+  },
+  vendors: {
+    label: "Vendors & Costs",
+    tiles: [
+      ["vendors", "Vendors with prices", r => fmtInt(vendorSummary(r).length), r => `${fmtInt(r.filter(x => x._vendorCount > 0).length)} products priced`],
+      ["costcheck", "Cheaper vendor available", r => fmtInt(r.filter(x => x._saving > 0.005).length), () => "cheapest price below our cost"],
+      ["costcheck", "Savings on 60-day need", r => fmtUsd(sum(r, x => x._saving > 0 ? x._saving * x._ch60 : 0)), () => "if bought from the cheapest vendor"],
+      ["multi", "Multi-vendor products", r => fmtInt(r.filter(x => x._vendorCount > 1).length), () => "two or more vendors quote"],
+      ["nocost", "No vendor price", r => fmtInt(r.filter(x => x._vendorCount === 0).length), () => "no quote on file"],
+    ],
+    views: ["vendors", "costcheck", "multi", "nocost"],
+    charts: ["chVendors"],
+  },
+  other: {
+    label: "Other reports",
+    tiles: [
+      ["dead", "Dead stock", r => fmtInt(r.filter(VIEWS.dead.filter).length), r => fmtUsd(sum(r.filter(VIEWS.dead.filter), x => x._value)) + " tied up"],
+      ["returns", "Return rate (90d)", r => { const s = sum(r, x => x._s90); return fmtPct(s ? sum(r, x => x._returns) / s : null); }, r => `${fmtInt(sum(r, x => x._returns))} units returned`],
+      ["onorder", "On order", r => fmtInt(r.filter(VIEWS.onorder.filter).length), r => `${fmtInt(sum(r, x => x._inProg))} units`],
+      ["all", "All products", r => fmtInt(r.length), () => "full product list"],
+    ],
+    views: ["dead", "returns", "onorder", "all"],
+    charts: [],
+  },
+};
+const lowMargin = r => Object.values(r._pf).some(x => x.margin != null && x.margin * 100 < MIN_MARGIN);
+function topCustomer(list) {
+  const t = {}; list.forEach(r => { for (const [k, v] of Object.entries(r._customers)) { const g = customerGroup(k); t[g] = (t[g] || 0) + v; } });
+  return Object.entries(t).sort((a, b) => b[1] - a[1])[0] || [];
+}
+
 const VIEWS = {
-  all: { label: "All products", hint: "Every product matching the filters above.", filter: () => true, sort: "_s90", cols: STD },
-  stock: { label: "In stock", hint: "Products with units on hand, by inventory value.", filter: r => r._qoh > 0, sort: "_value",
-    cols: [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_value", "Value", fmtUsd], ["_s90", "Sold 90d", fmtInt], ["_cover", "Days cover", coverPill]] },
-  top: { label: "Top sellers", hint: "Ranked by units sold in the last 90 days.", filter: r => r._s90 > 0, sort: "_s90",
-    cols: [P, ["_s90", "Sold 90d", fmtInt], ["sales_highest_avg_90_days", "Best 90d avg", v => fmtInt(num(v))], ["_ch60", "Proj. 60d", fmtInt],
-      ["_qoh", "On hand", fmtInt], ["_cover", "Days cover", coverPill], ["_cost", "Cost", fmtUsd], ["_returnRate", "Return rate", fmtPct]] },
-  out: { label: "Out of stock", hint: "Nothing on hand but sold in the last 90 days: lost sales.", filter: r => r._qoh <= 0 && r._s90 > 0, sort: "_s90",
-    cols: [P, ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt], ["_inProg", "On order", fmtInt], ["_best", "Best price", fmtUsd],
-      ["_bestVendor", "Best vendor", vName], ["last_ordered_date", "Last ordered", fmtDate], ["last_ordered_name", "From", v => esc(v || "—")]] },
-  reorder: { label: "Reorder", hint: "Selling products under 30 days of cover. Suggested qty = the larger of the 60-day projection or 60 days at the 90-day rate, minus on hand and on order.",
-    filter: r => r._s90 > 0 && (r._cover == null || r._cover < 30), sort: "_cover", asc: true,
-    cols: [P, ["_qoh", "On hand", fmtInt], ["_inProg", "On order", fmtInt], ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt],
-      ["_cover", "Days cover", coverPill], ["_reorderQty", "Suggest qty", fmtInt], ["_best", "Best price", fmtUsd], ["_bestVendor", "Best vendor", vName],
-      ["last_ordered_date", "Last ordered", fmtDate]] },
-  dead: { label: "Dead stock", hint: "In stock with zero sales in 90 days, by tied-up value.", filter: r => r._qoh > 0 && r._s90 === 0, sort: "_value",
-    cols: [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_value", "Value", fmtUsd], ["first_added_date", "First added", fmtDate], ["last_ordered_date", "Last ordered", fmtDate]] },
-  onorder: { label: "On order", hint: "Products with in-progress purchase orders.", filter: r => r._inProg > 0, sort: "_inProg",
-    cols: [P, ["_inProg", "On order", fmtInt], ["in_progress_vendor", "Vendor", v => esc(v || "—")], ["in_progress_cost", "PO cost", v => fmtUsd(num(v))],
-      ["in_progress_date", "Ordered", fmtDate], ["_qoh", "On hand", fmtInt], ["_s90", "Sold 90d", fmtInt]] },
-  vendors: { label: "Vendors", hint: "", filter: () => true, sort: "_vprice", asc: true, cols: [] },
-  channels: { label: "Channel mix", hint: "Projected units per channel over the next 60 days.", filter: r => r._ch60 > 0, sort: "_ch60",
+  reorder: { label: "Reorder plan", sort: "_order120",
+    hint: "Matches the Excel ordering columns. Day avg = 90-day sales ÷ 90. Listed when on hand + on order is below 28 days of stock. Order qty fills 120 days (150 shown for reference).",
+    filter: r => r._trigger28,
+    cols: [P, ["_cover", "Days of stock", coverPill], ["_qoh", "Live inv", fmtInt], ["_inProg", "On order", fmtInt], ["_dayAvg", "Day avg", fmt1],
+      ["_hiDayAvg", "Highest day avg", fmt1], ["_monthly", "Monthly sold", fmtInt], ["_stock28", "28 days stock", fmtInt], ["_trigger28", "Trigger 28d", yes],
+      ["_needMonth", "Need for month", fmtInt], ["_order120", "Order (120d)", fmtInt], ["_cases120", "Cases", fmtInt], ["_order150", "Order (150d)", fmtInt],
+      ["_best", "Cheapest price", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["current_vendor", "Current vendor"]] },
+  top: { label: "Top sellers", sort: "_s90", hint: "Ranked by units sold in the last 90 days.", filter: r => r._s90 > 0,
+    cols: [P, ["_s90", "Sold 90d", fmtInt], ["_dayAvg", "Day avg", fmt1], ["_ch60", "Proj. 60d", fmtInt], ["_qoh", "Live inv", fmtInt],
+      ["_cover", "Days of stock", coverPill], ["_returnRate", "Return rate", fmtPct], ["_margin60", "Blended margin", marginPill]] },
+  out: { label: "Out of stock", sort: "_s90", hint: "Nothing on hand but sold in the last 90 days.", filter: r => r._qoh <= 0 && r._s90 > 0,
+    cols: [P, ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt], ["_inProg", "On order", fmtInt], ["_order120", "Order (120d)", fmtInt],
+      ["_best", "Cheapest price", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["last_ordered_date", "Last received", fmtDate], ["last_ordered_name", "From"]] },
+  stock: { label: "Stock on hand", sort: "_value", hint: "Products with units on hand, by stock value at landed cost.", filter: r => r._qoh > 0,
+    cols: [P, ["_qoh", "Live inv", fmtInt], ["_caseQty", "Qty in case", fmtInt], ["_land", "Landed cost", fmtUsd], ["_value", "Stock value", fmtUsd],
+      ["_s90", "Sold 90d", fmtInt], ["_cover", "Days of stock", coverPill], ["box_no", "Box #"]] },
+  channels: { label: "Platform projections", sort: "_ch60", hint: "Projected units per platform over the next 60 days.", filter: r => r._ch60 > 0,
     cols: [P, ["_ch60", "Total", fmtInt], ...Object.entries(CHANNELS).map(([k, l]) => ["_ch." + k, l, v => v ? fmtInt(v) : "<span class=muted>·</span>"])] },
-  returns: { label: "Returns", hint: "Products with returns in the last 90 days, by return rate.", filter: r => r._returns > 0, sort: "_returnRate",
+  customers: { label: "Sales by customer", sort: "units", custom: true,
+    hint: "Units sold by customer and platform from QuickBooks (qb_customer_sales). Click a row to see its products." },
+  margins: { label: "Margin by platform", sort: "_profit60",
+    hint: "Profit per unit = listing price − platform fee − landed cost − shipping we pay. Edit fees under Assumptions.",
+    filter: r => r._pfListings > 0,
+    cols: () => [P, ["_land", "Landed cost", fmtUsd], ...Object.entries(PLATFORMS).flatMap(([k, c]) => [["_pr_" + k, c.label + " price", fmtUsd], ["_pm_" + k, c.label + " margin", marginPill]]),
+      ["_profit60", "60-day profit", money], ["_margin60", "Blended", marginPill]] },
+  platform: { label: "Platform detail", sort: "_pfprofit60", picker: "platform",
+    hint: "One platform's listing economics per product, like the Excel PRICE / FEE / SHIP / PFT / PFT% blocks.",
+    filter: r => r._listing[pick]?.price != null,
+    cols: () => [P, ["_pfprice", "Price", fmtUsd], ...(pick === "tiktok" ? [["_pflist", "Display price", fmtUsd], ["_pfcomp", "Comp best", fmtUsd]] : []),
+      ["_pffee", "Fee", fmtUsd], ["_pfship", "Ship", fmtUsd], ["_land", "Landed cost", fmtUsd], ["_pfprofit", "Profit", money],
+      ["_pfmargin", "PFT %", marginPill], ["_pfproj", "60 days", fmtInt], ["_pfprofit60", "60-day profit", money], ["_pfstock", "Listed qty", fmtInt]] },
+  low: { label: `Below min margin`, sort: "_pfMin", asc: true, hint: "Products under the minimum margin on at least one platform.", filter: lowMargin,
+    cols: () => VIEWS.margins.cols() },
+  losing: { label: "Losing money", sort: "_pfMin", asc: true, hint: "Negative profit on at least one platform.", filter: r => r._pfMin != null && r._pfMin < 0,
+    cols: () => VIEWS.margins.cols() },
+  sept: { label: "September sales", sort: "_sepRev", hint: "Actual September orders. Margin = sale price + shipping we paid − landed cost × units.", filter: r => r._sepCount > 0,
+    cols: [P, ["_sepCount", "Units", fmtInt], ["_sepRev", "Revenue", fmtUsd], ["_sepShip", "Shipping paid", fmtUsd], ["_land", "Landed cost", fmtUsd],
+      ["_sepMargin", "Margin", money], ["_sepMarginPct", "Margin %", marginPill]] },
+  vendors: { label: "Vendor price lists", picker: "vendor", custom: true, hint: "" },
+  costcheck: { label: "Cost check", sort: "_saving", hint: "Our purchase cost vs. the cheapest vendor quote. Green savings means a cheaper vendor exists.",
+    filter: r => r._cost != null,
+    cols: [P, ["actual_cost", "Actual cost", v => fmtUsd(pos(v))], ["purchase_cost", "Purchase cost", v => fmtUsd(pos(v))], ["cost", "Cost", v => fmtUsd(pos(v))],
+      ["_land", "Landed cost", fmtUsd], ["_best", "Cheapest price", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["_saving", "Saving / unit", money],
+      ["current_vendor", "Current vendor"], ["last_ordered_price", "Last paid", v => fmtUsd(num(v))], ["_vendorCount", "# vendors", fmtInt]] },
+  multi: { label: "Multi-vendor", sort: "_vendorCount", hint: "Products quoted by two or more vendors.", filter: r => r._vendorCount > 1,
+    cols: [P, ["_vendorCount", "# vendors", fmtInt], ["_best", "Cheapest", fmtUsd], ["_bestVendor", "Cheapest vendor", vName],
+      ["_spread", "Spread", fmtUsd], ["_cost", "Our cost", fmtUsd], ["_ch60", "Proj. 60d", fmtInt]] },
+  nocost: { label: "No vendor price", sort: "_s90", hint: "Products with no vendor quote on file.", filter: r => r._vendorCount === 0,
+    cols: [P, ["_cost", "Our cost", fmtUsd], ["current_vendor", "Current vendor"], ["_s90", "Sold 90d", fmtInt], ["_qoh", "Live inv", fmtInt]] },
+  dead: { label: "Dead stock", sort: "_value", hint: "In stock with zero sales in 90 days, by tied-up value.", filter: r => r._qoh > 0 && r._s90 === 0,
+    cols: [P, ["_qoh", "Live inv", fmtInt], ["_land", "Landed cost", fmtUsd], ["_value", "Value", fmtUsd], ["first_added_date", "First received", fmtDate], ["last_ordered_date", "Last received", fmtDate]] },
+  returns: { label: "Returns", sort: "_returnRate", hint: "Products with returns in the last 90 days, by return rate.", filter: r => r._returns > 0,
     cols: [P, ["_returns", "Returned 90d", fmtInt], ["_s90", "Sold 90d", fmtInt], ["_returnRate", "Return rate", fmtPct]] },
-  sept: { label: "September sales", hint: "September orders. Margin = sale price + shipping we paid − cost × units.", filter: r => r._sepCount > 0, sort: "_sepRev",
-    cols: [P, ["_sepCount", "Units", fmtInt], ["_sepRev", "Revenue", fmtUsd], ["_sepShip", "Shipping paid", fmtUsd], ["_cost", "Unit cost", fmtUsd],
-      ["_sepMargin", "Margin", savePill], ["_sepMarginPct", "Margin %", fmtPct]] },
+  onorder: { label: "On order", sort: "_inProg", hint: "Products with in-progress purchase orders.", filter: r => r._inProg > 0,
+    cols: [P, ["_inProg", "On order", fmtInt], ["in_progress_vendor", "Vendor"], ["in_progress_cost", "PO cost", v => fmtUsd(num(v))],
+      ["in_progress_date", "Ordered", fmtDate], ["_qoh", "Live inv", fmtInt], ["_s90", "Sold 90d", fmtInt]] },
+  all: { label: "All products", sort: "_s90", hint: "Every product matching the filters.", filter: () => true,
+    cols: [P, ["_qoh", "Live inv", fmtInt], ["_cost", "Cost", fmtUsd], ["_land", "Landed", fmtUsd], ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt],
+      ["_cover", "Days of stock", coverPill], ["_best", "Cheapest", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["pricing_category", "Tier"], ["category", "Category"]] },
 };
 
-// Vendors tab: summary of every vendor, or one vendor's price list when picked.
-function vendorSummary() {
+function vendorSummary(list = rows) {
   return Object.entries(VENDORS).map(([k, label]) => {
-    const listed = rows.filter(r => r._prices.some(p => p.k === k));
-    const wins = rows.filter(r => r._bestVendor === k).length;
+    const listed = list.filter(r => r._prices.some(p => p.k === k));
+    const wins = list.filter(r => r._bestVendor === k).length;
     const diffs = listed.map(r => r._cost != null ? (r._prices.find(p => p.k === k).price - r._cost) / r._cost : null).filter(v => v != null);
     const dates = listed.map(r => r._prices.find(p => p.k === k).date).filter(Boolean).sort((a, b) => b - a);
-    return { _vk: k, _vname: label, _vlisted: listed.length, _vwins: wins, _vwinRate: listed.length ? wins / listed.length : null,
-      _vavgDiff: diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : null, _vlast: dates[0] || null };
-  }).filter(v => v._vlisted > 0);
+    return { _key: k, _name: label, _listed: listed.length, _wins: wins, _winRate: listed.length ? wins / listed.length : null,
+      _avgDiff: diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : null, _last: dates[0] || null };
+  }).filter(v => v._listed > 0);
 }
-const VENDOR_SUMMARY_COLS = [["_vname", "Vendor", v => `<b>${esc(v)}</b>`], ["_vlisted", "Products priced", fmtInt], ["_vwins", "Cheapest on", fmtInt],
-  ["_vwinRate", "Win rate", fmtPct], ["_vavgDiff", "Avg vs our cost", v => v == null ? "—" : `<span class="${v < 0 ? "good" : "bad"}">${v > 0 ? "+" : ""}${fmtPct(v)}</span>`],
-  ["_vlast", "Latest price date", fmtDate]];
-function vendorListCols() {
-  return [P, ["_vprice", vName(vendor) + " price", fmtUsd], ["_vdate", "Price date", fmtDate], ["_cost", "Our cost", fmtUsd],
-    ["_vdiff", "vs our cost", v => v == null ? "—" : `<span class="${v < -0.005 ? "good" : v > 0.005 ? "bad" : ""}">${v > 0 ? "+" : ""}${fmtUsd(v)}</span>`],
-    ["_vrank", "Rank", v => v == null ? "—" : v === 1 ? `<span class="pill good">cheapest</span>` : "#" + v],
-    ["_best", "Lowest overall", fmtUsd], ["_bestVendor", "Lowest vendor", vName], ["_qoh", "On hand", fmtInt], ["_s90", "Sold 90d", fmtInt]];
+const pctDiff = v => v == null ? "—" : `<span class="${v < 0 ? "good" : "bad"}">${v > 0 ? "+" : ""}${fmtPct(v)}</span>`;
+function customerSummary() {
+  const t = {};
+  rows.forEach(r => { for (const [k, v] of Object.entries(r._customers)) { if (!v) continue; (t[k] ||= { _key: k, _name: k, _group: customerGroup(k), units: 0, skus: 0 }); t[k].units += v; t[k].skus++; } });
+  return Object.values(t);
 }
 
-function currentCols() { return view === "vendors" ? (vendor ? vendorListCols() : VENDOR_SUMMARY_COLS) : VIEWS[view].cols; }
-
-function currentRows() {
+// Rows + columns for the current view, after search/filters.
+function tableModel() {
   const v = VIEWS[view], q = $("q").value.trim().toLowerCase();
-  let list;
-  if (view === "vendors" && !vendor) {
-    list = vendorSummary();
-    if (q) list = list.filter(r => r._vname.toLowerCase().includes(q));
-  } else {
-    list = rows.filter(v.filter);
-    if (view === "vendors") list = list.filter(r => r._prices.some(p => p.k === vendor)).map(r => {
-      const i = r._prices.findIndex(p => p.k === vendor), p = r._prices[i];
+  let cols, list;
+  if (view === "vendors" && !pick) {
+    cols = [["_name", "Vendor", x => `<b>${esc(x)}</b>`], ["_listed", "Products priced", fmtInt], ["_wins", "Cheapest on", fmtInt],
+      ["_winRate", "Win rate", fmtPct], ["_avgDiff", "Avg vs our cost", pctDiff], ["_last", "Latest price date", fmtDate]];
+    list = vendorSummary().filter(r => !q || r._name.toLowerCase().includes(q));
+    return finish(list, cols, "_wins", false);
+  }
+  if (view === "customers" && !pick) {
+    cols = [["_name", "Customer / platform", x => `<b>${esc(x)}</b>`], ["_group", "Group"], ["units", "Units sold", fmtInt], ["skus", "Products", fmtInt]];
+    list = customerSummary().filter(r => !q || r._name.toLowerCase().includes(q));
+    return finish(list, cols, "units", false);
+  }
+  if (view === "vendors") {
+    cols = [P, ["_vprice", vName(pick) + " price", fmtUsd], ["_vdate", "Price date", fmtDate], ["_cost", "Our cost", fmtUsd], ["_vdiff", "vs our cost", x => money(x == null ? null : -x)],
+      ["_vrank", "Rank", x => x == null ? "—" : x === 1 ? `<span class="pill good">cheapest</span>` : "#" + x],
+      ["_best", "Cheapest overall", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["_qoh", "Live inv", fmtInt], ["_s90", "Sold 90d", fmtInt]];
+    list = rows.filter(r => r._prices.some(p => p.k === pick)).map(r => {
+      const i = r._prices.findIndex(p => p.k === pick), p = r._prices[i];
       return { ...r, _vprice: p.price, _vdate: p.date, _vdiff: r._cost != null ? p.price - r._cost : null, _vrank: i + 1 };
     });
-    if (view === "sept") list = list.map(r => ({ ...r, _sepMarginPct: r._sepMargin != null && r._sepRev ? r._sepMargin / r._sepRev : null }));
-    if (channel) list = list.filter(r => r._ch[channel] > 0);
-    if (coverBucket != null) list = list.filter(COVER[coverBucket][1]);
-    if (q) list = list.filter(r => [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q)));
+    return finish(search(list, q), cols, "_vprice", true);
   }
-  const def = view === "vendors" && !vendor ? "_vwins" : channel ? "_ch." + channel : v.sort;
-  const key = sortKey ?? def, asc = sortKey ? sortAsc : (view === "vendors" && !vendor ? false : !!v.asc && !channel);
-  return { list: list.sort((a, b) => cmp(get(a, key), get(b, key), asc)), key, asc };
+  if (view === "customers") {
+    cols = [P, ["_cunits", pick + " units", fmtInt], ["_s90", "Sold 90d (all)", fmtInt], ["_qoh", "Live inv", fmtInt], ["_cost", "Our cost", fmtUsd]];
+    list = rows.filter(r => r._customers[pick] > 0).map(r => ({ ...r, _cunits: r._customers[pick] }));
+    return finish(search(list, q), cols, "_cunits", false);
+  }
+  cols = typeof v.cols === "function" ? v.cols() : v.cols;
+  list = rows.filter(v.filter);
+  if (view === "platform") list = list.map(r => { const f = r._pf[pick], L = r._listing[pick];
+    return { ...r, _pfprice: f.price, _pflist: L.list, _pfcomp: L.compBest, _pffee: f.fee, _pfship: f.ship, _pfprofit: f.profit, _pfmargin: f.margin, _pfproj: f.proj, _pfprofit60: f.profit60, _pfstock: L.stock }; });
+  if (view === "multi") list = list.map(r => ({ ...r, _spread: r._prices.at(-1).price - r._prices[0].price }));
+  if (channel) list = list.filter(r => r._ch[channel] > 0);
+  if (coverBucket != null) list = list.filter(COVER[coverBucket][1]);
+  return finish(search(list, q), cols, channel ? "_ch." + channel : v.sort, channel ? false : !!v.asc);
+}
+const search = (list, q) => q ? list.filter(r => [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q))) : list;
+function finish(list, cols, defKey, defAsc) {
+  const key = sortKey ?? defKey, asc = sortKey ? sortAsc : defAsc;
+  return { list: list.sort((a, b) => cmp(get(a, key), get(b, key), asc)), cols, key, asc };
 }
 function cmp(x, y, asc) {
+  if (typeof x === "boolean" || typeof y === "boolean") { x = x ? 1 : 0; y = y ? 1 : 0; }
   if (x instanceof Date || y instanceof Date) { x = x ? +x : null; y = y ? +y : null; }
   const nx = num(x), ny = num(y);
   if (nx != null || ny != null) { if (nx == null) return 1; if (ny == null) return -1; return asc ? nx - ny : ny - nx; }
   return asc ? String(x ?? "").localeCompare(String(y ?? "")) : String(y ?? "").localeCompare(String(x ?? ""));
 }
-const get = (r, k) => k === "_prod" ? r.name : k.startsWith("_ch.") ? r._ch[k.slice(4)] : k === "last_ordered_date" || k === "first_added_date" || k === "in_progress_date" ? parseDate(r[k]) : r[k];
+const DATE_COLS = new Set(["last_ordered_date", "first_added_date", "in_progress_date"]);
+const get = (r, k) => k === "_prod" ? r.name : k.startsWith("_ch.") ? r._ch[k.slice(4)] : DATE_COLS.has(k) ? parseDate(r[k]) : r[k];
 
 // ---------- rendering ----------
-const TILES = [
-  ["all", "Products", r => fmtInt(r.length), r => `${fmtInt(r.filter(x => x._qoh > 0).length)} in stock`],
-  ["stock", "Inventory value", r => fmtUsd(sum(r, x => x._value)), r => `${fmtInt(sum(r, x => x._qoh))} units on hand`],
-  ["top", "Sold (90 days)", r => fmtInt(sum(r, x => x._s90)), r => `${fmtInt(sum(r, x => x._s90) / 90)} / day`],
-  ["channels", "Projected (60 days)", r => fmtInt(sum(r, x => x._ch60)), () => "across all channels"],
-  ["out", "Out of stock", r => fmtInt(r.filter(VIEWS.out.filter).length), () => "0 on hand, still selling"],
-  ["reorder", "Reorder now", r => fmtInt(r.filter(VIEWS.reorder.filter).length), () => "under 30 days of cover"],
-  ["dead", "Dead stock", r => fmtInt(r.filter(VIEWS.dead.filter).length), r => fmtUsd(sum(r.filter(VIEWS.dead.filter), x => x._value)) + " tied up"],
-  ["onorder", "On order", r => fmtInt(r.filter(VIEWS.onorder.filter).length), r => `${fmtInt(sum(r, x => x._inProg))} units`],
-  ["returns", "Return rate (90d)", r => { const s = sum(r, x => x._s90); return fmtPct(s ? sum(r, x => x._returns) / s : null); }, r => `${fmtInt(sum(r, x => x._returns))} units returned`],
-  ["sept", "September revenue", r => fmtUsd(sum(r, x => x._sepRev)), r => `margin ${fmtUsd(sum(r, x => x._sepMargin ?? 0))}`],
-];
-const sum = (list, f) => list.reduce((a, r) => a + (f(r) || 0), 0);
-
+function render() {
+  if (!view || !PAGES[page].views.includes(view)) view = PAGES[page].views[0];
+  $("pages").innerHTML = Object.entries(PAGES).map(([k, p]) => `<button data-p="${k}" class="${k === page ? "active" : ""}">${p.label}</button>`).join("");
+  renderKpis(); renderTabs(); renderTable(); renderCharts();
+}
 function renderKpis() {
-  $("kpis").innerHTML = TILES.map(([k, l, v, s]) =>
-    `<button class="kpi ${k === view && !channel && coverBucket == null ? "active" : ""}" data-v="${k}"><div class="label">${l}</div><div class="value">${v(rows)}</div><div class="sub">${s(rows)}</div></button>`).join("");
+  $("kpis").innerHTML = PAGES[page].tiles.map(([k, l, v, s], i) =>
+    `<button class="kpi ${k === view && !channel && coverBucket == null && !pick ? "active" : ""}" data-v="${k}"><div class="label">${l}</div><div class="value">${esc(v(rows))}</div><div class="sub">${esc(s(rows))}</div></button>`).join("");
 }
 function renderTabs() {
-  $("tabs").innerHTML = Object.entries(VIEWS).map(([k, v]) => `<button data-v="${k}" class="${k === view ? "active" : ""}">${v.label}</button>`).join("");
-  const vp = $("vendorPick"); vp.hidden = view !== "vendors";
-  vp.innerHTML = `<option value="">All vendors (summary)</option>` + Object.entries(VENDORS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
-  vp.value = vendor;
+  $("tabs").innerHTML = PAGES[page].views.map(k => `<button data-v="${k}" class="${k === view ? "active" : ""}">${VIEWS[k].label}</button>`).join("");
+  const pk = $("picker"), v = VIEWS[view];
+  pk.hidden = !(view === "vendors" || view === "platform" || view === "customers");
+  if (view === "vendors") pk.innerHTML = `<option value="">All vendors (summary)</option>` + Object.entries(VENDORS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+  if (view === "customers") pk.innerHTML = `<option value="">All customers (summary)</option>` + customerSummary().sort((a, b) => b.units - a.units).map(c => `<option>${esc(c._key)}</option>`).join("");
+  if (view === "platform") { if (!PLATFORMS[pick]) pick = "tiktok"; pk.innerHTML = Object.entries(PLATFORMS).map(([k, c]) => `<option value="${k}">${c.label}</option>`).join(""); }
+  pk.value = pick;
+  $("assumeSlot").innerHTML = page === "profit" ? assumptionsHtml() : "";
+}
+function assumptionsHtml() {
+  return `<details class="assume"><summary>Assumptions: platform fees, shipping and minimum margin (click to edit)</summary>
+    <table><thead><tr><th class="l">Platform</th><th>Fee %</th><th>We pay ship</th></tr></thead><tbody>
+    ${Object.entries(PLATFORMS).map(([k, c]) => `<tr><td class="l">${c.label}</td><td><input type="number" step="0.5" data-fee="${k}" value="${c.fee}"></td>
+      <td><input type="checkbox" data-ship="${k}" ${c.ship ? "checked" : ""}></td></tr>`).join("")}
+    <tr><td class="l">Minimum margin %</td><td><input type="number" step="1" id="minMargin" value="${MIN_MARGIN}"></td><td><button id="resetAssume">Reset</button></td></tr>
+    </tbody></table><p class="hint">Ship uses the product's ship_cost. Landed cost uses final_cost from the API. Saved in this browser.</p></details>`;
 }
 function renderTable() {
-  const { list, key, asc } = currentRows(), cols = currentCols();
+  const { list, cols, key, asc } = tableModel(), v = VIEWS[view];
   $("tabHint").textContent = view === "vendors"
-    ? (vendor ? `${vName(vendor)}'s price list. Green means cheaper than our cost. Click a product to compare all vendors.` : "Each vendor's coverage and how competitive they are. Click a vendor to open its price list.")
-    : VIEWS[view].hint;
-  const chips = [channel && `Channel: ${CHANNELS[channel]}`, coverBucket != null && `Stock: ${COVER[coverBucket][0]}`].filter(Boolean);
+    ? (pick ? `${vName(pick)}'s price list. Green means cheaper than our cost. Click a product to compare all vendors.` : "Each vendor's coverage and how competitive they are. Click a vendor to open its price list.")
+    : view === "customers" && pick ? `Products bought by ${pick}.` : v.hint;
+  const chips = [channel && `Platform: ${CHANNELS[channel]}`, coverBucket != null && `Stock: ${COVER[coverBucket][0]}`].filter(Boolean);
   $("chipSlot").innerHTML = chips.map(c => `<span class="chip">${esc(c)}<button data-clear title="Clear">×</button></span>`).join(" ");
   $("count").textContent = `${list.length.toLocaleString()} rows`;
-  $("q").placeholder = view === "vendors" && !vendor ? "Find a vendor…" : "Look up SKU, product name, UPC…";
   document.querySelector("#tbl thead").innerHTML = "<tr>" + cols.map(([k, l]) =>
-    `<th data-k="${k}" class="${k === key ? "sorted" + (asc ? " asc" : "") : ""} ${k === "_prod" || k === "_vname" ? "l" : ""}">${esc(l)}</th>`).join("") + "</tr>";
+    `<th data-k="${k}" class="${k === key ? "sorted" + (asc ? " asc" : "") : ""} ${k === "_prod" || k === "_name" ? "l" : ""}">${esc(l)}</th>`).join("") + "</tr>";
   document.querySelector("#tbl tbody").innerHTML = list.slice(0, 1500).map((r, i) => `<tr data-i="${i}">` + cols.map(([k, , f]) =>
     k === "_prod" ? `<td class="prod" title="${esc(r.name)}"><b>${esc(r.sku)}</b><span>${esc(r.name)}</span></td>`
-      : `<td class="${k === "_vname" ? "l" : ""}">${f ? f(get(r, k)) : esc(get(r, k) ?? "—")}</td>`).join("") + "</tr>").join("");
+      : `<td class="${k === "_name" ? "l" : ""}">${f ? f(get(r, k)) : esc(get(r, k) ?? "—")}</td>`).join("") + "</tr>").join("");
   tableList = list;
 }
-let tableList = [];
 
+const CHART_DEFS = {
+  chCustomers: ["Units sold by platform", "Actual units from QuickBooks, wholesale customers grouped. Click a bar to see those sales.", (accent) => {
+    const t = {}; rows.forEach(r => { for (const [k, v] of Object.entries(r._customers)) { const g = customerGroup(k); t[g] = (t[g] || 0) + v; } });
+    const e = Object.entries(t).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    return { type: "bar", data: { labels: e.map(x => x[0]), datasets: [{ data: e.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
+      click: i => { goto("customers"); $("q").value = e[i][0] === "Wholesale customers" ? "" : e[i][0].split(" ")[0]; renderTable(); }, horizontal: true };
+  }],
+  chTop: ["Top 15 sellers (last 90 days)", "Units sold. Click a bar for product detail.", accent => {
+    const top = [...rows].sort((a, b) => b._s90 - a._s90).slice(0, 15), short = s => { s = String(s || ""); return s.length > 24 ? s.slice(0, 23) + "…" : s; };
+    return { type: "bar", data: { labels: top.map(r => `${r.sku} · ${short(r.name)}`), datasets: [{ data: top.map(r => r._s90), backgroundColor: accent, borderRadius: 4 }] },
+      click: i => showDetail(top[i]), horizontal: true, tooltipTitle: i => top[i].name };
+  }],
+  chCover: ["Stock health", "SKUs by days of stock. Click a bar to filter.", () => ({ type: "bar",
+    data: { labels: COVER.map(b => b[0]), datasets: [{ data: COVER.map(b => rows.filter(b[1]).length), backgroundColor: COVER.map(b => css(b[2])), borderRadius: 4 }] },
+    click: i => goto("stock", { coverBucket: i }) })],
+  chChannels: ["Projected sales by platform (next 60 days)", "Sum of the *_60_days projections. Click a bar to list products.", accent => {
+    const e = Object.keys(CHANNELS).map(k => [k, sum(rows, r => r._ch[k])]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+    return { type: "bar", data: { labels: e.map(x => CHANNELS[x[0]]), datasets: [{ data: e.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
+      click: i => goto("channels", { channel: e[i][0] }), horizontal: true };
+  }],
+  chPlatformProfit: ["Projected 60-day profit by platform", "Profit per unit × 60-day projection. Click a bar for that platform's detail.", accent => {
+    const e = Object.entries(PLATFORMS).map(([k, c]) => [k, c.label, sum(rows, r => r._pf[k].profit60)]);
+    return { type: "bar", data: { labels: e.map(x => x[1]), datasets: [{ data: e.map(x => Math.round(x[2])), backgroundColor: e.map(x => x[2] < 0 ? css("--bad") : accent), borderRadius: 4 }] },
+      click: i => { pick = e[i][0]; goto("platform", { keepPick: true }); } };
+  }],
+  chMarginDist: ["Listings by margin", "Every platform listing bucketed by margin %.", () => {
+    const b = [["Loss", -Infinity, 0, "--bad"], [`0–${MIN_MARGIN}%`, 0, MIN_MARGIN, "--warn"], [`${MIN_MARGIN}–30%`, MIN_MARGIN, 30, "--good"], ["30–50%", 30, 50, "--accent"], ["50%+", 50, Infinity, "--muted"]];
+    const ms = rows.flatMap(r => Object.values(r._pf).map(x => x.margin).filter(x => x != null).map(x => x * 100));
+    return { type: "bar", data: { labels: b.map(x => x[0]), datasets: [{ data: b.map(x => ms.filter(m => m >= x[1] && m < x[2]).length), backgroundColor: b.map(x => css(x[3])), borderRadius: 4 }] },
+      click: i => goto(i === 0 ? "losing" : "low") };
+  }],
+  chVendors: ["Cheapest vendor wins", "How often each vendor has the lowest price on a product. Click a bar for its price list.", accent => {
+    const wins = {}; rows.forEach(r => { if (r._bestVendor) wins[r._bestVendor] = (wins[r._bestVendor] || 0) + 1; });
+    const w = Object.entries(wins).sort((a, b) => b[1] - a[1]);
+    return { type: "bar", data: { labels: w.map(x => VENDORS[x[0]]), datasets: [{ data: w.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
+      click: i => { pick = w[i][0]; goto("vendors", { keepPick: true }); }, horizontal: true };
+  }],
+};
 function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function renderCharts() {
-  Object.values(charts).forEach(c => c.destroy());
+  Object.values(charts).forEach(c => c.destroy()); charts = {};
+  const ids = PAGES[page].charts;
+  $("charts").innerHTML = ids.map(id => `<div class="card"><h2>${CHART_DEFS[id][0]}</h2><p class="hint">${CHART_DEFS[id][1]}</p><div class="chart"><canvas id="${id}"></canvas></div></div>`).join("");
+  if (typeof Chart === "undefined") return;
   Chart.defaults.color = css("--muted"); Chart.defaults.borderColor = css("--border");
   const accent = css("--accent");
-  const base = onClick => ({ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
-    onClick: (e, els) => els.length && onClick(els[0].index), onHover: (e, els) => e.native.target.style.cursor = els.length ? "pointer" : "default" });
-
-  const chTot = Object.keys(CHANNELS).map(k => [k, sum(rows, r => r._ch[k])]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-  charts.ch = new Chart($("chChannels"), { type: "bar",
-    data: { labels: chTot.map(x => CHANNELS[x[0]]), datasets: [{ data: chTot.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
-    options: { ...base(i => goto("channels", { channel: chTot[i][0] })), indexAxis: "y" } });
-
-  const top = [...rows].sort((a, b) => b._s90 - a._s90).slice(0, 15);
-  const short = s => { s = String(s || ""); return s.length > 24 ? s.slice(0, 23) + "…" : s; };
-  charts.top = new Chart($("chTop"), { type: "bar",
-    data: { labels: top.map(r => `${r.sku} · ${short(r.name)}`), datasets: [{ data: top.map(r => r._s90), backgroundColor: accent, borderRadius: 4 }] },
-    options: { ...base(i => showDetail(top[i])), indexAxis: "y",
-      plugins: { legend: { display: false }, tooltip: { callbacks: { title: i => top[i[0].dataIndex].name } } } } });
-
-  charts.cover = new Chart($("chCover"), { type: "bar",
-    data: { labels: COVER.map(b => b[0]), datasets: [{ data: COVER.map(b => rows.filter(b[1]).length), backgroundColor: COVER.map(b => css(b[2])), borderRadius: 4 }] },
-    options: base(i => goto("all", { coverBucket: i })) });
-
-  const wins = {}; rows.forEach(r => { if (r._bestVendor) wins[r._bestVendor] = (wins[r._bestVendor] || 0) + 1; });
-  const w = Object.entries(wins).sort((a, b) => b[1] - a[1]);
-  charts.vendors = new Chart($("chVendors"), { type: "bar",
-    data: { labels: w.map(x => VENDORS[x[0]]), datasets: [{ data: w.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
-    options: { ...base(i => goto("vendors", { vendor: w[i][0] })), indexAxis: "y", scales: { y: { ticks: { autoSkip: false } } } } });
+  for (const id of ids) {
+    const d = CHART_DEFS[id][2](accent);
+    charts[id] = new Chart($(id), { type: d.type, data: d.data, options: {
+      responsive: true, maintainAspectRatio: false, animation: false, indexAxis: d.horizontal ? "y" : "x",
+      scales: d.horizontal ? { y: { ticks: { autoSkip: false } } } : {},
+      plugins: { legend: { display: false }, tooltip: d.tooltipTitle ? { callbacks: { title: i => d.tooltipTitle(i[0].dataIndex) } } : {} },
+      onClick: (e, els) => els.length && d.click(els[0].index),
+      onHover: (e, els) => e.native.target.style.cursor = els.length ? "pointer" : "default" } });
+  }
 }
 
 function goto(v, opts = {}) {
-  view = v; sortKey = null; vendor = opts.vendor ?? (v === "vendors" ? vendor : "");
+  const pg = Object.keys(PAGES).find(k => PAGES[k].views.includes(opts.view || v));
+  if (pg && pg !== page) page = pg;
+  view = opts.view || v; sortKey = null; if (!opts.keepPick) pick = view === "platform" ? "tiktok" : "";
   channel = opts.channel || ""; coverBucket = opts.coverBucket ?? null;
-  renderKpis(); renderTabs(); renderTable();
+  render();
   if (opts.scroll !== false) $("tableCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -450,46 +639,64 @@ function goto(v, opts = {}) {
 function showDetail(r) {
   $("dTitle").textContent = r.name || r.sku;
   $("dSub").textContent = [r.sku, r.upc && "UPC " + r.upc, r.category, r.pricing_category && "Tier: " + r.pricing_category, r.current_vendor && "Current vendor: " + r.current_vendor].filter(Boolean).join(" · ");
-  const facts = [["On hand", fmtInt(r._qoh)], ["Our cost", fmtUsd(r._cost)], ["Sold 90d", fmtInt(r._s90)], ["Projected 60d", fmtInt(r._ch60)],
-    ["Days cover", r._cover == null ? "—" : Math.round(r._cover) + "d"], ["On order", fmtInt(r._inProg)], ["Returns 90d", fmtInt(r._returns)],
-    ["Last ordered", `${fmtDate(r.last_ordered_date)}${r.last_ordered_qty ? " · " + r.last_ordered_qty + " @ " + fmtUsd(num(r.last_ordered_price)) : ""}`],
-    ["Last vendor", esc(r.last_ordered_name || "—")], ["TikTok price", fmtUsd(num(r.tiktok_same_price))], ["Ship cost", fmtUsd(num(r.ship_cost))], ["Updated", fmtDate(r.updated_at)]];
+  const facts = [["Live inv", fmtInt(r._qoh)], ["Days of stock", r._cover == null ? "—" : Math.round(r._cover) + "d"], ["Sold 90d", fmtInt(r._s90)], ["Day avg", fmt1(r._dayAvg)],
+    ["Projected 60d", fmtInt(r._ch60)], ["On order", fmtInt(r._inProg)], ["Order (120d)", `${fmtInt(r._order120)}${r._cases120 ? ` · ${r._cases120} cases` : ""}`],
+    ["Actual cost", fmtUsd(pos(r.actual_cost))], ["Purchase cost", fmtUsd(pos(r.purchase_cost))], ["Cost", fmtUsd(pos(r.cost))], ["Landed cost", fmtUsd(r._land)],
+    ["Ship charge", fmtUsd(r._ship)], ["Last received", `${fmtDate(r.last_ordered_date)}${r.last_ordered_qty ? " · " + r.last_ordered_qty + " @ " + fmtUsd(num(r.last_ordered_price)) : ""}`],
+    ["Last vendor", esc(r.last_ordered_name || "—")], ["Returns 90d", fmtInt(r._returns)], ["Updated", fmtDate(r.updated_at)]];
+  const tbl = (head, body) => body ? `<div class="tablewrap"><table><thead><tr>${head.map((h, i) => `<th class="${i ? "" : "l"}">${h}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table></div>` : `<p class="muted">None on file.</p>`;
+  const pf = Object.entries(PLATFORMS).map(([k, c]) => { const f = r._pf[k]; if (f.price == null) return "";
+    return `<tr><td class="l">${c.label}</td><td>${fmtUsd(f.price)}</td><td>${fmtUsd(f.fee)}</td><td>${fmtUsd(f.ship)}</td><td>${money(f.profit)}</td><td>${marginPill(f.margin)}</td><td>${fmtInt(f.proj)}</td></tr>`; }).join("");
   const vrows = r._prices.map((p, i) => `<tr><td class="l">${i === 0 ? "<b>" : ""}${esc(VENDORS[p.k])}${i === 0 ? "</b>" : ""}</td><td>${fmtUsd(p.price)}</td>
-    <td>${r._cost != null ? savePill(r._cost - p.price) : "—"}</td><td>${fmtDate(p.date)}</td></tr>`).join("");
+    <td>${r._cost != null ? money(r._cost - p.price) : "—"}</td><td>${fmtDate(p.date)}</td></tr>`).join("");
   const chRows = Object.entries(CHANNELS).filter(([k]) => r._ch[k] > 0).map(([k, l]) => `<tr><td class="l">${l}</td><td>${fmtInt(r._ch[k])}</td></tr>`).join("");
+  const cust = Object.entries(r._customers).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td class="l">${esc(k)}</td><td>${fmtInt(v)}</td></tr>`).join("");
   $("dBody").innerHTML = `<div class="facts">${facts.map(([l, v]) => `<div><span>${l}</span>${v}</div>`).join("")}</div>
-    <h4>Vendor prices (${r._prices.length})</h4>
-    ${vrows ? `<div class="tablewrap"><table><thead><tr><th class="l">Vendor</th><th>Price</th><th>Saving vs our cost</th><th>Price date</th></tr></thead><tbody>${vrows}</tbody></table></div>` : `<p class="muted">No vendor prices listed.</p>`}
-    <h4>Projected sales by channel (60 days)</h4>
-    ${chRows ? `<div class="tablewrap"><table><tbody>${chRows}</tbody></table></div>` : `<p class="muted">No projections.</p>`}`;
+    <h4>Profit by platform</h4>${tbl(["Platform", "Price", "Fee", "Ship", "Profit", "PFT %", "60 days"], pf)}
+    <h4>Vendor prices (${r._prices.length})</h4>${tbl(["Vendor", "Price", "Saving vs our cost", "Price date"], vrows)}
+    <h4>Units sold by customer</h4>${tbl(["Customer / platform", "Units"], cust)}
+    <h4>Projected sales by platform (60 days)</h4>${tbl(["Platform", "Units"], chRows)}`;
   $("detail").showModal();
 }
 
 function exportCsv() {
-  const { list } = currentRows(), cols = currentCols();
+  const { list, cols } = tableModel();
+  const strip = s => String(s ?? "").replace(/<[^>]*>/g, "");
   const cell = x => { if (x instanceof Date) x = dayKey(x); const s = String(x ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const head = cols.flatMap(c => c[0] === "_prod" ? ["SKU", "Name"] : [c[1]]);
   const body = list.map(r => cols.flatMap(([k]) => k === "_prod" ? [r.sku, r.name] : [k === "_bestVendor" ? VENDORS[r[k]] : get(r, k)]).map(cell).join(","));
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([[head.map(cell).join(","), ...body].join("\n")], { type: "text/csv" }));
-  a.download = `${view}${vendor ? "-" + vendor : ""}-${dayKey(new Date())}.csv`; a.click();
+  a.download = `${view}${pick ? "-" + pick : ""}-${dayKey(new Date())}.csv`.replace(/[^\w.-]+/g, "_"); a.click();
 }
 
 // ---------- events ----------
+$("pages").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; page = b.dataset.p; view = null; pick = ""; channel = ""; coverBucket = null; sortKey = null; render(); });
 $("kpis").addEventListener("click", e => { const b = e.target.closest(".kpi"); if (b) goto(b.dataset.v); });
 $("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) goto(b.dataset.v, { scroll: false }); });
-$("vendorPick").addEventListener("change", e => { vendor = e.target.value; sortKey = null; renderTable(); });
+$("picker").addEventListener("change", e => { pick = e.target.value; sortKey = null; renderKpis(); renderTable(); });
 $("chipSlot").addEventListener("click", e => { if (e.target.closest("[data-clear]")) goto(view, { scroll: false }); });
+$("assumeSlot").addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.fee) PLATFORMS[t.dataset.fee].fee = +t.value || 0;
+  if (t.dataset.ship) PLATFORMS[t.dataset.ship].ship = t.checked;
+  if (t.id === "minMargin") MIN_MARGIN = +t.value || 0;
+  saveAssumptions(); all.forEach(computeProfit); renderKpis(); renderTable(); renderCharts();
+});
+$("assumeSlot").addEventListener("click", e => {
+  if (e.target.id !== "resetAssume") return;
+  PLATFORMS = JSON.parse(JSON.stringify(PLATFORM_DEFAULTS)); MIN_MARGIN = MIN_MARGIN_DEFAULT; saveAssumptions(); all.forEach(computeProfit); render();
+});
 document.querySelector("#tbl thead").addEventListener("click", e => {
   const th = e.target.closest("th"); if (!th) return;
-  const { key, asc } = currentRows();
-  if (th.dataset.k === key) { sortKey = key; sortAsc = !asc; } else { sortKey = th.dataset.k; sortAsc = th.dataset.k === "_prod" || th.dataset.k === "_vname"; }
+  const { key, asc } = tableModel();
+  if (th.dataset.k === key) { sortKey = key; sortAsc = !asc; } else { sortKey = th.dataset.k; sortAsc = th.dataset.k === "_prod" || th.dataset.k === "_name"; }
   renderTable();
 });
 document.querySelector("#tbl tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr"); if (!tr) return;
   const r = tableList[+tr.dataset.i];
-  if (r._vk) { vendor = r._vk; sortKey = null; $("q").value = ""; renderTabs(); renderTable(); } else showDetail(r);
+  if (r._key) { pick = r._key; sortKey = null; $("q").value = ""; renderTabs(); renderTable(); } else showDetail(r);
 });
 $("q").addEventListener("input", renderTable);
 $("presets").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setPreset(b.dataset.p); });
@@ -506,7 +713,6 @@ $("file").addEventListener("change", async e => {
 });
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => all.length && renderCharts());
 
-// Default: products updated today.
 const t0 = dayKey(new Date()); $("from").value = t0; $("to").value = t0; markPreset("today");
 load();
 </script>
