@@ -33,7 +33,8 @@ http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/healthz") { res.writeHead(200); res.end("ok"); return; }
-  const file = path.join(PUBLIC, path.normalize(url.pathname === "/" ? "/index.html" : url.pathname));
+  const route = { "/": "/index.html", "/favicon.ico": "/favicon.svg" }[url.pathname] || url.pathname;
+  const file = path.join(PUBLIC, path.normalize(route));
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
