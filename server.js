@@ -38,7 +38,11 @@ function getOnce(gzip) {
       const chunks = [];
       stream.on("data", c => chunks.push(c));
       stream.on("error", e => reject(new Error(`${e.message} (${info()})`)));
-      res.on("aborted", () => reject(new Error(`upstream closed the connection mid-response (${info()})`)));
+      res.on("aborted", () => {
+        // Show where the API stopped so the record it chokes on can be found.
+        if (!res.headers["content-encoding"]) console.warn(`Cut-off tail: ${Buffer.concat(chunks).toString("utf8").slice(-400)}`);
+        reject(new Error(`upstream closed the connection mid-response (${info()})`));
+      });
       res.on("error", e => reject(new Error(`${e.message} (${info()})`)));
       stream.on("end", () => {
         const body = Buffer.concat(chunks).toString("utf8");
