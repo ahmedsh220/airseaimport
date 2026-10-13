@@ -2,6 +2,7 @@
 const http = require("http");
 const https = require("https");
 const zlib = require("zlib");
+const http2 = require("http2");
 const fs = require("fs");
 const path = require("path");
 
@@ -50,12 +51,42 @@ function getOnce(gzip) {
   });
 }
 
+// Browsers reach the API over HTTP/2, and that works; our HTTP/1.1 requests get cut off by
+// Cloudflare partway through. So ask over HTTP/2 like a browser does.
+function getH2() {
+  return new Promise((resolve, reject) => {
+    const u = new URL(API);
+    const client = http2.connect(u.origin);
+    const fail = e => { client.close(); reject(e); };
+    client.on("error", fail);
+    const req = client.request({ ":path": u.pathname + u.search, ...HEADERS, "accept-encoding": "gzip" });
+    req.setTimeout(60000, () => { req.close(); fail(new Error("HTTP/2 request timed out after 60s")); });
+    let head = {};
+    req.on("response", h => { head = h; });
+    const chunks = [];
+    req.on("data", c => chunks.push(c));
+    req.on("error", fail);
+    req.on("end", () => {
+      client.close();
+      try {
+        let buf = Buffer.concat(chunks);
+        if (head["content-encoding"] === "gzip") buf = zlib.gunzipSync(buf);
+        const body = buf.toString("utf8");
+        if (head[":status"] !== 200) return reject(new Error(`Upstream HTTP/2 ${head[":status"]}: ${body.slice(0, 200)}`));
+        JSON.parse(body);
+        console.log(`HTTP/2 ok; CORS header: ${head["access-control-allow-origin"] || "none"}`);
+        resolve(body);
+      } catch (e) { reject(new Error(`HTTP/2 response unusable: ${e.message} (${chunks.reduce((a, c) => a + c.length, 0)} bytes)`)); }
+    });
+  });
+}
+
 async function fetchUpstream() {
   let last;
   for (let attempt = 1; attempt <= 6; attempt++) {
     try {
       // Alternate gzip and plain transfers in case one of them is what the upstream trips on.
-      const t = Date.now(), body = await getOnce(attempt % 2 === 1);
+      const t = Date.now(), body = API.startsWith("https:") && attempt <= 3 ? await getH2() : await getOnce(attempt % 2 === 1);
       console.log(`Products fetched in ${Date.now() - t}ms (${body.length} bytes, attempt ${attempt})`);
       return body;
     } catch (e) {
