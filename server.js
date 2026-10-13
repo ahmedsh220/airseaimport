@@ -1,5 +1,7 @@
 // Serves the dashboard and proxies the products API so the browser avoids CORS.
 const http = require("http");
+const https = require("https");
+const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
 
@@ -20,19 +22,40 @@ const HEADERS = {
 };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Plain https + gzip instead of fetch: the upstream sometimes drops the connection mid-body
+// ("terminated"), and a compressed transfer is ~4x smaller, so it finishes before that happens.
+function getOnce() {
+  return new Promise((resolve, reject) => {
+    const req = (API.startsWith("https:") ? https : http).get(API, { headers: { ...HEADERS, "accept-encoding": "gzip, deflate", connection: "close" }, timeout: 45000 }, res => {
+      const enc = res.headers["content-encoding"];
+      const stream = enc === "gzip" ? res.pipe(zlib.createGunzip()) : enc === "deflate" ? res.pipe(zlib.createInflate()) : res;
+      const chunks = [];
+      stream.on("data", c => chunks.push(c));
+      stream.on("error", reject);
+      res.on("aborted", () => reject(new Error("upstream closed the connection mid-response")));
+      stream.on("end", () => {
+        const body = Buffer.concat(chunks).toString("utf8");
+        if (res.statusCode !== 200) return reject(new Error(`Upstream HTTP ${res.statusCode}: ${body.slice(0, 200).replace(/\s+/g, " ")}`));
+        try { JSON.parse(body); resolve(body); } // don't cache a broken or cut-off response
+        catch { reject(new Error(`Upstream sent incomplete JSON (${body.length} bytes)`)); }
+      });
+    });
+    req.on("timeout", () => req.destroy(new Error("Upstream timed out after 45s")));
+    req.on("error", reject);
+  });
+}
+
 async function fetchUpstream() {
   let last;
-  for (let attempt = 1; attempt <= 4; attempt++) {
+  for (let attempt = 1; attempt <= 6; attempt++) {
     try {
-      const res = await fetch(API, { headers: HEADERS, signal: AbortSignal.timeout(30000) });
-      const body = await res.text();
-      if (!res.ok) throw new Error(`Upstream HTTP ${res.status}: ${body.slice(0, 200).replace(/\s+/g, " ")}`);
-      JSON.parse(body); // don't cache a broken response
+      const t = Date.now(), body = await getOnce();
+      console.log(`Products fetched in ${Date.now() - t}ms (${body.length} bytes, attempt ${attempt})`);
       return body;
     } catch (e) {
       last = e;
-      console.warn(`Products fetch attempt ${attempt} failed: ${e.message}`);
-      if (attempt < 4) await sleep(attempt * 1500);
+      console.warn(`Products fetch attempt ${attempt} failed: ${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ""}`);
+      if (attempt < 6) await sleep(attempt * 1500);
     }
   }
   throw last;
