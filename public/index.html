@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Air Sea Import Reports</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #667085; --border: #e4e7ec;
+    --accent: #2563eb; --accent-soft: #eff4ff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1115; --panel: #171a21; --text: #e6e8eb; --muted: #9aa3af; --border: #2a2f3a;
+            --accent: #60a5fa; --accent-soft: #1a2436; --good: #4ade80; --warn: #fbbf24; --bad: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 14px 24px; background: var(--panel); }
+  header h1 { margin: 0; font-size: 18px; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .filters { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+             padding: 10px 24px; background: var(--panel); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .filters .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .filters label.t { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  main { padding: 20px 24px 48px; max-width: 1440px; margin: 0 auto; }
+  button, input, select { font: inherit; color: var(--text); background: var(--panel);
+         border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
+  button { cursor: pointer; } button:hover { border-color: var(--accent); }
+  button.active, .seg button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; }
+  .seg button:first-child { border-radius: 6px 0 0 6px; margin: 0; } .seg button:last-child { border-radius: 0 6px 6px 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px;
+         cursor: pointer; text-align: left; transition: border-color .1s, background .1s; }
+  .kpi:hover { border-color: var(--accent); }
+  .kpi.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 24px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { color: var(--muted); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; margin-bottom: 20px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+  .card h2 { margin: 0 0 4px; font-size: 15px; }
+  p.hint { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
+  .chart { position: relative; height: 300px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .toolbar input[type=search] { flex: 1; min-width: 220px; }
+  .tablewrap { overflow: auto; max-height: 620px; border: 1px solid var(--border); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  th.l, td.l { text-align: left; }
+  td.prod { text-align: left; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
+  td.prod b { font-weight: 600; margin-right: 6px; }
+  td.prod span { color: var(--muted); }
+  th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; font-weight: 600; z-index: 1; }
+  th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover td { background: var(--accent-soft); }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
+  .chip { display: inline-flex; gap: 6px; align-items: center; background: var(--accent-soft); color: var(--accent);
+          border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12px; }
+  .chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
+  #status { padding: 40px; text-align: center; color: var(--muted); }
+  #status .err { color: var(--bad); margin-bottom: 12px; }
+  dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
+           width: min(860px, calc(100vw - 32px)); max-height: 86vh; padding: 0; }
+  dialog::backdrop { background: rgb(0 0 0 / .4); }
+  dialog .head { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 16px 20px;
+                 border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); }
+  dialog .body { padding: 16px 20px; }
+  dialog h3 { margin: 0; font-size: 16px; } dialog h4 { margin: 18px 0 8px; font-size: 13px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+  .facts span { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+  @media (max-width: 600px) { main, header, .filters { padding-left: 16px; padding-right: 16px; } .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Air Sea Import · Reports</h1>
+    <div class="meta" id="meta">Loading…</div>
+  </div>
+  <div class="toolbar" style="margin:0">
+    <button id="reload">Refresh data</button>
+    <button id="uploadBtn" type="button">Load JSON file</button>
+    <input type="file" id="file" accept=".json,application/json" hidden>
+    <button id="csv">Export table CSV</button>
+  </div>
+</header>
+
+<div class="filters">
+  <div class="group">
+    <label class="t" for="dateField">Date</label>
+    <select id="dateField">
+      <option value="updated_at">Last updated</option>
+      <option value="vendor_date">Vendor price date</option>
+      <option value="last_ordered_date">Last ordered</option>
+      <option value="first_added_date">First added</option>
+      <option value="in_progress_date">In progress</option>
+    </select>
+    <div class="seg" id="presets">
+      <button data-p="today">Today</button><button data-p="7">7 days</button><button data-p="30">30 days</button>
+      <button data-p="90">90 days</button><button data-p="all">All time</button>
+    </div>
+    <input type="date" id="from" aria-label="From"> <span class="muted">to</span> <input type="date" id="to" aria-label="To">
+  </div>
+  <div class="group">
+    <label class="t" for="cat">Category</label>
+    <select id="cat"><option value="">All</option></select>
+    <label class="t" for="tier">Tier</label>
+    <select id="tier"><option value="">All</option></select>
+  </div>
+  <div class="group"><span class="muted" id="inRange"></span></div>
+</div>
+
+<main>
+  <div id="status">Fetching products…</div>
+  <div id="app" hidden>
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card" id="tableCard" style="margin-bottom:20px">
+      <div class="tabs" id="tabs"></div>
+      <p class="hint" id="tabHint"></p>
+      <div class="toolbar">
+        <input type="search" id="q" placeholder="Look up SKU, product name, UPC…">
+        <select id="vendorPick" hidden></select>
+        <span id="chipSlot"></span>
+        <span class="muted" id="count"></span>
+      </div>
+      <div class="tablewrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <section class="grid">
+      <div class="card">
+        <h2>Projected sales by channel (next 60 days)</h2>
+        <p class="hint">Sum of the *_60_days projections. Click a bar to list SKUs for that channel.</p>
+        <div class="chart"><canvas id="chChannels"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Top 15 sellers (last 90 days)</h2>
+        <p class="hint">Units sold. Click a bar for product detail.</p>
+        <div class="chart"><canvas id="chTop"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Stock health</h2>
+        <p class="hint">SKUs by days of cover (on hand ÷ 90-day daily sales rate). Click a bar to filter.</p>
+        <div class="chart"><canvas id="chCover"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Cheapest vendor wins</h2>
+        <p class="hint">How often each vendor has the lowest price on a SKU. Click a bar for its price list.</p>
+        <div class="chart"><canvas id="chVendors"></canvas></div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<dialog id="detail"><div class="head"><div><h3 id="dTitle"></h3><div class="meta" id="dSub"></div></div>
+  <button id="dClose">Close</button></div><div class="body" id="dBody"></div></dialog>
+
+<script>
+const API = location.protocol.startsWith("http") ? "/api/products" : "https://hub.fragrancewholesalerusa.com/api/open/products";
+
+const CHANNELS = { amaz: "Amazon", tt: "TikTok", wmt: "Walmart", shn: "Shein", joma: "Jomashop", noc: "NocNoc",
+  fair: "Faire", temu: "Temu", wholesale: "Wholesale", shopify: "Shopify", ebay: "eBay", posh: "Poshmark",
+  whatnot: "Whatnot", seebiz: "SeeBiz" };
+const VENDORS = { perfume_trading_center: "Perfume Trading Center", perfume_plus: "Perfume Plus", al_hussein: "Al Hussein",
+  br: "B&R", edge: "Edge", fragsense: "Fragsense", french_perfumes: "French Perfumes", giftexpress: "GiftExpress",
+  legacy: "Legacy", lux: "Lux", perfume_center_america: "Perfume Center America", perfume_of_the_world: "Perfume of the World",
+  azmere: "Azmere", tahir: "Tahir", nandanson: "Nandanson", bs: "BS", mb: "MB", universal: "Universal", tjs: "TJs" };
+const vendorDateKey = k => k === "perfume_trading_center" ? "perfume_trading_center__date" : k + "_date";
+
+const num = v => { if (v === null || v === undefined || v === "" || v === false || v === true) return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,]/g, "")); return isFinite(n) ? n : null; };
+const n0 = v => num(v) ?? 0;
+const pos = v => { const n = num(v); return n != null && n > 0 ? n : null; };
+// API dates come as ISO, "YYYY-MM-DD HH:MM:SS" or "MM/DD/YYYY".
+function parseDate(v) {
+  if (!v) return null;
+  const s = String(v), us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  const d = us ? new Date(+us[3], us[1] - 1, +us[2]) : new Date(/^\d{4}-\d{2}-\d{2} /.test(s) ? s.replace(" ", "T") : s);
+  return isNaN(d) ? null : d;
+}
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const fmtInt = v => v == null ? "—" : Math.round(v).toLocaleString();
+const fmtUsd = v => v == null ? "—" : v.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: Math.abs(v) >= 1000 ? 0 : 2 });
+const fmtPct = v => v == null ? "—" : (v * 100).toFixed(1) + "%";
+const fmtDate = v => { const d = v instanceof Date ? v : parseDate(v); return d ? d.toLocaleDateString() : "—"; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+
+let all = [], rows = [], charts = {}, view = "all", sortKey = null, sortAsc = false, vendor = "", channel = "", coverBucket = null;
+
+function enrich(p) {
+  const qoh = n0(p.live_qoh ?? p.qoh);
+  const cost = pos(p.actual_cost) ?? pos(p.cost) ?? pos(p.purchase_cost);
+  const s90 = n0(p.sales_90_days), daily = s90 / 90;
+  const ch = {}; let ch60 = 0;
+  for (const k in CHANNELS) { const v = n0(p[k + "_60_days"]); ch[k] = v; ch60 += v; }
+  const prices = [];
+  for (const k in VENDORS) { const v = pos(p[k]); if (v != null) prices.push({ k, price: v, date: parseDate(p[vendorDateKey(k)]) }); }
+  prices.sort((a, b) => a.price - b.price);
+  const best = prices[0] || null;
+  const ret = n0(p.returns_90_days), sepCount = n0(p.sales_sep_count), sepRev = n0(p.sales_sep_sale_price), sepShip = n0(p.sales_sep_shipping_price_we_paid);
+  return { ...p, _qoh: qoh, _cost: cost, _s90: s90, _cover: daily > 0 ? Math.max(0, qoh) / daily : null, _ch: ch, _ch60: ch60,
+    _value: cost != null ? cost * Math.max(0, qoh) : 0, _prices: prices, _best: best?.price ?? null, _bestVendor: best?.k ?? null,
+    _saving: cost != null && best ? cost - best.price : null, _vendorCount: prices.length,
+    _returns: ret, _returnRate: s90 > 0 ? ret / s90 : null, _inProg: n0(p.in_progress),
+    _reorderQty: daily > 0 ? Math.max(0, Math.ceil(Math.max(ch60, daily * 60) - qoh - n0(p.in_progress))) : 0,
+    _sepCount: sepCount, _sepRev: sepRev, _sepShip: sepShip,
+    _sepMargin: sepCount && cost != null ? sepRev + sepShip - cost * sepCount : null,
+    _dates: { updated_at: parseDate(p.updated_at), last_ordered_date: parseDate(p.last_ordered_date),
+      first_added_date: parseDate(p.first_added_date), in_progress_date: parseDate(p.in_progress_date),
+      vendor_date: prices.map(x => x.date).filter(Boolean) } };
+}
+
+// ---------- loading ----------
+async function load(force) {
+  setStatus("Fetching products…");
+  try {
+    const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    ingest(await res.json(), "live API");
+  } catch (e) {
+    setStatus(`<div class="err">Couldn't load the products API (${esc(e.message)}).</div>
+      You can still open <a href="https://hub.fragrancewholesalerusa.com/api/open/products" target="_blank" rel="noopener">the API</a>,
+      save it as a .json file and click <b>Load JSON file</b>.`);
+  }
+}
+function ingest(data, source) {
+  const list = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
+  all = list.map(enrich);
+  fillSelect("cat", all.map(r => r.category)); fillSelect("tier", all.map(r => r.pricing_category));
+  $("meta").textContent = `${all.length.toLocaleString()} products · ${source} · loaded ${new Date().toLocaleString()}`;
+  $("status").hidden = true; $("app").hidden = false;
+  apply();
+}
+function fillSelect(id, values) {
+  const el = $(id), cur = el.value, opts = [...new Set(values.filter(Boolean))].sort();
+  el.innerHTML = `<option value="">All</option>` + opts.map(v => `<option>${esc(v)}</option>`).join("");
+  el.value = opts.includes(cur) ? cur : "";
+}
+function setStatus(html) { const s = $("status"); s.innerHTML = html; s.hidden = false; }
+
+// ---------- global filters ----------
+function setPreset(p) {
+  const t = new Date(), today = dayKey(t);
+  if (p === "all") { $("from").value = ""; $("to").value = ""; }
+  else if (p === "today") { $("from").value = today; $("to").value = today; }
+  else { const f = new Date(t); f.setDate(f.getDate() - (+p - 1)); $("from").value = dayKey(f); $("to").value = today; }
+  markPreset(p); apply();
+}
+function markPreset(p) { document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("active", b.dataset.p === p)); }
+
+function apply() {
+  const field = $("dateField").value, from = $("from").value, to = $("to").value, cat = $("cat").value, tier = $("tier").value;
+  const inRange = d => d && (!from || dayKey(d) >= from) && (!to || dayKey(d) <= to);
+  rows = all.filter(r => {
+    if (cat && r.category !== cat) return false;
+    if (tier && r.pricing_category !== tier) return false;
+    if (!from && !to) return true;
+    const d = r._dates[field];
+    return Array.isArray(d) ? d.some(inRange) : inRange(d);
+  });
+  $("inRange").textContent = `${rows.length.toLocaleString()} of ${all.length.toLocaleString()} products match`;
+  renderKpis(); renderCharts(); renderTabs(); renderTable();
+}
+
+// ---------- views (tiles + tabs share these) ----------
+const P = ["_prod", "Product"];
+const coverPill = v => { if (v == null) return "<span class=muted>—</span>";
+  const c = v < 14 ? "bad" : v < 30 ? "warn" : v < 180 ? "good" : "muted"; return `<span class="pill ${c}">${Math.round(v)}d</span>`; };
+const savePill = v => v == null ? "—" : `<span class="${v > 0.005 ? "good" : v < -0.005 ? "bad" : ""}">${fmtUsd(v)}</span>`;
+const vName = k => VENDORS[k] || "—";
+const STD = [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt],
+  ["_cover", "Days cover", coverPill], ["_best", "Best vendor price", fmtUsd], ["_bestVendor", "Best vendor", vName], ["pricing_category", "Tier"]];
+const COVER = [["Out (selling)", r => r._qoh <= 0 && r._s90 > 0, "--bad"], ["< 30 days", r => r._qoh > 0 && r._cover != null && r._cover < 30, "--warn"],
+  ["30–90 days", r => r._cover != null && r._cover >= 30 && r._cover < 90, "--good"], ["90–180 days", r => r._cover != null && r._cover >= 90 && r._cover < 180, "--accent"],
+  ["180+ days", r => r._cover != null && r._cover >= 180, "--muted"], ["No sales", r => r._qoh > 0 && r._s90 === 0, "--border"]];
+
+const VIEWS = {
+  all: { label: "All products", hint: "Every product matching the filters above.", filter: () => true, sort: "_s90", cols: STD },
+  stock: { label: "In stock", hint: "Products with units on hand, by inventory value.", filter: r => r._qoh > 0, sort: "_value",
+    cols: [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_value", "Value", fmtUsd], ["_s90", "Sold 90d", fmtInt], ["_cover", "Days cover", coverPill]] },
+  top: { label: "Top sellers", hint: "Ranked by units sold in the last 90 days.", filter: r => r._s90 > 0, sort: "_s90",
+    cols: [P, ["_s90", "Sold 90d", fmtInt], ["sales_highest_avg_90_days", "Best 90d avg", v => fmtInt(num(v))], ["_ch60", "Proj. 60d", fmtInt],
+      ["_qoh", "On hand", fmtInt], ["_cover", "Days cover", coverPill], ["_cost", "Cost", fmtUsd], ["_returnRate", "Return rate", fmtPct]] },
+  out: { label: "Out of stock", hint: "Nothing on hand but sold in the last 90 days: lost sales.", filter: r => r._qoh <= 0 && r._s90 > 0, sort: "_s90",
+    cols: [P, ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt], ["_inProg", "On order", fmtInt], ["_best", "Best price", fmtUsd],
+      ["_bestVendor", "Best vendor", vName], ["last_ordered_date", "Last ordered", fmtDate], ["last_ordered_name", "From", v => esc(v || "—")]] },
+  reorder: { label: "Reorder", hint: "Selling products under 30 days of cover. Suggested qty = the larger of the 60-day projection or 60 days at the 90-day rate, minus on hand and on order.",
+    filter: r => r._s90 > 0 && (r._cover == null || r._cover < 30), sort: "_cover", asc: true,
+    cols: [P, ["_qoh", "On hand", fmtInt], ["_inProg", "On order", fmtInt], ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt],
+      ["_cover", "Days cover", coverPill], ["_reorderQty", "Suggest qty", fmtInt], ["_best", "Best price", fmtUsd], ["_bestVendor", "Best vendor", vName],
+      ["last_ordered_date", "Last ordered", fmtDate]] },
+  dead: { label: "Dead stock", hint: "In stock with zero sales in 90 days, by tied-up value.", filter: r => r._qoh > 0 && r._s90 === 0, sort: "_value",
+    cols: [P, ["_qoh", "On hand", fmtInt], ["_cost", "Cost", fmtUsd], ["_value", "Value", fmtUsd], ["first_added_date", "First added", fmtDate], ["last_ordered_date", "Last ordered", fmtDate]] },
+  onorder: { label: "On order", hint: "Products with in-progress purchase orders.", filter: r => r._inProg > 0, sort: "_inProg",
+    cols: [P, ["_inProg", "On order", fmtInt], ["in_progress_vendor", "Vendor", v => esc(v || "—")], ["in_progress_cost", "PO cost", v => fmtUsd(num(v))],
+      ["in_progress_date", "Ordered", fmtDate], ["_qoh", "On hand", fmtInt], ["_s90", "Sold 90d", fmtInt]] },
+  vendors: { label: "Vendors", hint: "", filter: () => true, sort: "_vprice", asc: true, cols: [] },
+  channels: { label: "Channel mix", hint: "Projected units per channel over the next 60 days.", filter: r => r._ch60 > 0, sort: "_ch60",
+    cols: [P, ["_ch60", "Total", fmtInt], ...Object.entries(CHANNELS).map(([k, l]) => ["_ch." + k, l, v => v ? fmtInt(v) : "<span class=muted>·</span>"])] },
+  returns: { label: "Returns", hint: "Products with returns in the last 90 days, by return rate.", filter: r => r._returns > 0, sort: "_returnRate",
+    cols: [P, ["_returns", "Returned 90d", fmtInt], ["_s90", "Sold 90d", fmtInt], ["_returnRate", "Return rate", fmtPct]] },
+  sept: { label: "September sales", hint: "September orders. Margin = sale price + shipping we paid − cost × units.", filter: r => r._sepCount > 0, sort: "_sepRev",
+    cols: [P, ["_sepCount", "Units", fmtInt], ["_sepRev", "Revenue", fmtUsd], ["_sepShip", "Shipping paid", fmtUsd], ["_cost", "Unit cost", fmtUsd],
+      ["_sepMargin", "Margin", savePill], ["_sepMarginPct", "Margin %", fmtPct]] },
+};
+
+// Vendors tab: summary of every vendor, or one vendor's price list when picked.
+function vendorSummary() {
+  return Object.entries(VENDORS).map(([k, label]) => {
+    const listed = rows.filter(r => r._prices.some(p => p.k === k));
+    const wins = rows.filter(r => r._bestVendor === k).length;
+    const diffs = listed.map(r => r._cost != null ? (r._prices.find(p => p.k === k).price - r._cost) / r._cost : null).filter(v => v != null);
+    const dates = listed.map(r => r._prices.find(p => p.k === k).date).filter(Boolean).sort((a, b) => b - a);
+    return { _vk: k, _vname: label, _vlisted: listed.length, _vwins: wins, _vwinRate: listed.length ? wins / listed.length : null,
+      _vavgDiff: diffs.length ? diffs.reduce((a, b) => a + b, 0) / diffs.length : null, _vlast: dates[0] || null };
+  }).filter(v => v._vlisted > 0);
+}
+const VENDOR_SUMMARY_COLS = [["_vname", "Vendor", v => `<b>${esc(v)}</b>`], ["_vlisted", "Products priced", fmtInt], ["_vwins", "Cheapest on", fmtInt],
+  ["_vwinRate", "Win rate", fmtPct], ["_vavgDiff", "Avg vs our cost", v => v == null ? "—" : `<span class="${v < 0 ? "good" : "bad"}">${v > 0 ? "+" : ""}${fmtPct(v)}</span>`],
+  ["_vlast", "Latest price date", fmtDate]];
+function vendorListCols() {
+  return [P, ["_vprice", vName(vendor) + " price", fmtUsd], ["_vdate", "Price date", fmtDate], ["_cost", "Our cost", fmtUsd],
+    ["_vdiff", "vs our cost", v => v == null ? "—" : `<span class="${v < -0.005 ? "good" : v > 0.005 ? "bad" : ""}">${v > 0 ? "+" : ""}${fmtUsd(v)}</span>`],
+    ["_vrank", "Rank", v => v == null ? "—" : v === 1 ? `<span class="pill good">cheapest</span>` : "#" + v],
+    ["_best", "Lowest overall", fmtUsd], ["_bestVendor", "Lowest vendor", vName], ["_qoh", "On hand", fmtInt], ["_s90", "Sold 90d", fmtInt]];
+}
+
+function currentCols() { return view === "vendors" ? (vendor ? vendorListCols() : VENDOR_SUMMARY_COLS) : VIEWS[view].cols; }
+
+function currentRows() {
+  const v = VIEWS[view], q = $("q").value.trim().toLowerCase();
+  let list;
+  if (view === "vendors" && !vendor) {
+    list = vendorSummary();
+    if (q) list = list.filter(r => r._vname.toLowerCase().includes(q));
+  } else {
+    list = rows.filter(v.filter);
+    if (view === "vendors") list = list.filter(r => r._prices.some(p => p.k === vendor)).map(r => {
+      const i = r._prices.findIndex(p => p.k === vendor), p = r._prices[i];
+      return { ...r, _vprice: p.price, _vdate: p.date, _vdiff: r._cost != null ? p.price - r._cost : null, _vrank: i + 1 };
+    });
+    if (view === "sept") list = list.map(r => ({ ...r, _sepMarginPct: r._sepMargin != null && r._sepRev ? r._sepMargin / r._sepRev : null }));
+    if (channel) list = list.filter(r => r._ch[channel] > 0);
+    if (coverBucket != null) list = list.filter(COVER[coverBucket][1]);
+    if (q) list = list.filter(r => [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q)));
+  }
+  const def = view === "vendors" && !vendor ? "_vwins" : channel ? "_ch." + channel : v.sort;
+  const key = sortKey ?? def, asc = sortKey ? sortAsc : (view === "vendors" && !vendor ? false : !!v.asc && !channel);
+  return { list: list.sort((a, b) => cmp(get(a, key), get(b, key), asc)), key, asc };
+}
+function cmp(x, y, asc) {
+  if (x instanceof Date || y instanceof Date) { x = x ? +x : null; y = y ? +y : null; }
+  const nx = num(x), ny = num(y);
+  if (nx != null || ny != null) { if (nx == null) return 1; if (ny == null) return -1; return asc ? nx - ny : ny - nx; }
+  return asc ? String(x ?? "").localeCompare(String(y ?? "")) : String(y ?? "").localeCompare(String(x ?? ""));
+}
+const get = (r, k) => k === "_prod" ? r.name : k.startsWith("_ch.") ? r._ch[k.slice(4)] : k === "last_ordered_date" || k === "first_added_date" || k === "in_progress_date" ? parseDate(r[k]) : r[k];
+
+// ---------- rendering ----------
+const TILES = [
+  ["all", "Products", r => fmtInt(r.length), r => `${fmtInt(r.filter(x => x._qoh > 0).length)} in stock`],
+  ["stock", "Inventory value", r => fmtUsd(sum(r, x => x._value)), r => `${fmtInt(sum(r, x => x._qoh))} units on hand`],
+  ["top", "Sold (90 days)", r => fmtInt(sum(r, x => x._s90)), r => `${fmtInt(sum(r, x => x._s90) / 90)} / day`],
+  ["channels", "Projected (60 days)", r => fmtInt(sum(r, x => x._ch60)), () => "across all channels"],
+  ["out", "Out of stock", r => fmtInt(r.filter(VIEWS.out.filter).length), () => "0 on hand, still selling"],
+  ["reorder", "Reorder now", r => fmtInt(r.filter(VIEWS.reorder.filter).length), () => "under 30 days of cover"],
+  ["dead", "Dead stock", r => fmtInt(r.filter(VIEWS.dead.filter).length), r => fmtUsd(sum(r.filter(VIEWS.dead.filter), x => x._value)) + " tied up"],
+  ["onorder", "On order", r => fmtInt(r.filter(VIEWS.onorder.filter).length), r => `${fmtInt(sum(r, x => x._inProg))} units`],
+  ["returns", "Return rate (90d)", r => { const s = sum(r, x => x._s90); return fmtPct(s ? sum(r, x => x._returns) / s : null); }, r => `${fmtInt(sum(r, x => x._returns))} units returned`],
+  ["sept", "September revenue", r => fmtUsd(sum(r, x => x._sepRev)), r => `margin ${fmtUsd(sum(r, x => x._sepMargin ?? 0))}`],
+];
+const sum = (list, f) => list.reduce((a, r) => a + (f(r) || 0), 0);
+
+function renderKpis() {
+  $("kpis").innerHTML = TILES.map(([k, l, v, s]) =>
+    `<button class="kpi ${k === view && !channel && coverBucket == null ? "active" : ""}" data-v="${k}"><div class="label">${l}</div><div class="value">${v(rows)}</div><div class="sub">${s(rows)}</div></button>`).join("");
+}
+function renderTabs() {
+  $("tabs").innerHTML = Object.entries(VIEWS).map(([k, v]) => `<button data-v="${k}" class="${k === view ? "active" : ""}">${v.label}</button>`).join("");
+  const vp = $("vendorPick"); vp.hidden = view !== "vendors";
+  vp.innerHTML = `<option value="">All vendors (summary)</option>` + Object.entries(VENDORS).map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+  vp.value = vendor;
+}
+function renderTable() {
+  const { list, key, asc } = currentRows(), cols = currentCols();
+  $("tabHint").textContent = view === "vendors"
+    ? (vendor ? `${vName(vendor)}'s price list. Green means cheaper than our cost. Click a product to compare all vendors.` : "Each vendor's coverage and how competitive they are. Click a vendor to open its price list.")
+    : VIEWS[view].hint;
+  const chips = [channel && `Channel: ${CHANNELS[channel]}`, coverBucket != null && `Stock: ${COVER[coverBucket][0]}`].filter(Boolean);
+  $("chipSlot").innerHTML = chips.map(c => `<span class="chip">${esc(c)}<button data-clear title="Clear">×</button></span>`).join(" ");
+  $("count").textContent = `${list.length.toLocaleString()} rows`;
+  $("q").placeholder = view === "vendors" && !vendor ? "Find a vendor…" : "Look up SKU, product name, UPC…";
+  document.querySelector("#tbl thead").innerHTML = "<tr>" + cols.map(([k, l]) =>
+    `<th data-k="${k}" class="${k === key ? "sorted" + (asc ? " asc" : "") : ""} ${k === "_prod" || k === "_vname" ? "l" : ""}">${esc(l)}</th>`).join("") + "</tr>";
+  document.querySelector("#tbl tbody").innerHTML = list.slice(0, 1500).map((r, i) => `<tr data-i="${i}">` + cols.map(([k, , f]) =>
+    k === "_prod" ? `<td class="prod" title="${esc(r.name)}"><b>${esc(r.sku)}</b><span>${esc(r.name)}</span></td>`
+      : `<td class="${k === "_vname" ? "l" : ""}">${f ? f(get(r, k)) : esc(get(r, k) ?? "—")}</td>`).join("") + "</tr>").join("");
+  tableList = list;
+}
+let tableList = [];
+
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function renderCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  Chart.defaults.color = css("--muted"); Chart.defaults.borderColor = css("--border");
+  const accent = css("--accent");
+  const base = onClick => ({ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } },
+    onClick: (e, els) => els.length && onClick(els[0].index), onHover: (e, els) => e.native.target.style.cursor = els.length ? "pointer" : "default" });
+
+  const chTot = Object.keys(CHANNELS).map(k => [k, sum(rows, r => r._ch[k])]).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  charts.ch = new Chart($("chChannels"), { type: "bar",
+    data: { labels: chTot.map(x => CHANNELS[x[0]]), datasets: [{ data: chTot.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
+    options: { ...base(i => goto("channels", { channel: chTot[i][0] })), indexAxis: "y" } });
+
+  const top = [...rows].sort((a, b) => b._s90 - a._s90).slice(0, 15);
+  const short = s => { s = String(s || ""); return s.length > 24 ? s.slice(0, 23) + "…" : s; };
+  charts.top = new Chart($("chTop"), { type: "bar",
+    data: { labels: top.map(r => `${r.sku} · ${short(r.name)}`), datasets: [{ data: top.map(r => r._s90), backgroundColor: accent, borderRadius: 4 }] },
+    options: { ...base(i => showDetail(top[i])), indexAxis: "y",
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: i => top[i[0].dataIndex].name } } } } });
+
+  charts.cover = new Chart($("chCover"), { type: "bar",
+    data: { labels: COVER.map(b => b[0]), datasets: [{ data: COVER.map(b => rows.filter(b[1]).length), backgroundColor: COVER.map(b => css(b[2])), borderRadius: 4 }] },
+    options: base(i => goto("all", { coverBucket: i })) });
+
+  const wins = {}; rows.forEach(r => { if (r._bestVendor) wins[r._bestVendor] = (wins[r._bestVendor] || 0) + 1; });
+  const w = Object.entries(wins).sort((a, b) => b[1] - a[1]);
+  charts.vendors = new Chart($("chVendors"), { type: "bar",
+    data: { labels: w.map(x => VENDORS[x[0]]), datasets: [{ data: w.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
+    options: { ...base(i => goto("vendors", { vendor: w[i][0] })), indexAxis: "y", scales: { y: { ticks: { autoSkip: false } } } } });
+}
+
+function goto(v, opts = {}) {
+  view = v; sortKey = null; vendor = opts.vendor ?? (v === "vendors" ? vendor : "");
+  channel = opts.channel || ""; coverBucket = opts.coverBucket ?? null;
+  renderKpis(); renderTabs(); renderTable();
+  if (opts.scroll !== false) $("tableCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ---------- product detail ----------
+function showDetail(r) {
+  $("dTitle").textContent = r.name || r.sku;
+  $("dSub").textContent = [r.sku, r.upc && "UPC " + r.upc, r.category, r.pricing_category && "Tier: " + r.pricing_category, r.current_vendor && "Current vendor: " + r.current_vendor].filter(Boolean).join(" · ");
+  const facts = [["On hand", fmtInt(r._qoh)], ["Our cost", fmtUsd(r._cost)], ["Sold 90d", fmtInt(r._s90)], ["Projected 60d", fmtInt(r._ch60)],
+    ["Days cover", r._cover == null ? "—" : Math.round(r._cover) + "d"], ["On order", fmtInt(r._inProg)], ["Returns 90d", fmtInt(r._returns)],
+    ["Last ordered", `${fmtDate(r.last_ordered_date)}${r.last_ordered_qty ? " · " + r.last_ordered_qty + " @ " + fmtUsd(num(r.last_ordered_price)) : ""}`],
+    ["Last vendor", esc(r.last_ordered_name || "—")], ["TikTok price", fmtUsd(num(r.tiktok_same_price))], ["Ship cost", fmtUsd(num(r.ship_cost))], ["Updated", fmtDate(r.updated_at)]];
+  const vrows = r._prices.map((p, i) => `<tr><td class="l">${i === 0 ? "<b>" : ""}${esc(VENDORS[p.k])}${i === 0 ? "</b>" : ""}</td><td>${fmtUsd(p.price)}</td>
+    <td>${r._cost != null ? savePill(r._cost - p.price) : "—"}</td><td>${fmtDate(p.date)}</td></tr>`).join("");
+  const chRows = Object.entries(CHANNELS).filter(([k]) => r._ch[k] > 0).map(([k, l]) => `<tr><td class="l">${l}</td><td>${fmtInt(r._ch[k])}</td></tr>`).join("");
+  $("dBody").innerHTML = `<div class="facts">${facts.map(([l, v]) => `<div><span>${l}</span>${v}</div>`).join("")}</div>
+    <h4>Vendor prices (${r._prices.length})</h4>
+    ${vrows ? `<div class="tablewrap"><table><thead><tr><th class="l">Vendor</th><th>Price</th><th>Saving vs our cost</th><th>Price date</th></tr></thead><tbody>${vrows}</tbody></table></div>` : `<p class="muted">No vendor prices listed.</p>`}
+    <h4>Projected sales by channel (60 days)</h4>
+    ${chRows ? `<div class="tablewrap"><table><tbody>${chRows}</tbody></table></div>` : `<p class="muted">No projections.</p>`}`;
+  $("detail").showModal();
+}
+
+function exportCsv() {
+  const { list } = currentRows(), cols = currentCols();
+  const cell = x => { if (x instanceof Date) x = dayKey(x); const s = String(x ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const head = cols.flatMap(c => c[0] === "_prod" ? ["SKU", "Name"] : [c[1]]);
+  const body = list.map(r => cols.flatMap(([k]) => k === "_prod" ? [r.sku, r.name] : [k === "_bestVendor" ? VENDORS[r[k]] : get(r, k)]).map(cell).join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([[head.map(cell).join(","), ...body].join("\n")], { type: "text/csv" }));
+  a.download = `${view}${vendor ? "-" + vendor : ""}-${dayKey(new Date())}.csv`; a.click();
+}
+
+// ---------- events ----------
+$("kpis").addEventListener("click", e => { const b = e.target.closest(".kpi"); if (b) goto(b.dataset.v); });
+$("tabs").addEventListener("click", e => { const b = e.target.closest("button"); if (b) goto(b.dataset.v, { scroll: false }); });
+$("vendorPick").addEventListener("change", e => { vendor = e.target.value; sortKey = null; renderTable(); });
+$("chipSlot").addEventListener("click", e => { if (e.target.closest("[data-clear]")) goto(view, { scroll: false }); });
+document.querySelector("#tbl thead").addEventListener("click", e => {
+  const th = e.target.closest("th"); if (!th) return;
+  const { key, asc } = currentRows();
+  if (th.dataset.k === key) { sortKey = key; sortAsc = !asc; } else { sortKey = th.dataset.k; sortAsc = th.dataset.k === "_prod" || th.dataset.k === "_vname"; }
+  renderTable();
+});
+document.querySelector("#tbl tbody").addEventListener("click", e => {
+  const tr = e.target.closest("tr"); if (!tr) return;
+  const r = tableList[+tr.dataset.i];
+  if (r._vk) { vendor = r._vk; sortKey = null; $("q").value = ""; renderTabs(); renderTable(); } else showDetail(r);
+});
+$("q").addEventListener("input", renderTable);
+$("presets").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setPreset(b.dataset.p); });
+["from", "to"].forEach(id => $(id).addEventListener("change", () => { markPreset(null); apply(); }));
+["dateField", "cat", "tier"].forEach(id => $(id).addEventListener("change", apply));
+$("dClose").addEventListener("click", () => $("detail").close());
+$("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
+$("reload").addEventListener("click", () => load(true));
+$("csv").addEventListener("click", exportCsv);
+$("uploadBtn").addEventListener("click", () => $("file").click());
+$("file").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { ingest(JSON.parse(await f.text()), f.name); } catch (err) { setStatus(`<div class="err">Couldn't read that file: ${esc(err.message)}</div>`); }
+});
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => all.length && renderCharts());
+
+// Default: products updated today.
+const t0 = dayKey(new Date()); $("from").value = t0; $("to").value = t0; markPreset("today");
+load();
+</script>
+</body>
+</html>
