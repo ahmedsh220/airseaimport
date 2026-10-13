@@ -29,6 +29,7 @@ function getOnce(gzip) {
   return new Promise((resolve, reject) => {
     const headers = { ...HEADERS, "accept-encoding": gzip ? "gzip, deflate" : "identity", connection: "close" };
     const req = (API.startsWith("https:") ? https : http).get(API, { headers, timeout: 45000 }, res => {
+      console.log(`Upstream responded ${res.statusCode}; CORS header: ${res.headers["access-control-allow-origin"] || "none"}; cf-cache: ${res.headers["cf-cache-status"] || "-"}`);
       let raw = 0;
       res.on("data", c => { raw += c.length; });
       const info = () => `status ${res.statusCode}, ${raw} bytes received of ${res.headers["content-length"] || "unknown"}, encoding ${res.headers["content-encoding"] || "none"}, server ${res.headers.server || "?"}`;

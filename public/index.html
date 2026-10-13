@@ -305,14 +305,16 @@ const saveSnapshot = text => idb("readwrite", s => s.put({ at: Date.now(), text 
 const loadSnapshot = () => idb("readonly", s => s.get("products")).catch(() => null);
 
 const UPSTREAM = "https://hub.fragrancewholesalerusa.com/api/open/products";
+// The API loads fine in a browser but gets cut off when our server fetches it, so the browser
+// asks the API directly first and only uses our server's copy if the browser isn't allowed to.
 async function fetchProducts(force) {
-  let last;
-  try { return await fetchVia(API, force); } catch (e) { last = e; }
-  // Our server couldn't get it: try the API straight from the browser (works if the API allows it).
   if (API !== UPSTREAM) {
-    try { const res = await fetch(UPSTREAM, { cache: "no-store" }); if (res.ok) return await res.text(); } catch {}
+    try {
+      const res = await fetch(UPSTREAM, { cache: "no-store" });
+      if (res.ok) { const text = await res.text(); JSON.parse(text); return text; }
+    } catch (e) { console.warn("Direct API fetch failed, using the server copy", e); }
   }
-  throw last;
+  return fetchVia(API, force);
 }
 async function fetchVia(API, force) {
   let last;
