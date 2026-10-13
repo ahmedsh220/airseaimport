@@ -386,7 +386,7 @@ const PAGES = {
     tiles: [
       ["margins", "Projected 60-day profit", r => fmtUsd(sum(r, x => x._profit60)), r => `on ${fmtUsd(sum(r, x => x._rev60))} revenue`],
       ["margins", "Blended margin", r => { const rev = sum(r, x => x._rev60); return fmtPct(rev ? sum(r, x => x._profit60) / rev : null); }, () => "weighted by 60-day projection"],
-      ["low", `Below ${MIN_MARGIN}% margin`, r => fmtInt(r.filter(lowMargin).length), () => "at least one platform"],
+      ["low", () => `Below ${MIN_MARGIN}% margin`, r => fmtInt(r.filter(lowMargin).length), () => "at least one platform"],
       ["losing", "Losing money", r => fmtInt(r.filter(x => x._pfMin != null && x._pfMin < 0).length), () => "negative profit on a platform"],
       ["sept", "September revenue", r => fmtUsd(sum(r, x => x._sepRev)), r => `margin ${fmtUsd(sum(r, x => x._sepMargin ?? 0))}`],
     ],
@@ -562,12 +562,11 @@ function tableModel() {
     return finish(search(list, q), cols, "_cunits", false);
   }
   cols = typeof v.cols === "function" ? v.cols() : v.cols;
-  list = rows.filter(v.filter);
+  list = coverBucket != null ? rows.filter(COVER[coverBucket][1]) : rows.filter(v.filter);
   if (view === "platform") list = list.map(r => { const f = r._pf[pick], L = r._listing[pick];
     return { ...r, _pfprice: f.price, _pflist: L.list, _pfcomp: L.compBest, _pffee: f.fee, _pfship: f.ship, _pfprofit: f.profit, _pfmargin: f.margin, _pfproj: f.proj, _pfprofit60: f.profit60, _pfstock: L.stock }; });
   if (view === "multi") list = list.map(r => ({ ...r, _spread: r._prices.at(-1).price - r._prices[0].price }));
   if (channel) list = list.filter(r => r._ch[channel] > 0);
-  if (coverBucket != null) list = list.filter(COVER[coverBucket][1]);
   return finish(search(list, q), cols, channel ? "_ch." + channel : v.sort, channel ? false : !!v.asc);
 }
 const r0src = k => (all.find(r => r._listing[k]?.source) || { _listing: { [k]: { source: "—" } } })._listing[k].source;
@@ -594,7 +593,7 @@ function render() {
 }
 function renderKpis() {
   $("kpis").innerHTML = PAGES[page].tiles.map(([k, l, v, s], i) =>
-    `<button class="kpi ${k === view && !channel && coverBucket == null && !pick ? "active" : ""}" data-v="${k}"><div class="label">${l}</div><div class="value">${esc(v(rows))}</div><div class="sub">${esc(s(rows))}</div></button>`).join("");
+    `<button class="kpi ${k === view && !channel && coverBucket == null && !pick ? "active" : ""}" data-v="${k}"><div class="label">${esc(typeof l === "function" ? l() : l)}</div><div class="value">${esc(v(rows))}</div><div class="sub">${esc(s(rows))}</div></button>`).join("");
 }
 function renderTabs() {
   $("tabs").innerHTML = PAGES[page].views.map(k => `<button data-v="${k}" class="${k === view ? "active" : ""}">${VIEWS[k].label}</button>`).join("");
@@ -635,7 +634,12 @@ const CHART_DEFS = {
     const t = {}; rows.forEach(r => { for (const [k, v] of Object.entries(r._customers)) { const g = customerGroup(k); t[g] = (t[g] || 0) + v; } });
     const e = Object.entries(t).sort((a, b) => b[1] - a[1]).slice(0, 15);
     return { type: "bar", data: { labels: e.map(x => x[0]), datasets: [{ data: e.map(x => x[1]), backgroundColor: accent, borderRadius: 4 }] },
-      click: i => { goto("customers"); $("q").value = e[i][0] === "Wholesale customers" ? "" : e[i][0].split(" ")[0]; renderTable(); }, horizontal: true };
+      click: i => {
+        // One customer behind the bar: open its products. Grouped wholesale: list those customers.
+        const names = customerSummary().filter(c => c._group === e[i][0]).map(c => c._key);
+        goto("customers", names.length === 1 ? { pick: names[0] } : {});
+        if (names.length > 1) { $("q").value = ""; renderTable(); }
+      }, horizontal: true };
   }],
   chTop: ["Top 15 sellers (last 90 days)", "Units sold. Click a bar for product detail.", accent => {
     const top = [...rows].sort((a, b) => b._s90 - a._s90).slice(0, 15), short = s => { s = String(s || ""); return s.length > 24 ? s.slice(0, 23) + "…" : s; };
@@ -682,7 +686,7 @@ function renderCharts() {
       responsive: true, maintainAspectRatio: false, animation: false, indexAxis: d.horizontal ? "y" : "x",
       scales: d.horizontal ? { y: { ticks: { autoSkip: false } } } : {},
       plugins: { legend: { display: false }, tooltip: d.tooltipTitle ? { callbacks: { title: i => d.tooltipTitle(i[0].dataIndex) } } : {} },
-      onClick: (e, els) => els.length && d.click(els[0].index),
+      onClick: (e, els) => { if (els.length) { const i = els[0].index; setTimeout(() => d.click(i)); } },
       onHover: (e, els) => e.native.target.style.cursor = els.length ? "pointer" : "default" } });
   }
 }
@@ -690,7 +694,7 @@ function renderCharts() {
 function goto(v, opts = {}) {
   const pg = Object.keys(PAGES).find(k => PAGES[k].views.includes(opts.view || v));
   if (pg && pg !== page) page = pg;
-  view = opts.view || v; sortKey = null; if (!opts.keepPick) pick = view === "platform" ? "tiktok" : "";
+  view = opts.view || v; sortKey = null; if (opts.pick) pick = opts.pick; else if (!opts.keepPick) pick = view === "platform" ? "tiktok" : "";
   channel = opts.channel || ""; coverBucket = opts.coverBucket ?? null;
   render();
   if (opts.scroll !== false) $("tableCard").scrollIntoView({ behavior: "smooth", block: "start" });

@@ -13,9 +13,17 @@ let cache = { at: 0, body: null };
 
 async function products(force) {
   if (!force && cache.body && Date.now() - cache.at < CACHE_MS) return cache.body;
-  const res = await fetch(API, { headers: { accept: "application/json" } });
-  if (!res.ok) throw new Error(`Upstream HTTP ${res.status}`);
-  cache = { at: Date.now(), body: await res.text() };
+  try {
+    const res = await fetch(API, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+    if (!res.ok) throw new Error(`Upstream HTTP ${res.status}`);
+    const body = await res.text();
+    JSON.parse(body); // don't cache a broken response
+    cache = { at: Date.now(), body };
+  } catch (e) {
+    // Upstream down or slow: serve the last good copy rather than failing the page.
+    if (!cache.body) throw e;
+    console.warn(`Serving cached products from ${new Date(cache.at).toISOString()}: ${e.message}`);
+  }
   return cache.body;
 }
 
