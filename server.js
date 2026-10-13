@@ -7,7 +7,7 @@ const path = require("path");
 
 const PORT = process.env.PORT || 3000;
 const API = process.env.PRODUCTS_API || "https://hub.fragrancewholesalerusa.com/api/open/products";
-const CACHE_MS = 60 * 1000;
+const CACHE_MS = 5 * 60 * 1000; // the upstream is slow and sometimes cuts off; don't hit it more than needed
 const PUBLIC = path.join(__dirname, "public");
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
 
