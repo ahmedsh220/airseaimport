@@ -159,11 +159,18 @@ const VENDORS = { perfume_trading_center: "Perfume Trading Center", perfume_plus
 const vendorDateKey = k => k === "perfume_trading_center" ? "perfume_trading_center__date" : k + "_date";
 // Listing platforms with a live price in the API. fee = marketplace fee share, ship = we pay shipping.
 const PLATFORM_DEFAULTS = {
-  // TikTok 27% matches the profit_value the API reports (sell − 27% − final_cost). Others are placeholders to confirm.
-  tiktok: { label: "TikTok", ch: "tt", fee: 27, ship: false },
+  // TikTok 27% covers fees + shipping and matches the API's own profit_value. Others are rough placeholders.
+  tiktok: { label: "TikTok", ch: "tt", fee: 27, ship: false, confirmed: true },
   amazon: { label: "Amazon", ch: "amaz", fee: 15, ship: false },
+  walmart: { label: "Walmart", ch: "wmt", fee: 15, ship: false },
+  faire: { label: "Faire", ch: "fair", fee: 25, ship: false },
   nocnoc: { label: "NocNoc", ch: "noc", fee: 15, ship: false },
+  jomashop: { label: "Jomashop", ch: "joma", fee: 20, ship: false },
+  shein: { label: "Shein", ch: "shn", fee: 15, ship: false },
+  temu: { label: "Temu", ch: "temu", fee: 15, ship: false },
+  ebay: { label: "eBay", ch: "ebay", fee: 15, ship: false },
   shopify: { label: "Shopify", ch: "shopify", fee: 3, ship: false },
+  whatnot: { label: "Whatnot", ch: "whatnot", fee: 12, ship: false },
 };
 const MIN_MARGIN_DEFAULT = 18;
 let PLATFORMS = loadAssumptions();
@@ -184,9 +191,17 @@ const pos = v => { const n = num(v); return n != null && n > 0 ? n : null; };
 const json = v => { if (!v) return null; if (typeof v === "object") return v; try { return JSON.parse(v); } catch { return null; } };
 function parseDate(v) {
   if (!v) return null;
+  // Parsed by hand: Safari rejects "…T17:40:23.000000Z" (6-digit fractions) and "YYYY-MM-DD HH:MM:SS".
   const s = String(v), us = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  const d = us ? new Date(+us[3], us[1] - 1, +us[2]) : new Date(/^\d{4}-\d{2}-\d{2} /.test(s) ? s.replace(" ", "T") : s);
-  return isNaN(d) ? null : d;
+  if (us) return new Date(+us[3], us[1] - 1, +us[2]);
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?/);
+  if (!m) return null;
+  const [, y, mo, d, h = 0, mi = 0, sec = 0, tz] = m;
+  if (!tz) return new Date(+y, mo - 1, +d, +h, +mi, +sec);
+  const utc = Date.UTC(+y, mo - 1, +d, +h, +mi, +sec);
+  if (tz === "Z") return new Date(utc);
+  const sign = tz[0] === "-" ? -1 : 1, off = tz.slice(1).replace(":", "");
+  return new Date(utc - sign * (+off.slice(0, 2) * 60 + +off.slice(2)) * 60000);
 }
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const fmtInt = v => v == null ? "—" : Math.round(v).toLocaleString();
@@ -204,7 +219,7 @@ function enrich(p) {
   // Purchase cost: actual_cost when set, else purchase_cost, else cost. Landed = final_cost from the API.
   const cost = pos(p.actual_cost) ?? pos(p.purchase_cost) ?? pos(p.cost);
   const land = pos(p.final_cost) ?? (cost != null ? cost + n0(p.box_cost) : null);
-  const s90 = n0(p.sales_90_days), dayAvg = s90 / 90, hiDayAvg = n0(p.sales_highest_avg_90_days) / 90;
+  const s90 = n0(p.sales_90_days), dayAvg = s90 / 90;
   const ch = {}; let ch60 = 0;
   for (const k in CHANNELS) { const v = n0(p[k + "_60_days"]); ch[k] = v; ch60 += v; }
   const prices = [];
@@ -216,7 +231,9 @@ function enrich(p) {
   const ret = n0(p.returns_90_days), sepCount = n0(p.sales_sep_count), sepRev = n0(p.sales_sep_sale_price), sepShip = n0(p.sales_sep_shipping_price_we_paid);
   const customers = json(p.qb_customer_sales) || {};
   const r = { ...p, _qoh: qoh, _inProg: onOrder, _caseQty: caseQty, _cost: cost, _land: land, _ship: pos(p.ship_cost),
-    _s90: s90, _dayAvg: dayAvg, _hiDayAvg: hiDayAvg, _monthly: dayAvg * 30,
+    _s90: s90, _dayAvg: dayAvg, _hiAvg: n0(p.sales_highest_avg_90_days),
+    _casesOnHand: caseQty ? Math.max(0, qoh) / caseQty : null, _caseCost: caseQty && cost != null ? caseQty * cost : null,
+    _orderCost: cost != null ? order120 * cost : null, _monthly: dayAvg * 30,
     _cover: dayAvg > 0 ? Math.max(0, qoh) / dayAvg : null, _stock28: dayAvg * 28,
     _trigger28: dayAvg > 0 && qoh + onOrder < dayAvg * 28, _order120: order120, _order150: need(150),
     _cases120: caseQty && order120 ? Math.ceil(order120 / caseQty) : null, _needMonth: need(30),
@@ -238,13 +255,20 @@ function enrich(p) {
 function listingPrices(p) {
   const igloo = json(p.igloo) || {}, tt = json(p.igloo_tiktok), az = json(p.igloo_amazon), noc = json(p.igloo_nocnoc), sh = json(p.igloo_shopify);
   const ttSku = tt?.skus?.[0];
-  return {
+  // Each platform: its own listing feed first, then the pricing tool's sell price (igloo.<platform>.sell_price).
+  const out = {
     tiktok: { price: pos(igloo.tiktok?.sell_price) ?? pos(p.tiktok_same_price), list: pos(ttSku?.price?.tax_exclusive_price),
-      compLow: pos(igloo.tiktok?.comp_low), compBest: pos(igloo.tiktok?.comp_best), stock: ttSku?.inventory?.[0]?.quantity ?? null },
-    amazon: { price: pos(az?.price), stock: num(az?.quantity), status: az?.status },
-    nocnoc: { price: pos(noc?.price), stock: num(noc?.available_quantity) },
-    shopify: { price: pos(sh?.price), list: pos(sh?.compare_at_price), stock: num(sh?.inventory_quantity) },
+      compLow: pos(igloo.tiktok?.comp_low), compBest: pos(igloo.tiktok?.comp_best), stock: ttSku?.inventory?.[0]?.quantity ?? null,
+      apiProfit: num(igloo.tiktok?.profit_value), source: "igloo.tiktok.sell_price / tiktok_same_price" },
+    amazon: { price: pos(az?.price) ?? pos(igloo.amazon?.sell_price), stock: num(az?.quantity), source: "igloo_amazon.price" },
+    nocnoc: { price: pos(noc?.price) ?? pos(igloo.nocnoc?.sell_price), stock: num(noc?.available_quantity), source: "igloo_nocnoc.price" },
+    shopify: { price: pos(sh?.price) ?? pos(igloo.shopify?.sell_price), list: pos(sh?.compare_at_price), stock: num(sh?.inventory_quantity), source: "igloo_shopify.price" },
   };
+  for (const k in PLATFORMS) if (!out[k]) {
+    const ig = igloo[k] || igloo[k === "walmart" ? "walmart" : k];
+    out[k] = { price: pos(ig?.sell_price) ?? pos(p[k]) ?? pos(p[k + "_price"]), source: `igloo.${k}.sell_price` };
+  }
+  return out;
 }
 // Profit per unit = price − fee% × price − landed cost − shipping we pay.
 function computeProfit(r) {
@@ -254,7 +278,7 @@ function computeProfit(r) {
     const L = r._listing[k], price = L.price;
     if (price == null || r._land == null) { r._pf[k] = { price, profit: null, margin: null }; continue; }
     const fee = price * cfg.fee / 100, ship = cfg.ship ? (r._ship ?? 0) : 0;
-    const profit = price - fee - r._land - ship, proj = r._ch[cfg.ch] || 0;
+    const profit = L.apiProfit ?? (price - fee - r._land - ship), proj = r._ch[cfg.ch] || 0;
     r._pf[k] = { price, fee, ship, profit, margin: profit / price, proj, profit60: profit * proj };
     units += proj; profit60 += profit * proj; rev60 += price * proj;
   }
@@ -276,6 +300,7 @@ async function load(force) {
     if (!res.ok) throw new Error("HTTP " + res.status);
     ingest(await res.json(), "live API");
   } catch (e) {
+    console.error(e);
     setStatus(`<div class="err">Couldn't load the products API (${esc(e.message)}).</div>
       You can still open <a href="https://hub.fragrancewholesalerusa.com/api/open/products" target="_blank" rel="noopener">the API</a>,
       save it as a .json file and click <b>Load JSON file</b>.`);
@@ -283,11 +308,16 @@ async function load(force) {
 }
 function ingest(data, source) {
   const list = Array.isArray(data) ? data : (data.data || data.products || data.items || []);
-  all = list.map(enrich);
+  all = [];
+  let bad = 0;
+  for (const p of list) { try { all.push(enrich(p)); } catch (e) { bad++; console.warn("Skipped product", p?.sku, e); } }
+  if (!all.length) { setStatus(`<div class="err">The API answered but no products could be read (${list.length} records, ${bad} failed).</div>`); return; }
   fillSelect("cat", all.map(r => r.category)); fillSelect("tier", all.map(r => r.pricing_category));
   $("meta").textContent = `${all.length.toLocaleString()} products · ${source} · loaded ${new Date().toLocaleString()}`;
   $("status").hidden = true; $("app").hidden = false;
   apply();
+  // Nothing updated today (e.g. the sync hasn't run yet): show everything rather than an empty page.
+  if (!rows.length && $("from").value === dayKey(new Date())) { setPreset("all"); $("inRange").textContent += " · nothing updated today, showing all time"; }
 }
 function fillSelect(id, values) {
   const el = $(id), cur = el.value, opts = [...new Set(values.filter(Boolean))].sort();
@@ -360,7 +390,7 @@ const PAGES = {
       ["losing", "Losing money", r => fmtInt(r.filter(x => x._pfMin != null && x._pfMin < 0).length), () => "negative profit on a platform"],
       ["sept", "September revenue", r => fmtUsd(sum(r, x => x._sepRev)), r => `margin ${fmtUsd(sum(r, x => x._sepMargin ?? 0))}`],
     ],
-    views: ["margins", "platform", "low", "losing", "sept"],
+    views: ["margins", "platform", "coverage", "low", "losing", "sept"],
     charts: ["chPlatformProfit", "chMarginDist"],
   },
   vendors: {
@@ -383,7 +413,7 @@ const PAGES = {
       ["onorder", "On order", r => fmtInt(r.filter(VIEWS.onorder.filter).length), r => `${fmtInt(sum(r, x => x._inProg))} units`],
       ["all", "All products", r => fmtInt(r.length), () => "full product list"],
     ],
-    views: ["dead", "returns", "onorder", "all"],
+    views: ["dead", "returns", "onorder", "fields", "all"],
     charts: [],
   },
 };
@@ -398,8 +428,9 @@ const VIEWS = {
     hint: "Matches the Excel ordering columns. Day avg = 90-day sales ÷ 90. Listed when on hand + on order is below 28 days of stock. Order qty fills 120 days (150 shown for reference).",
     filter: r => r._trigger28,
     cols: [P, ["_cover", "Days of stock", coverPill], ["_qoh", "Live inv", fmtInt], ["_inProg", "On order", fmtInt], ["_dayAvg", "Day avg", fmt1],
-      ["_hiDayAvg", "Highest day avg", fmt1], ["_monthly", "Monthly sold", fmtInt], ["_stock28", "28 days stock", fmtInt], ["_trigger28", "Trigger 28d", yes],
-      ["_needMonth", "Need for month", fmtInt], ["_order120", "Order (120d)", fmtInt], ["_cases120", "Cases", fmtInt], ["_order150", "Order (150d)", fmtInt],
+      ["_hiAvg", "Highest 90d avg", fmtInt], ["_monthly", "Monthly sold", fmtInt], ["_stock28", "28 days stock", fmtInt], ["_trigger28", "Trigger 28d", yes],
+      ["_needMonth", "Need for month", fmtInt], ["_order120", "Order qty (120d)", fmtInt], ["_caseQty", "Qty in case", fmtInt], ["_cases120", "Cases to order", fmtInt],
+      ["_caseCost", "Case cost", fmtUsd], ["_orderCost", "Order cost", fmtUsd], ["_order150", "Order (150d)", fmtInt],
       ["_best", "Cheapest price", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["current_vendor", "Current vendor"]] },
   top: { label: "Top sellers", sort: "_s90", hint: "Ranked by units sold in the last 90 days.", filter: r => r._s90 > 0,
     cols: [P, ["_s90", "Sold 90d", fmtInt], ["_dayAvg", "Day avg", fmt1], ["_ch60", "Proj. 60d", fmtInt], ["_qoh", "Live inv", fmtInt],
@@ -408,7 +439,7 @@ const VIEWS = {
     cols: [P, ["_s90", "Sold 90d", fmtInt], ["_ch60", "Proj. 60d", fmtInt], ["_inProg", "On order", fmtInt], ["_order120", "Order (120d)", fmtInt],
       ["_best", "Cheapest price", fmtUsd], ["_bestVendor", "Cheapest vendor", vName], ["last_ordered_date", "Last received", fmtDate], ["last_ordered_name", "From"]] },
   stock: { label: "Stock on hand", sort: "_value", hint: "Products with units on hand, by stock value at landed cost.", filter: r => r._qoh > 0,
-    cols: [P, ["_qoh", "Live inv", fmtInt], ["_caseQty", "Qty in case", fmtInt], ["_land", "Landed cost", fmtUsd], ["_value", "Stock value", fmtUsd],
+    cols: [P, ["_qoh", "Live inv", fmtInt], ["_caseQty", "Qty in case", fmtInt], ["_casesOnHand", "Cases on hand", fmt1], ["_caseCost", "Case cost", fmtUsd], ["_land", "Landed cost", fmtUsd], ["_value", "Stock value", fmtUsd],
       ["_s90", "Sold 90d", fmtInt], ["_cover", "Days of stock", coverPill], ["box_no", "Box #"]] },
   channels: { label: "Platform projections", sort: "_ch60", hint: "Projected units per platform over the next 60 days.", filter: r => r._ch60 > 0,
     cols: [P, ["_ch60", "Total", fmtInt], ...Object.entries(CHANNELS).map(([k, l]) => ["_ch." + k, l, v => v ? fmtInt(v) : "<span class=muted>·</span>"])] },
@@ -417,14 +448,18 @@ const VIEWS = {
   margins: { label: "Margin by platform", sort: "_profit60",
     hint: "Profit per unit = listing price − platform fee − landed cost − shipping we pay. Edit fees under Assumptions.",
     filter: r => r._pfListings > 0,
-    cols: () => [P, ["_land", "Landed cost", fmtUsd], ...Object.entries(PLATFORMS).flatMap(([k, c]) => [["_pr_" + k, c.label + " price", fmtUsd], ["_pm_" + k, c.label + " margin", marginPill]]),
+    cols: () => [P, ["_land", "Landed cost", fmtUsd], ...Object.entries(PLATFORMS).filter(([k]) => rows.some(r => r._listing[k].price != null)).flatMap(([k, c]) => [["_pr_" + k, c.label + " price", fmtUsd], ["_pm_" + k, c.label + " margin", marginPill]]),
       ["_profit60", "60-day profit", money], ["_margin60", "Blended", marginPill]] },
   platform: { label: "Platform detail", sort: "_pfprofit60", picker: "platform",
-    hint: "One platform's listing economics per product, like the Excel PRICE / FEE / SHIP / PFT / PFT% blocks.",
+    hint: "One platform's listing economics per product, like the Excel PRICE / FEE / SHIP / PFT / PFT% blocks. TikTok profit is taken straight from the API (profit_value) when it's there.",
     filter: r => r._listing[pick]?.price != null,
     cols: () => [P, ["_pfprice", "Price", fmtUsd], ...(pick === "tiktok" ? [["_pflist", "Display price", fmtUsd], ["_pfcomp", "Comp best", fmtUsd]] : []),
       ["_pffee", "Fee", fmtUsd], ["_pfship", "Ship", fmtUsd], ["_land", "Landed cost", fmtUsd], ["_pfprofit", "Profit", money],
       ["_pfmargin", "PFT %", marginPill], ["_pfproj", "60 days", fmtInt], ["_pfprofit60", "60-day profit", money], ["_pfstock", "Listed qty", fmtInt]] },
+  coverage: { label: "Data coverage", custom: true,
+    hint: "Which platforms have a price feed in the API. Without one, profit for that platform can't be calculated and is left blank. Fees marked rough are placeholders; edit them under Assumptions." },
+  fields: { label: "Missing data", custom: true,
+    hint: "How many products have each key column filled. Low counts mean that column may be inaccurate or missing from the feed." },
   low: { label: `Below min margin`, sort: "_pfMin", asc: true, hint: "Products under the minimum margin on at least one platform.", filter: lowMargin,
     cols: () => VIEWS.margins.cols() },
   losing: { label: "Losing money", sort: "_pfMin", asc: true, hint: "Negative profit on at least one platform.", filter: r => r._pfMin != null && r._pfMin < 0,
@@ -487,6 +522,30 @@ function tableModel() {
     list = customerSummary().filter(r => !q || r._name.toLowerCase().includes(q));
     return finish(list, cols, "units", false);
   }
+  if (view === "coverage") {
+    cols = [["_name", "Platform", x => `<b>${esc(x)}</b>`], ["_feed", "Price feed", x => x ? `<span class="pill good">yes</span>` : `<span class="pill bad">missing</span>`],
+      ["_priced", "Products priced", fmtInt], ["_selling", "Projected to sell", fmtInt], ["_gap", "Selling, no price", x => x ? `<span class="warn">${fmtInt(x)}</span>` : "0"],
+      ["_fee", "Fee %", x => x + "%"], ["_feeOk", "Fee", x => x ? "confirmed" : `<span class="warn">rough estimate</span>`], ["_source", "Source column"]];
+    list = Object.entries(PLATFORMS).map(([k, c]) => {
+      const priced = rows.filter(r => r._listing[k].price != null).length, selling = rows.filter(r => r._ch[c.ch] > 0);
+      return { _key: null, _name: c.label, _feed: priced > 0, _priced: priced, _selling: selling.length,
+        _gap: selling.filter(r => r._listing[k].price == null).length, _fee: c.fee, _feeOk: !!c.confirmed, _source: r0src(k) };
+    });
+    return finish(list, cols, "_selling", false);
+  }
+  if (view === "fields") {
+    const F = [["actual_cost", "Actual cost (purchase price)", r => pos(r.actual_cost)], ["purchase_cost", "Purchase cost", r => pos(r.purchase_cost)],
+      ["cost", "Cost", r => pos(r.cost)], ["final_cost", "Landed cost (final_cost)", r => pos(r.final_cost)], ["qty_in_case", "Qty in case", r => pos(r.qty_in_case)],
+      ["live_qoh", "Live inventory", r => r.live_qoh != null], ["sales_90_days", "Sales 90 days", r => r.sales_90_days != null],
+      ["sales_highest_avg_90_days", "Highest 90d avg", r => pos(r.sales_highest_avg_90_days)], ["returns_90_days", "Returns 90 days", r => r.returns_90_days != null],
+      ["in_progress", "On order", r => pos(r.in_progress)], ["last_ordered_date", "Last received date", r => r.last_ordered_date],
+      ["vendor prices", "Any vendor price", r => r._vendorCount > 0], ["vendor dates", "Vendor price dates", r => r._prices.some(x => x.date)],
+      ["ship_cost", "Ship charge", r => pos(r.ship_cost)], ["category", "Category", r => r.category], ["pricing_category", "Tier", r => r.pricing_category],
+      ["qb_customer_sales", "Sales by customer", r => Object.keys(r._customers).length], ["sales_data", "Monthly sales (sales_data)", r => r.sales_data]];
+    cols = [["_name", "Column", x => `<b>${esc(x)}</b>`], ["_field", "API field"], ["_filled", "Products filled", fmtInt], ["_pct", "Filled %", x => `<span class="${x < .2 ? "bad" : x < .7 ? "warn" : "good"}">${fmtPct(x)}</span>`]];
+    list = F.map(([f, l, has]) => { const n = rows.filter(r => !!has(r)).length; return { _key: null, _name: l, _field: f, _filled: n, _pct: rows.length ? n / rows.length : 0 }; });
+    return finish(list, cols, "_pct", true);
+  }
   if (view === "vendors") {
     cols = [P, ["_vprice", vName(pick) + " price", fmtUsd], ["_vdate", "Price date", fmtDate], ["_cost", "Our cost", fmtUsd], ["_vdiff", "vs our cost", x => money(x == null ? null : -x)],
       ["_vrank", "Rank", x => x == null ? "—" : x === 1 ? `<span class="pill good">cheapest</span>` : "#" + x],
@@ -511,6 +570,7 @@ function tableModel() {
   if (coverBucket != null) list = list.filter(COVER[coverBucket][1]);
   return finish(search(list, q), cols, channel ? "_ch." + channel : v.sort, channel ? false : !!v.asc);
 }
+const r0src = k => (all.find(r => r._listing[k]?.source) || { _listing: { [k]: { source: "—" } } })._listing[k].source;
 const search = (list, q) => q ? list.filter(r => [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q))) : list;
 function finish(list, cols, defKey, defAsc) {
   const key = sortKey ?? defKey, asc = sortKey ? sortAsc : defAsc;
@@ -641,7 +701,8 @@ function showDetail(r) {
   $("dTitle").textContent = r.name || r.sku;
   $("dSub").textContent = [r.sku, r.upc && "UPC " + r.upc, r.category, r.pricing_category && "Tier: " + r.pricing_category, r.current_vendor && "Current vendor: " + r.current_vendor].filter(Boolean).join(" · ");
   const facts = [["Live inv", fmtInt(r._qoh)], ["Days of stock", r._cover == null ? "—" : Math.round(r._cover) + "d"], ["Sold 90d", fmtInt(r._s90)], ["Day avg", fmt1(r._dayAvg)],
-    ["Projected 60d", fmtInt(r._ch60)], ["On order", fmtInt(r._inProg)], ["Order (120d)", `${fmtInt(r._order120)}${r._cases120 ? ` · ${r._cases120} cases` : ""}`],
+    ["Projected 60d", fmtInt(r._ch60)], ["On order", fmtInt(r._inProg)], ["Qty in case", fmtInt(r._caseQty)],
+    ["Cases on hand", fmt1(r._casesOnHand)], ["Case cost", fmtUsd(r._caseCost)], ["Order (120d)", `${fmtInt(r._order120)}${r._cases120 ? ` · ${r._cases120} cases` : ""}`],
     ["Actual cost", fmtUsd(pos(r.actual_cost))], ["Purchase cost", fmtUsd(pos(r.purchase_cost))], ["Cost", fmtUsd(pos(r.cost))], ["Landed cost", fmtUsd(r._land)],
     ["Ship charge", fmtUsd(r._ship)], ["Last received", `${fmtDate(r.last_ordered_date)}${r.last_ordered_qty ? " · " + r.last_ordered_qty + " @ " + fmtUsd(num(r.last_ordered_price)) : ""}`],
     ["Last vendor", esc(r.last_ordered_name || "—")], ["Returns 90d", fmtInt(r._returns)], ["Updated", fmtDate(r.updated_at)]];
@@ -697,6 +758,7 @@ document.querySelector("#tbl thead").addEventListener("click", e => {
 document.querySelector("#tbl tbody").addEventListener("click", e => {
   const tr = e.target.closest("tr"); if (!tr) return;
   const r = tableList[+tr.dataset.i];
+  if (r._key === null) return;
   if (r._key) { pick = r._key; sortKey = null; $("q").value = ""; renderTabs(); renderTable(); } else showDetail(r);
 });
 $("q").addEventListener("input", renderTable);
