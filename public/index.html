@@ -293,16 +293,47 @@ function computeProfit(r) {
 
 // ---------- loading ----------
 let all = [], rows = [], charts = {}, page = "sales", view = null, sortKey = null, sortAsc = false, pick = "", channel = "", coverBucket = null, tableList = [];
+// Last good copy kept in the browser (IndexedDB) so a server or API hiccup still shows data.
+const idb = (mode, fn) => new Promise((resolve, reject) => {
+  const open = indexedDB.open("asi-dashboard", 1);
+  open.onupgradeneeded = () => open.result.createObjectStore("kv");
+  open.onerror = () => reject(open.error);
+  open.onsuccess = () => { const tx = open.result.transaction("kv", mode), req = fn(tx.objectStore("kv"));
+    tx.oncomplete = () => resolve(req.result); tx.onerror = () => reject(tx.error); };
+});
+const saveSnapshot = text => idb("readwrite", s => s.put({ at: Date.now(), text }, "products")).catch(() => {});
+const loadSnapshot = () => idb("readonly", s => s.get("products")).catch(() => null);
+
+async function fetchProducts(force) {
+  let last;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.text();
+    } catch (e) {
+      last = e;
+      if (attempt < 3) { setStatus(`Fetching products… (retrying, attempt ${attempt + 1} of 3)`); await new Promise(r => setTimeout(r, attempt * 2000)); }
+    }
+  }
+  throw last;
+}
 async function load(force) {
   setStatus("Fetching products…");
   try {
-    const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    ingest(await res.json(), "live API");
+    const text = await fetchProducts(force);
+    const data = JSON.parse(text);
+    ingest(data, "live API");
+    saveSnapshot(text);
   } catch (e) {
     console.error(e);
+    const snap = await loadSnapshot();
+    if (snap?.text) {
+      ingest(JSON.parse(snap.text), `saved copy from ${new Date(snap.at).toLocaleString()} (live API unavailable: ${e.message}, try Refresh data)`);
+      return;
+    }
     setStatus(`<div class="err">Couldn't load the products API (${esc(e.message)}).</div>
-      You can still open <a href="https://hub.fragrancewholesalerusa.com/api/open/products" target="_blank" rel="noopener">the API</a>,
+      Try <b>Refresh data</b> in a minute. You can also open <a href="https://hub.fragrancewholesalerusa.com/api/open/products" target="_blank" rel="noopener">the API</a>,
       save it as a .json file and click <b>Load JSON file</b>.`);
   }
 }
