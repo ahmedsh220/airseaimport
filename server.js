@@ -88,16 +88,16 @@ function getH2() {
 
 async function fetchUpstream() {
   let last;
-  for (let attempt = 1; attempt <= 6; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       // Alternate gzip and plain transfers in case one of them is what the upstream trips on.
-      const t = Date.now(), body = API.startsWith("https:") && attempt <= 3 ? await getH2() : await getOnce(attempt % 2 === 1);
+      const t = Date.now(), body = API.startsWith("https:") && attempt === 1 ? await getH2() : await getOnce(attempt % 2 === 1);
       console.log(`Products fetched in ${Date.now() - t}ms (${body.length} bytes, attempt ${attempt})`);
       return body;
     } catch (e) {
       last = e;
       console.warn(`Products fetch attempt ${attempt} failed: ${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ""}`);
-      if (attempt < 6) await sleep(attempt * 1500);
+      if (attempt < 3) await sleep(attempt * 1500);
     }
   }
   throw last;
