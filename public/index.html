@@ -11,11 +11,13 @@
     --bg: #f5f6f8; --panel: #ffffff; --text: #1b1f24; --muted: #667085; --border: #e4e7ec;
     --accent: #2563eb; --accent-soft: #eef3ff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
     --t-super: #7c3aed; --t-hero: #2563eb; --t-green: #15803d; --t-new: #0891b2; --t-dead: #6b7280; --t-other: #b45309;
+    --t-empty: #9f1239; --t-breathing: #ca8a04;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #0f1115; --panel: #171a21; --text: #e6e8eb; --muted: #9aa3af; --border: #2a2f3a;
             --accent: #60a5fa; --accent-soft: #1a2436; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
-            --t-super: #a78bfa; --t-hero: #60a5fa; --t-green: #4ade80; --t-new: #22d3ee; --t-dead: #9ca3af; --t-other: #fbbf24; }
+            --t-super: #a78bfa; --t-hero: #60a5fa; --t-green: #4ade80; --t-new: #22d3ee; --t-dead: #9ca3af; --t-other: #fbbf24;
+            --t-empty: #fb7185; --t-breathing: #facc15; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -79,6 +81,9 @@
   thead tr.grp th { cursor: default; top: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: center; border-left: 1px solid var(--border); }
   thead tr.grp + tr th { top: 28px; }
   th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
+  /* Rows tinted by the product's tier, with a solid stripe on the left edge. */
+  tbody tr[data-tier] td { background: color-mix(in srgb, var(--rowc) 13%, var(--panel)); }
+  tbody tr[data-tier] td:first-child { box-shadow: inset 4px 0 0 var(--rowc); }
   tbody tr.click { cursor: pointer; } tbody tr.click:hover td { background: var(--accent-soft); }
   tfoot td { font-weight: 650; background: var(--bg); position: sticky; bottom: 0; }
   .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
@@ -89,6 +94,11 @@
   .chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
   td.wrap { white-space: normal; min-width: 280px; }
   .calc { color: var(--muted); font-size: 11px; margin-left: 3px; }
+  .est { color: var(--warn); font-size: 10px; font-weight: 650; margin-left: 3px; text-transform: uppercase; }
+  .coverage { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px;
+              padding: 8px 12px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+  .coverage.partial { border-left-color: var(--warn); }
+  .coverage b { color: var(--text); } .coverage div + div { margin-top: 3px; }
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
   #status { padding: 40px; text-align: center; color: var(--muted); }
@@ -131,8 +141,8 @@
   <div class="content">
     <nav class="tabs" id="tabs"></nav>
     <div class="bar2">
-      <div class="row"><label class="t">Project next</label>
-        <div class="seg" id="horizon"><button data-h="7">7 days</button><button data-h="14">14 days</button><button data-h="30">30 days</button><button data-h="60">60 days</button></div></div>
+      <div class="row"><label class="t">Period</label>
+        <div class="seg" id="horizon"><button data-h="7">7 days</button><button data-h="14">14 days</button><button data-h="30">30 days</button><button data-h="60">60 days</button><button data-h="90">90 days</button></div></div>
       <div class="row">
         <label class="t" for="cat">Category</label><select id="cat"><option value="">All</option></select>
         <label class="t" for="tier">Tier</label><select id="tier"><option value="">All</option></select>
@@ -379,6 +389,7 @@ function ingest(data, source) {
   fillSelect("cat", all.map(r => r.category)); fillSelect("tier", all.map(r => r.pricing_category));
   $("meta").textContent = `${all.length.toLocaleString()} products · ${source} · loaded ${new Date().toLocaleString()}`;
   $("status").hidden = true; $("app").hidden = false;
+  indexTiktokSales();
   apply();
 }
 function reEnrich() { all = all.map(r => enrich(r)); apply(); }
@@ -395,11 +406,75 @@ function apply() {
   render();
 }
 
+// ---------- sales by period ----------
+// The products API has an all-platform 90-day total (sales_90_days) and per-platform 60-day columns,
+// nothing shorter. Exact TikTok units for any period come from Euka (/api/tiktok-sales) once TikTok
+// Shop is connected there; everything else is estimated from the daily average and marked "est.".
+const PERIODS = [7, 14, 30, 60, 90];
+let TTS = null, TT_UNITS = {};
+async function loadTiktokSales() {
+  try { const res = await fetch("/api/tiktok-sales", { cache: "no-store" }); TTS = await res.json(); }
+  catch (e) { TTS = { error: e.message }; }
+  indexTiktokSales();
+}
+const ttIds = r => { const ids = []; if (r.tiktok_product_id) ids.push(String(r.tiktok_product_id)); const t = json(r.igloo_tiktok); if (t?.id) ids.push(String(t.id)); return ids; };
+function indexTiktokSales() {
+  TT_UNITS = {};
+  if (!TTS?.windows || !all.length) return;
+  const bySku = new Map(all.map(r => [r.sku, r])), byId = new Map();
+  for (const r of all) for (const id of ttIds(r)) byId.set(id, r.sku);
+  for (const [n, w] of Object.entries(TTS.windows)) {
+    const m = TT_UNITS[n] = {};
+    for (const p of w.products) {
+      const sku = byId.get(p.id) || (p.skus.length === 1 && bySku.has(p.skus[0]) ? p.skus[0] : null);
+      if (sku) m[sku] = (m[sku] || 0) + p.units;
+    }
+  }
+}
+// Units sold in the last n days for the selected platform (or all). src: api | euka | est.
+function soldIn(r, n) {
+  const tt = TT_UNITS[n];
+  if (ST.plat) {
+    if (ST.plat === "tt" && tt) return { v: tt[r.sku] || 0, src: "euka" };
+    if (n === 60) return { v: r._ch[ST.plat] || 0, src: "api" };
+    return { v: (r._ch[ST.plat] || 0) / 60 * n, src: "est" };
+  }
+  if (n === 90) return { v: r._sold, src: "api" };
+  if (n === 60) return { v: r._ch60, src: "api" };
+  return { v: r._ch60 / 60 * n, src: "est" };
+}
+const soldCell = x => `${fmtInt(x.v)}${x.src === "est" ? `<span class="est" title="Estimated: the products API has no sales for this exact period">est.</span>` : ""}`;
+// Days since the product was first added; a product younger than the period has less history than it.
+const ageDays = r => { const d = parseDate(r.first_added_date); return d ? Math.floor((Date.now() - d) / 864e5) : null; };
+const apiSyncedAt = () => { let m = 0; for (const r of all) { const d = parseDate(r.updated_at); if (d && +d > m) m = +d; } return m ? new Date(m) : null; };
+function coverageHtml() {
+  const n = H(), plat = ST.plat ? platName(ST.plat) : "All platforms", synced = apiSyncedAt();
+  const ttOk = !!TTS?.windows, w = TTS?.windows?.[n];
+  let what;
+  if (ST.plat === "tt" && ttOk) what = `<b>exact TikTok units</b> from TikTok Shop analytics (via Euka), ${esc(w.start)} to ${esc(w.end)}`;
+  else if (n === 60) what = `<b>exact units</b> from the products API's 60-day platform columns`;
+  else if (n === 90 && !ST.plat) what = `<b>exact all-platform units</b> from the products API's 90-day total`;
+  else if (n === 90) what = `<b>estimated</b>: the API keeps only a 60-day split by platform, so ${esc(plat)} is scaled from 60 days`;
+  else what = `<b>estimated</b>: the products API has no ${n}-day sales, so units are the 60-day figure scaled to ${n} days`;
+  const partial = !(ST.plat === "tt" && ttOk) && !(n === 60) && !(n === 90 && !ST.plat);
+  const young = n >= 30 ? rows.filter(r => { const a = ageDays(r); return a != null && a < n && soldIn(r, n).v > 0; }).length : 0;
+  const tt = ttOk
+    ? `TikTok analytics reported through <b>${esc(TTS.end)}</b>${TTS.end < dayKey(new Date(Date.now() - 864e5)) ? " (TikTok is running behind)" : ""}.`
+    : TTS?.error ? `Exact TikTok numbers for any period need TikTok Shop connected in Euka: ${esc(TTS.error)}.` : "";
+  return `<div class="coverage ${partial ? "partial" : ""}">
+    <div><b>Last ${n} days · ${esc(plat)}:</b> ${what}.</div>
+    <div>Data cutoff: products API synced <b>${synced ? synced.toLocaleString() : "unknown"}</b>; its windows end at that sync. ${tt}</div>
+    ${young ? `<div>${fmtInt(young)} selling products were added less than ${n} days ago, so they have less than ${n} days of history.</div>` : ""}</div>`;
+}
+
 // ---------- formatting ----------
 const H = () => ST.horizon;
 const platName = ch => CHANNELS[ch] || "All platforms";
 const prodCell = r => `<b>${esc(r.sku)}</b><span>${esc(r.name)}</span>`;
-const TIER_COLOR = { super: "--t-super", hero: "--t-hero", green: "--t-green", reg: "--t-green", new: "--t-new", dead: "--t-dead" };
+const TIER_COLOR = { super: "--t-super", hero: "--t-hero", green: "--t-green", reg: "--t-green", new: "--t-new", dead: "--t-dead",
+  empty: "--t-empty", breathing: "--t-breathing" };
+// Tier of a table row: product rows carry _tier, competitor rows wrap the product as .r.
+const rowTier = r => { const t = r?._tier ?? r?.r?._tier; return t && t !== "none" ? t : null; };
 const tierTag = r => r._tier === "none" ? "<span class=muted>—</span>"
   : `<span class="tier" style="background:var(${TIER_COLOR[r._tier] || "--t-other"})">${esc(r._tier)}</span>`;
 const daysPill = v => { if (v == null) return "<span class=muted>no sales</span>";
@@ -428,14 +503,15 @@ function table(id, cols, list, opts = {}) {
   const limit = opts.limit || 1000, shown = list.slice(0, limit);
   const grp = cols.some(c => c.grp) ? `<tr class="grp">${groupHeads(cols)}</tr>` : "";
   const head = cols.map((c, i) => `<th data-t="${id}" data-i="${i}" class="${c.l ? "l" : ""}${s.i === i ? " sorted" + (s.asc ? " asc" : "") : ""}" title="${esc(c.tip || "")}">${c.h}</th>`).join("");
-  const body = shown.map((r, ri) => `<tr class="${opts.onRow ? "click" : ""}" data-t="${id}" data-r="${ri}">${cols.map(c => {
+  const body = shown.map((r, ri) => { const t = rowTier(r);
+    return `<tr class="${opts.onRow ? "click" : ""}" data-t="${id}" data-r="${ri}"${t ? ` data-tier="${esc(t)}" style="--rowc:var(${TIER_COLOR[t] || "--t-other"})"` : ""}>${cols.map(c => {
     const html = c.f ? c.f(r) : (FMT[c.t || "int"])(c.v(r));
-    return `<td class="${c.prod ? "prod" : c.l ? "l" : ""}">${html}</td>`; }).join("")}</tr>`).join("");
+    return `<td class="${c.prod ? "prod" : c.l ? "l" : ""}">${html}</td>`; }).join("")}</tr>`; }).join("");
   const foot = cols.some(c => c.total) ? `<tfoot><tr>${cols.map((c, i) => `<td class="${c.l || c.prod ? "l" : ""}">${
     c.total ? (FMT[c.t || "int"])(sum(list, c.v)) : i === 0 ? `Total · ${list.length.toLocaleString()} rows` : ""}</td>`).join("")}</tr></tfoot>` : "";
   const more = list.length > limit ? `<p class="hint">Showing ${limit} of ${list.length.toLocaleString()}. Search or export CSV for the rest.</p>` : "";
   if (!list.length) return `<p class="muted" style="padding:16px 0">${opts.empty || "Nothing matches."}</p>`;
-  return `<div class="tablewrap" style="${opts.height ? `max-height:${opts.height}` : ""}"><table><thead>${grp}<tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${more}`;
+  return `<div class="tablewrap" data-scroll="${id}" style="${opts.height ? `max-height:${opts.height}` : ""}"><table><thead>${grp}<tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${more}`;
 }
 function groupHeads(cols) {
   const out = []; let cur = null, n = 0;
@@ -456,28 +532,36 @@ const TIER = { h: "Tier", v: r => r._tier, f: tierTag, l: true };
 const TABS = { overview: "Overview", actions: "Actions", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
 function render() {
   saveState();
+  // Re-rendering replaces every table, so remember where each one (and the page) was scrolled.
+  const scrolls = {}, pageY = window.scrollY;
+  document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { scrolls[el.dataset.scroll] = [el.scrollTop, el.scrollLeft]; });
   $("tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${ST.tab === k ? "active" : ""}">${v}</button>`).join("");
   document.querySelectorAll("#horizon button").forEach(b => b.classList.toggle("active", +b.dataset.h === ST.horizon));
   $("platChip").innerHTML = ST.plat ? `<span class="chip">Platform: ${platName(ST.plat)}<button data-plat="" title="Show all platforms">×</button></span>` : "";
   renderSide();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
+  $("main").innerHTML = coverageHtml() + ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
   if (ST.tab === "overview") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
+  document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { const s = scrolls[el.dataset.scroll]; if (s) [el.scrollTop, el.scrollLeft] = s; });
+  window.scrollTo(window.scrollX, pageY);
 }
 
 function renderSide() {
-  const tot = sum(rows, r => r._ch60), h = H();
-  const list = Object.keys(CHANNELS).map(k => ({ k, u: sum(rows, r => r._ch[k]) })).sort((a, b) => b.u - a.u);
+  const h = H(), tt = TT_UNITS[h];
+  // Units per platform for the period: exact for 60 days (API) and TikTok via Euka, otherwise scaled from 60 days.
+  const unitsFor = k => k === "tt" && tt ? { u: sum(rows, r => tt[r.sku]), est: false } : { u: sum(rows, r => r._ch[k]) / 60 * h, est: h !== 60 };
+  const list = Object.keys(CHANNELS).map(k => ({ k, ...unitsFor(k) })).sort((a, b) => b.u - a.u);
+  const tot = h === 90 ? { u: sum(rows, r => r._sold), est: false } : h === 60 ? { u: sum(rows, r => r._ch60), est: false } : { u: sum(rows, r => r._ch60) / 60 * h, est: true };
   const max = Math.max(1, ...list.map(x => x.u));
-  const item = (k, label, u, share) => `<button class="plat ${ST.plat === k ? "on" : ""}" data-plat="${k}">
-    <div class="top"><span>${label}</span><span>${fmtInt(u)}</span></div>
+  const item = (k, label, x, share) => `<button class="plat ${ST.plat === k ? "on" : ""}" data-plat="${k}">
+    <div class="top"><span>${label}</span><span>${fmtInt(x.u)}${x.est ? `<span class="est">est.</span>` : ""}</span></div>
     <div class="bar"><i style="width:${(share * 100).toFixed(1)}%"></i></div>
-    <div class="sub">${fmt1(u / 60)}/day · next ${h}d ≈ ${fmtInt(u / 60 * h)}</div></button>`;
-  $("side").innerHTML = `<h2>Sales by platform · 60 days</h2>` + item("", "All platforms", tot, 1)
-    + list.map(x => item(x.k, CHANNELS[x.k], x.u, x.u / max)).join("")
-    + `<p class="meta" style="margin:10px 8px">Units from the API's 60-day platform columns. Click a platform to focus every tab on it.</p>`;
+    <div class="sub">${fmt1(x.u / h)}/day over the last ${h} days</div></button>`;
+  $("side").innerHTML = `<h2>Sales by platform · last ${h} days</h2>` + item("", "All platforms", tot, 1)
+    + list.map(x => item(x.k, CHANNELS[x.k], x, x.u / max)).join("")
+    + `<p class="meta" style="margin:10px 8px">Exact: 60-day platform columns and the 90-day total from the products API${tt ? ", and TikTok from TikTok Shop analytics" : ""}. <span class="est">est.</span> figures are scaled from 60 days because the API has nothing shorter. Click a platform to focus every tab on it.</p>`;
 }
 
 // ---------- Overview ----------
@@ -506,11 +590,12 @@ function overviewHtml() {
   <section class="card" id="topCard"><div class="head"><div><h3>Top sellers, projected next ${h} days</h3><p class="hint" style="margin:0">Sorted by projected units. Click a row for the full breakdown.</p></div></div>
     ${table("top", [PROD, TIER, { h: "Live inv", v: r => r._qoh },
       { h: soldLabel(), v: soldFor },
+      { h: `Sold last ${h}d`, v: r => soldIn(r, h).v, f: r => soldCell(soldIn(r, h)), tip: "Units sold in the selected period; est. means the API has no exact figure for it" },
       { h: "Day ave", v: dayFor, t: "1" },
-      ...[7, 14, 30, 60].map(n => ({ h: `Next ${n}d`, v: r => dayFor(r) * n, tip: `Day ave × ${n}` })),
+      ...PERIODS.map(n => ({ h: `Next ${n}d`, v: r => dayFor(r) * n, tip: `Day ave × ${n}` })),
       { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days) },
       { h: `Short in ${h}d`, v: r => Math.max(0, dayFor(r) * h - r._qoh - r._inProg), f: r => { const v = Math.max(0, dayFor(r) * h - r._qoh - r._inProg); return v ? `<span class=bad>${fmtInt(v)}</span>` : "<span class=muted>0</span>"; }, tip: "Projected units minus live inventory and on order" }],
-      top, { sort: 4 + 1 + [7, 14, 30, 60].indexOf(h), limit: 100, onRow: showDetail, main: "top-sellers" })}</section>`;
+      top, { sort: 6 + PERIODS.indexOf(h), limit: 100, onRow: showDetail, main: "top-sellers" })}</section>`;
 }
 
 function drawPlatformChart(id, mode) {
@@ -829,7 +914,7 @@ async function loadCompetitors(withStatus) {
     if (withStatus || !compStatus) { const s = await fetch("/api/competitors/status", { cache: "no-store" }); if (s.ok) compStatus = await s.json(); }
   } catch (e) { console.warn("Competitor data unavailable", e); }
   clearTimeout(compPoll);
-  if (COMP?.running) compPoll = setTimeout(() => loadCompetitors().then(() => ST.tab === "competitors" && render()), 5000);
+  if (COMP?.running) compPoll = setTimeout(() => loadCompetitors().then(() => ST.tab === "competitors" && !$("detail").open && render()), 15000);
 }
 const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 // TikTok P&L from the sheet: 20% fee, we pay ship when price ≥ $30.
@@ -1047,6 +1132,7 @@ $("file").onchange = async e => { const f = e.target.files[0]; if (!f) return;
   try { ingest(JSON.parse(await f.text()), `file ${f.name}`); } catch (err) { setStatus(`<div class="err">Couldn't read ${esc(f.name)}: ${esc(err.message)}</div>`); } };
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
 load();
+if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all.length) render(); });
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
 </body>
