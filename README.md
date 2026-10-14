@@ -9,7 +9,7 @@ Single-page reports dashboard for the product data at
 - Charts: 60-day sales by channel, top 15 sellers, stock health (days of cover), cheapest-vendor wins
 - Report tables (sortable, searchable, CSV export): Reorder, Top sellers, Vendor pricing, Dead stock, Channel mix, Returns, All products
 
-A sticky filter bar picks the date field and range (default: today), category and tier. KPI tiles and chart bars open the matching report. Click any product for its full vendor price comparison. **Load JSON file** still works for offline snapshots.
+A sticky filter bar picks the date field and range (default: today), category and tier. KPI tiles and chart bars open the matching report. Click any product for its full vendor price comparison. **Catalog management** in the top bar opens the Customer catalog tab.
 
 Data notes: on hand uses `live_qoh`; our cost is `actual_cost` when above 0, else `cost`; vendor columns (`lux`, `edge`, `tahir`, …) are supplier prices; `*_60_days` are 60-day sales projections per channel; `sales_sep_sale_price` and `sales_sep_shipping_price_we_paid` are September totals.
 

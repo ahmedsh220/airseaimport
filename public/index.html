@@ -140,8 +140,7 @@
   </div>
   <div class="row">
     <button id="reload">Refresh data</button>
-    <button id="uploadBtn" type="button">Load JSON file</button>
-    <input type="file" id="file" accept=".json,application/json" hidden>
+    <button id="catalogBtn" type="button">Catalog management</button>
     <button id="csv">Export table CSV</button>
     <a id="signout" href="/logout" hidden><button type="button">Sign out</button></a>
   </div>
@@ -377,8 +376,7 @@ async function load(force) {
       return;
     }
     setStatus(`<div class="err">Couldn't load the products API (${esc(e.message)}).</div>
-      Try <b>Refresh data</b> in a minute. You can also open <a href="https://hub.fragrancewholesalerusa.com/api/open/products" target="_blank" rel="noopener">the API</a>,
-      save it as a .json file and click <b>Load JSON file</b>.`);
+      Try <b>Refresh data</b> in a minute.`);
   }
 }
 
@@ -1187,9 +1185,7 @@ $("dClose").onclick = () => $("detail").close();
 $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
 $("reload").onclick = () => load(true);
 $("csv").onclick = exportCsv;
-$("uploadBtn").onclick = () => $("file").click();
-$("file").onchange = async e => { const f = e.target.files[0]; if (!f) return;
-  try { ingest(JSON.parse(await f.text()), `file ${f.name}`); } catch (err) { setStatus(`<div class="err">Couldn't read ${esc(f.name)}: ${esc(err.message)}</div>`); } };
+$("catalogBtn").onclick = () => { ST.tab = "catalog"; render(); window.scrollTo(0, 0); };
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
 // Signed-in session (auth.js): send the user back to sign in when it runs out or the server says so.
 if (location.protocol.startsWith("http")) {
