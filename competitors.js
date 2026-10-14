@@ -414,11 +414,12 @@ async function handle(req, res, url, getList) {
       // Temporary: why product search answers 400. Fixed variants only, no caller input.
       const brand = (await euka("/me")).brandIds?.[0];
       const variants = {
-        brandOnly: [CFG.searchPath, { brandId: brand }],
-        brandRegion: [CFG.searchPath, { brandId: brand, region: CFG.region }],
-        brandQuery: [CFG.searchPath, { brandId: brand, region: CFG.region, query: "lattafa khamrah", limit: 50 }],
-        categories: ["/social-intelligence/categories", { brandId: brand }],
-        brands: ["/social-intelligence/brands", { brandId: brand }],
+        q1: [CFG.searchPath, { brandId: brand, query: "khamrah" }],
+        q2: [CFG.searchPath, { brandId: brand, query: "lattafa khamrah" }],
+        l50: [CFG.searchPath, { brandId: brand, limit: 50 }],
+        l20: [CFG.searchPath, { brandId: brand, limit: 20 }],
+        sort: [CFG.searchPath, { brandId: brand, sortBy: "last30dSales" }],
+        reg: [CFG.searchPath, { brandId: brand, region: "US", query: "khamrah" }],
       };
       const out = {};
       for (const [k, v] of Object.entries(variants)) {
