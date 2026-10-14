@@ -151,8 +151,8 @@ function build(list) {
 // Saved next to the competitor results, on the Render disk when COMPETITOR_DATA_DIR points there.
 const DATA_DIR = process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR || path.join(__dirname, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "catalog-settings.json");
-// Wholesale pricing rules: piece price = cost + pieceMarkupPct, case price = (cost + caseMarkupPct) × qty in case,
-// with the piece and per-piece case prices rounded to the nearest roundTo (0 = no rounding).
+// Wholesale pricing rules: piece price = cost + pieceMarkupPct, case price (per piece) = cost + caseMarkupPct,
+// with the piece and per-piece case prices rounded up to the next roundTo (0 = no rounding).
 const BASE = { enabled: true, pieceMarkupPct: 12, caseMarkupPct: 8, roundTo: 0.5, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
 const fresh = c => ({ ...BASE, ...c.defaults });
 let store = {};
@@ -188,10 +188,10 @@ function save(c, next) {
 // Whether a product shows in the catalog under its settings.
 // Prices under a catalog's rules. A price set for the SKU in Catalog management replaces the piece price.
 function pricesFor(i, s) {
-  const rnd = n => s.roundTo > 0 ? round2(Math.round(n / s.roundTo) * s.roundTo) : round2(n);
+  const rnd = n => s.roundTo > 0 ? round2(Math.ceil(n / s.roundTo - 1e-9) * s.roundTo) : round2(n);
   const piece = s.prices[i.sku] ?? (i.cost != null ? rnd(i.cost * (1 + s.pieceMarkupPct / 100)) : null);
   const unit = i.cost != null ? rnd(i.cost * (1 + s.caseMarkupPct / 100)) : null;
-  return { piece, caseUnit: unit, case: unit != null && i.qty ? round2(unit * i.qty) : null };
+  return { piece, caseUnit: unit };
 }
 const listed = (i, s) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
 // What the dashboard sees of a catalog's settings: everything but the password hash.
@@ -213,7 +213,7 @@ function customerView(c, data) {
   const items = data.items.filter(i => !hidden.has(i.sku) && (added.has(i.sku) || (s.mode === "all" && i.auto))).map(i => {
     const pr = pricesFor(i, s);
     return { sku: i.sku, upc: i.upc, name: i.name, category: i.category, section: i.section, isNew: i.isNew, img: i.img,
-      piece: s.showPrices ? pr.piece : undefined, case: s.showCasePrices ? pr.case : undefined,
+      piece: s.showPrices ? pr.piece : undefined,
       caseUnit: s.showCasePrices ? pr.caseUnit : undefined, qty: s.showCasePrices ? i.qty : undefined };
   });
   return { catalog: c.name, fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };

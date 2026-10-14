@@ -41,7 +41,7 @@
   const isIn = (i, s = CA.draft) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
   // Same rules as catalog.js pricesFor(): piece = cost + piece markup (or the SKU's own price), case = (cost + case markup) × qty.
   const r2 = n => Math.round(n * 100) / 100;
-  const rnd = n => { const t = +CA.draft.roundTo || 0; return t > 0 ? r2(Math.round(n / t) * t) : r2(n); };
+  const rnd = n => { const t = +CA.draft.roundTo || 0; return t > 0 ? r2(Math.ceil(n / t - 1e-9) * t) : r2(n); };
   const rulePiece = i => i.cost != null ? rnd(i.cost * (1 + (+CA.draft.pieceMarkupPct || 0) / 100)) : null;
   const price = i => CA.draft.prices[i.sku] ?? rulePiece(i);
   const caseUnit = i => i.cost != null ? rnd(i.cost * (1 + (+CA.draft.caseMarkupPct || 0) / 100)) : null;
@@ -87,11 +87,11 @@
       <div class="ca-opts">
         <label><input type="checkbox" data-ca="enabled" ${d.enabled ? "checked" : ""}><span><b>Catalog is on</b><small>Turned off, customers see "The catalog is unavailable right now".</small></span></label>
         <label><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost + the piece markup, or the price you set for a SKU below.</small></span></label>
-        <label><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>(Wholesale cost + the case markup) × qty in case.</small></span></label>
+        <label><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>Per-piece price when buying by the case: wholesale cost + the case markup.</small></span></label>
         <fieldset><legend>Wholesale pricing rules</legend>
           <label class="rule">Piece price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="pieceMarkupPct" value="${d.pieceMarkupPct}" style="width:72px">%</label>
           <label class="rule">Case price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="caseMarkupPct" value="${d.caseMarkupPct}" style="width:72px">% per piece</label>
-          <label class="rule">Round both to the nearest <select data-ca-round>${[[0, "no rounding"], [0.05, "$0.05"], [0.1, "$0.10"], [0.25, "$0.25"], [0.5, "$0.50"], [1, "$1.00"]].map(([v, l]) => `<option value="${v}" ${+d.roundTo === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="rule">Round both up to the next <select data-ca-round>${[[0, "no rounding"], [0.05, "$0.05"], [0.1, "$0.10"], [0.25, "$0.25"], [0.5, "$0.50"], [1, "$1.00"]].map(([v, l]) => `<option value="${v}" ${+d.roundTo === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </fieldset>
         <fieldset><legend>Which products</legend>
           <label><input type="radio" name="caMode" data-ca="mode" value="all" ${d.mode === "all" ? "checked" : ""}><span>Every product in the API, except the ones you remove<small>New API products appear on their own.</small></span></label>
@@ -134,9 +134,9 @@
         <td class=l>${esc(i.name)}</td><td class=l>${esc(i.category)}</td>
         <td>${usd(i.cost)}</td><td>${usd(rulePiece(i))}</td>
         <td><input type="number" min="0" step="0.01" data-ca-price="${esc(i.sku)}" value="${own ? d.prices[i.sku] : ""}" placeholder="${rulePiece(i) ?? ""}" title="Leave empty to use the rule"></td>
-        <td>${i.qty ?? "<span class=muted>—</span>"}</td><td>${usd(caseUnit(i))}</td><td>${usd(caseUnit(i) != null && i.qty ? r2(caseUnit(i) * i.qty) : null)}</td></tr>`;
+        <td>${i.qty ?? "<span class=muted>—</span>"}</td><td>${usd(caseUnit(i))}</td></tr>`;
     }).join("");
-    return `<div class="tablewrap" id="caTable"><table><thead><tr><th>In</th><th class=l>SKU</th><th class=l>Name</th><th class=l>Category</th><th>Wholesale cost</th><th>Piece (rule)</th><th>Your piece price</th><th>Qty / case</th><th>Case per piece</th><th>Case price</th></tr></thead>
+    return `<div class="tablewrap" id="caTable"><table><thead><tr><th>In</th><th class=l>SKU</th><th class=l>Name</th><th class=l>Category</th><th>Wholesale cost</th><th>Piece (rule)</th><th>Your piece price</th><th>Qty / case</th><th>Case price (per piece)</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">No products match.</td></tr>`}</tbody></table>
       ${list.length > CA.limit ? `<p class="muted" style="margin:8px">Showing ${CA.limit.toLocaleString()} of ${list.length.toLocaleString()}. <a href="#" data-ca-do="more">Show all</a> or search to narrow it down.</p>` : ""}</div>`;
   }
