@@ -401,4 +401,4 @@ async function handle(req, res, url, getList) {
   }
 }
 
-module.exports = { handle, schedule, CFG, _test: { profile, queries, score, sizes, slimMi, merge } };
+module.exports = { handle, schedule, CFG, euka, _test: { profile, queries, score, sizes, slimMi, merge } };
