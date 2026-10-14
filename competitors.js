@@ -72,7 +72,7 @@ async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
   }
   const text = await res.text();
   if (!res.ok) {
-    const err = new Error(`Euka HTTP ${res.status}: ${text.slice(0, 200).replace(/\s+/g, " ")}`);
+    const err = new Error(`Euka HTTP ${res.status}: ${text.slice(0, 600).replace(/\s+/g, " ")}`);
     err.status = res.status;
     throw err;
   }
@@ -409,6 +409,23 @@ async function handle(req, res, url, getList) {
         needsToken: !!CFG.adminToken, sources: CFG.sources, marketIntel: job ? miState : state.marketIntel || miState,
         skus: state.skus, overrides,
       }), true;
+    }
+    if (sub === "/diag") {
+      // Temporary: why product search answers 400. Fixed variants only, no caller input.
+      const brand = (await euka("/me")).brandIds?.[0];
+      const variants = {
+        current: { query: "lattafa khamrah", region: CFG.region, limit: 50, sortBy: "last30dSales" },
+        noSort: { query: "lattafa khamrah", region: CFG.region, limit: 50 },
+        noRegion: { query: "lattafa khamrah", limit: 50 },
+        withBrand: { query: "lattafa khamrah", region: CFG.region, limit: 50, brandId: brand },
+        bare: {},
+      };
+      const out = {};
+      for (const [k, v] of Object.entries(variants)) {
+        try { const r = await euka(CFG.searchPath, v); out[k] = { ok: true, items: (r.items || []).length }; }
+        catch (e) { out[k] = { ok: false, error: e.message }; }
+      }
+      return send(res, 200, out), true;
     }
     if (sub === "/status") {
       const k = await checkKey();
