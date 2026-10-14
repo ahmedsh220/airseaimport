@@ -83,6 +83,9 @@ function shown() {
   return data.items.filter(i => (!sec || i.section === sec) && (!onlyNew || i.isNew)
     && (!q || (i.name + " " + i.sku + " " + i.upc + " " + i.category).toLowerCase().includes(q)));
 }
+// Price columns the owner chose to show (set in the dashboard's Customer catalog tab).
+const priceCols = () => [data.showPrices !== false && ["PIECE PRICE", i => i.piece], data.showCasePrices !== false && ["CASE PRICE", i => i.case]].filter(Boolean);
+const nCols = () => 6 + priceCols().length;
 // Items grouped under their section headings, in catalog order.
 function grouped(items) {
   const out = [];
@@ -92,25 +95,32 @@ function grouped(items) {
 function render() {
   const items = shown();
   $("status").textContent = `${items.length.toLocaleString()} products`;
-  if (!items.length) { $("rows").innerHTML = `<tr><td colspan="8" class="empty">No products match.</td></tr>`; return; }
-  $("rows").innerHTML = grouped(items).map(([s, g]) => `<tr class="sec"><td colspan="8">${esc(s)}</td></tr>` + g.map(i => `<tr>
+  const pc = priceCols();
+  document.querySelector("thead tr").innerHTML = `<th></th><th>PICTURE</th><th>SKU</th><th>UPC</th><th>NAME</th><th>CATEGORY</th>` + pc.map(([h]) => `<th class="price">${h}</th>`).join("");
+  if (!items.length) { $("rows").innerHTML = `<tr><td colspan="${nCols()}" class="empty">No products match.</td></tr>`; return; }
+  $("rows").innerHTML = grouped(items).map(([s, g]) => `<tr class="sec"><td colspan="${nCols()}">${esc(s)}</td></tr>` + g.map(i => `<tr>
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${i.img ? `<img loading="lazy" src="/catalog/img/${encodeURIComponent(i.sku)}" alt="" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>'}</td>
     <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td>${esc(i.name)}</td><td>${esc(i.category)}</td>
-    <td class="price">${money(i.piece)}</td><td class="price">${money(i.case)}${i.case != null && i.qty ? `<small>${i.qty} pcs</small>` : ""}</td></tr>`).join("")).join("");
+    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.case != null && i.qty ? `<small>${i.qty} pcs</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
 }
 
 async function load() {
   const r = await fetch("/catalog/data", { cache: "no-store" });
-  if (r.status === 401) { location.href = "/catalog"; return; }
+  // Signed out, or the owner turned the catalog off: the page itself shows which.
+  if (r.status === 401 || r.status === 503) { location.href = "/catalog"; return; }
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   data = d;
+  const sec = $("sec").value;
   $("sec").innerHTML = '<option value="">All categories</option>' + d.sections.filter(s => d.items.some(i => i.section === s)).map(s => `<option>${esc(s)}</option>`).join("");
-  $("asof").textContent = `Prices as of ${new Date(d.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`;
+  $("sec").value = sec;
+  $("asof").textContent = !priceCols().length ? "Contact sales for pricing." : `Prices as of ${new Date(d.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`;
   render();
 }
 load().catch(e => { $("rows").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`; });
+// Pick up the owner's changes and new prices without a reload (skipped while an export is running).
+setInterval(() => { if (!$("pdf").disabled && document.visibilityState === "visible") load().catch(() => {}); }, 60e3);
 let t; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 150); });
 $("sec").addEventListener("change", render); $("onlyNew").addEventListener("change", render);
 
@@ -161,32 +171,33 @@ $("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
     views: [{ state: "frozen", ySplit: 6, showGridLines: true }],
     pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "6:6" },
   });
-  ws.columns = [8, 14, 14, 18, 74, 18, 17, 17].map(width => ({ width }));
+  const pc = priceCols(), N = 6 + pc.length, last = "ABCDEFGH"[N - 1];
+  ws.columns = [8, 14, 14, 18, 74, 18, 17, 17].slice(0, N).map(width => ({ width }));
   const font = { name: "Aptos Narrow", size: 12 };
   ws.getRow(1).height = 115; ws.getRow(2).height = 26; ws.getRow(3).height = 17; ws.getRow(4).height = 26; ws.getRow(5).height = 2; ws.getRow(6).height = 28;
   const img = (pic, col, row, w, h) => { if (!pic) return; const k = Math.min(w / pic.w, h / pic.h);
     ws.addImage(wb.addImage({ base64: pic.data, extension: "jpeg" }), { tl: { col, row }, ext: { width: pic.w * k, height: pic.h * k }, editAs: "oneCell" }); };
   // ExcelJS turns the fraction of a column into a fixed offset, not one scaled to the column's width,
-  // so each logo starts in its own column: Lattafa B, Arabiyat D, main logo E, Bharara F, Armaf H.
+  // so each logo starts in its own column: Lattafa B, Arabiyat D, main logo E, Bharara F, Armaf in the last column (left out when both price columns are hidden).
   img(logo.lattafa, 1.2, 0.1, 120, 120); img(logo.arabiyat, 3.1, 0.1, 125, 125);
-  img(logo.main, 4.9, 0.05, 320, 150); img(logo.bharara, 5.05, 0.3, 220, 95); img(logo.armaf, 7.0, 0.1, 115, 115);
+  img(logo.main, 4.9, 0.05, 320, 150); img(logo.bharara, 5.05, 0.3, 220, 95); if (N > 6) img(logo.armaf, N - 1, 0.1, 115, 115);
   // Same address, phone and price headings as the printed catalog.
-  ws.mergeCells("A2:H2"); ws.mergeCells("A3:H3");
+  ws.mergeCells(`A2:${last}2`); ws.mergeCells(`A3:${last}3`);
   Object.assign(ws.getCell("A2"), { value: ADDRESS, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
   Object.assign(ws.getCell("A3"), { value: PHONE, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
-  Object.assign(ws.getCell("E4"), { value: `Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, font: { ...font, size: 10, italic: true, color: { argb: "FF5D6675" } }, alignment: { horizontal: "left", vertical: "middle" } });
-  for (const c of ["G4", "H4"]) Object.assign(ws.getCell(c), { value: c === "G4" ? "PIECE PRICE" : "CASE PRICE", font: { name: "Arial", size: 12, bold: true },
-    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAD3" } }, alignment: { horizontal: "center", vertical: "middle" } });
-  ["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", "PIECE PRICE", "CASE PRICE"].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
+  if (pc.length) Object.assign(ws.getCell("E4"), { value: `Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, font: { ...font, size: 10, italic: true, color: { argb: "FF5D6675" } }, alignment: { horizontal: "left", vertical: "middle" } });
+  pc.forEach(([h], k) => Object.assign(ws.getRow(4).getCell(7 + k), { value: h, font: { name: "Arial", size: 12, bold: true },
+    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAD3" } }, alignment: { horizontal: "center", vertical: "middle" } }));
+  ["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
     { value: h, font: { ...font, bold: true, color: { argb: "FF156082" } }, alignment: { horizontal: k >= 6 ? "center" : "left", vertical: "middle" } }));
   let r = 7;
   for (const [s, g] of grouped(items)) {
     const row = ws.getRow(r++); row.height = 30;
-    for (let c = 1; c <= 8; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
+    for (let c = 1; c <= N; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
     Object.assign(row.getCell(3), { value: s, font: { ...font, bold: true, color: { argb: "FFFFFFFF" } }, alignment: { vertical: "middle" } });
     for (const i of g) {
       const row = ws.getRow(r); row.height = 62;
-      [i.isNew ? "NEW" : "", "", i.sku, i.upc, i.name, i.category, i.piece ?? "Contact Sales", i.case ?? "Contact Sales"].forEach((v, k) => {
+      [i.isNew ? "NEW" : "", "", i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => f(i) ?? "Contact Sales")].forEach((v, k) => {
         const cell = row.getCell(k + 1); cell.value = v; cell.font = k === 0 ? { ...font, bold: true, color: { argb: "FFE00000" } } : font;
         cell.alignment = { vertical: "middle", horizontal: k >= 6 || k === 0 ? "center" : "left", wrapText: k >= 2 && k <= 4 };
         if (k >= 6 && typeof v === "number") cell.numFmt = '"$"#,##0.00';
@@ -213,15 +224,15 @@ $("pdf").onclick = () => run($("pdf"), "PDF", async () => {
   doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(20);
   doc.text(ADDRESS, W / 2, 120, { align: "center" }); doc.text(PHONE, W / 2, 135, { align: "center" });
   doc.setFontSize(8); doc.setTextColor(93, 102, 117);
-  doc.text(`Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`, W / 2, 148, { align: "center" });
-  const body = [];
+  if (priceCols().length) doc.text(`Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`, W / 2, 148, { align: "center" });
+  const pc = priceCols(), body = [];
   for (const [s, g] of grouped(items)) {
-    body.push([{ content: s, colSpan: 8, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
-    for (const i of g) body.push([i.isNew ? "NEW" : "", { content: "", sku: i.sku }, i.sku, i.upc, i.name, i.category, money(i.piece), money(i.case)]);
+    body.push([{ content: s, colSpan: 6 + pc.length, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
+    for (const i of g) body.push([i.isNew ? "NEW" : "", { content: "", sku: i.sku }, i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => money(f(i)))]);
   }
   doc.autoTable({
     startY: 158, margin: { left: 24, right: 24, bottom: 30 }, theme: "plain",
-    head: [["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", "PIECE PRICE", "CASE PRICE"]], body,
+    head: [["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)]], body,
     styles: { fontSize: 8.5, valign: "middle", cellPadding: 3, minCellHeight: 50, lineColor: [236, 238, 241], lineWidth: { bottom: 0.5 } },
     headStyles: { textColor: [21, 96, 130], fontStyle: "bold", fontSize: 9, minCellHeight: 0 },
     columnStyles: { 0: { cellWidth: 30, halign: "center", textColor: [224, 0, 0], fontStyle: "bold" }, 1: { cellWidth: 56 }, 2: { cellWidth: 62 }, 3: { cellWidth: 82 },

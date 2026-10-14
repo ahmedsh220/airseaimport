@@ -103,6 +103,8 @@ function priceOf(p) {
   return c > 0 ? round2(c * (1 + num(process.env.CATALOG_MARKUP_PCT) / 100)) : null;
 }
 
+// Every API product with its catalog fields. auto: the catalog would include it on its own
+// (internal SKUs such as opened boxes, deleted and discontinued are left out unless added by hand).
 function build(list) {
   const newDays = num(process.env.CATALOG_NEW_DAYS || 30);
   const byUpc = new Map();
@@ -110,23 +112,55 @@ function build(list) {
   const images = new Map(), items = [];
   for (const p of list) {
     const sku = String(p.sku || "").trim();
-    if (!sku || HIDDEN.test(sku) || HIDDEN_NAME.test(String(p.name || "").trim()) || p.activated === 0 || p.activated === "0") continue;
+    if (!sku) continue;
+    const auto = !HIDDEN.test(sku) && !HIDDEN_NAME.test(String(p.name || "").trim()) && p.activated !== 0 && p.activated !== "0";
     const upc = String(p.upc || "").trim();
     let cat = String(p.category || "").trim().toUpperCase();
     if (!cat) cat = PREFIX[(sku.match(/^[A-Z]+/i) || [""])[0].toUpperCase()] || "PERFUME";
     const [section, category] = CATEGORY[cat] || ["OTHER", cat];
     const img = imageOf(p) || byUpc.get(upc) || null;
     if (img) images.set(sku, img);
-    const piece = priceOf(p), qty = Math.round(num(p.qty_in_case));
+    const qty = Math.round(num(p.qty_in_case));
     items.push({
       sku, upc, name: String(p.name || "").replace(/^\s*\*+\s*/, "").trim(), category, section,
-      piece, case: piece != null && qty > 0 ? round2(piece * qty) : null, qty: qty > 0 ? qty : null,
-      isNew: Date.now() - addedAt(p) < newDays * 864e5, img: !!img,
+      piece: priceOf(p), qty: qty > 0 ? qty : null, isNew: Date.now() - addedAt(p) < newDays * 864e5, img: !!img, auto,
     });
   }
   items.sort((a, b) => SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section) || a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku));
   return { items, images };
 }
+
+// ---- Settings the owner controls from the dashboard's Customer catalog tab ----
+// Saved next to the competitor results, on the Render disk when COMPETITOR_DATA_DIR points there.
+const DATA_DIR = process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR || path.join(__dirname, "data");
+const SETTINGS_FILE = path.join(DATA_DIR, "catalog-settings.json");
+const DEFAULTS = { enabled: true, showPrices: true, showCasePrices: true, mode: "all", hidden: [], added: [], prices: {}, updatedAt: null, updatedBy: null };
+let settings = { ...DEFAULTS };
+try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8")) }; } catch {}
+const skuList = v => [...new Set((Array.isArray(v) ? v : []).map(x => String(x).trim()).filter(Boolean))].slice(0, 10000);
+function clean(input, by) {
+  const prices = {};
+  for (const [k, v] of Object.entries(input.prices && typeof input.prices === "object" ? input.prices : {})) {
+    const n = Number(v); if (String(k).trim() && Number.isFinite(n) && n >= 0) prices[String(k).trim()] = round2(n);
+  }
+  return {
+    enabled: input.enabled !== false, showPrices: input.showPrices !== false, showCasePrices: input.showCasePrices !== false,
+    mode: input.mode === "selected" ? "selected" : "all", hidden: skuList(input.hidden), added: skuList(input.added), prices,
+    updatedAt: new Date().toISOString(), updatedBy: String(by || "").slice(0, 60) || null,
+  };
+}
+function save(next) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE + ".tmp", JSON.stringify(next, null, 1));
+  fs.renameSync(SETTINGS_FILE + ".tmp", SETTINGS_FILE);
+  settings = next;
+}
+// Whether a product shows in the customer catalog under the current settings.
+function listed(i, s = settings) {
+  if (s.hidden.includes(i.sku)) return false;
+  return s.added.includes(i.sku) || (s.mode === "all" && i.auto);
+}
+function piece(i, s = settings) { return s.prices[i.sku] ?? i.piece; }
 
 let built = { at: 0, data: null };
 async function catalog(productList, meta) {
@@ -134,6 +168,47 @@ async function catalog(productList, meta) {
   const { items, images } = build(await productList());
   built = { at: Date.now(), data: { items, images, sections: SECTIONS, ...meta() } };
   return built.data;
+}
+// What customers get: only listed products, and prices only when the owner shows them.
+function customerView(data) {
+  const s = settings, hidden = new Set(s.hidden), added = new Set(s.added);
+  const items = data.items.filter(i => !hidden.has(i.sku) && (added.has(i.sku) || (s.mode === "all" && i.auto))).map(i => {
+    const p = piece(i, s);
+    return { sku: i.sku, upc: i.upc, name: i.name, category: i.category, section: i.section, isNew: i.isNew, img: i.img,
+      piece: s.showPrices ? p : undefined, case: s.showCasePrices ? (p != null && i.qty ? round2(p * i.qty) : null) : undefined,
+      qty: s.showCasePrices ? i.qty : undefined };
+  });
+  return { fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };
+}
+
+const sendJson = (res, status, body) => { res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
+const readJson = req => new Promise((resolve, reject) => {
+  let b = ""; req.on("data", c => { b += c; if (b.length > 2e6) req.destroy(); });
+  req.on("end", () => { try { resolve(JSON.parse(b || "{}")); } catch (e) { reject(e); } }); req.on("error", reject);
+});
+
+// Dashboard side, behind the admin sign-in (auth.gate covers /api/*).
+async function handleAdmin(req, res, url, productList, meta) {
+  if (url.pathname !== "/api/catalog/settings") return false;
+  if (req.method === "POST") {
+    let body; try { body = await readJson(req); } catch { return sendJson(res, 400, { error: "Bad JSON" }), true; }
+    try { save(clean(body, body.editor)); } catch (e) { return sendJson(res, 500, { error: `Couldn't save: ${e.message}` }), true; }
+    console.log(`Catalog settings saved by ${settings.updatedBy || "admin"}: ${settings.enabled ? "on" : "off"}, mode ${settings.mode}, ${settings.hidden.length} removed, ${settings.added.length} added, ${Object.keys(settings.prices).length} price overrides`);
+    return sendJson(res, 200, { settings }), true;
+  }
+  try {
+    const data = await catalog(productList, meta);
+    sendJson(res, 200, { settings, persistent: !!(process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR), passwordSet: !!password(),
+      fetchedAt: data.fetchedAt, sections: data.sections, items: data.items });
+  } catch (e) { sendJson(res, 502, { error: e.message }); }
+  return true;
+}
+
+function offPage(res) {
+  res.writeHead(503, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+  res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wholesale Catalog · Fragrance Wholesaler USA</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f5f7;color:#14181f;font:15px/1.45 system-ui,sans-serif;padding:16px;text-align:center}img{width:220px;max-width:100%}p{color:#5d6675}</style></head>
+<body><div><img src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA"><h1 style="font-size:18px">The catalog is unavailable right now</h1><p>Please check back later or call (929) 257-3502.</p></div></body></html>`);
 }
 
 async function proxyImage(res, url) {
@@ -171,6 +246,10 @@ async function handle(req, res, url, productList, meta) {
     res.end("The catalog is locked: set CATALOG_PASSWORD in Render → Environment.");
     return true;
   }
+  if (!settings.enabled) {
+    if (p === "/catalog" || p === "/catalog/") return offPage(res), true;
+    return sendJson(res, 503, { error: "The catalog is turned off." }), true;
+  }
   if (p === "/catalog/logout") {
     res.setHeader("set-cookie", `${COOKIE}=; Path=/catalog; HttpOnly; SameSite=Lax; Max-Age=0${auth.secure(req) ? "; Secure" : ""}`);
     res.writeHead(302, { location: "/catalog" }); res.end(); return true;
@@ -198,9 +277,7 @@ async function handle(req, res, url, productList, meta) {
   }
   if (p === "/catalog/data") {
     try {
-      const { items, sections, fetchedAt } = await catalog(productList, meta);
-      res.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-      res.end(JSON.stringify({ fetchedAt, sections, items }));
+      sendJson(res, 200, customerView(await catalog(productList, meta)));
     } catch (e) {
       console.error(`/catalog/data failed: ${e.message}`);
       res.writeHead(502, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "The product list couldn't be loaded. Try again in a minute." }));
@@ -209,8 +286,9 @@ async function handle(req, res, url, productList, meta) {
   }
   const m = p.match(/^\/catalog\/img\/([^/]+)$/);
   if (m) {
-    const { images } = await catalog(productList, meta).catch(() => ({ images: new Map() }));
-    const src = images.get(decodeURIComponent(m[1]));
+    const data = await catalog(productList, meta).catch(() => ({ images: new Map(), items: [] }));
+    const sku = decodeURIComponent(m[1]), item = data.items.find(i => i.sku === sku);
+    const src = item && listed(item) ? data.images.get(sku) : null;
     if (!src) { res.writeHead(404); res.end(); return true; }
     await proxyImage(res, src);
     return true;
@@ -219,4 +297,4 @@ async function handle(req, res, url, productList, meta) {
   return true;
 }
 
-module.exports = { handle, build };
+module.exports = { handle, handleAdmin, build };
