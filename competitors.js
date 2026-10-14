@@ -414,18 +414,19 @@ async function handle(req, res, url, getList) {
       // Temporary: why product search answers 400. Fixed variants only, no caller input.
       const brand = (await euka("/me")).brandIds?.[0];
       const variants = {
-        current: { query: "lattafa khamrah", region: CFG.region, limit: 50, sortBy: "last30dSales" },
-        noSort: { query: "lattafa khamrah", region: CFG.region, limit: 50 },
-        noRegion: { query: "lattafa khamrah", limit: 50 },
-        withBrand: { query: "lattafa khamrah", region: CFG.region, limit: 50, brandId: brand },
-        bare: {},
+        q1: [CFG.searchPath, { brandId: brand, query: "khamrah" }],
+        q2: [CFG.searchPath, { brandId: brand, query: "lattafa khamrah" }],
+        l50: [CFG.searchPath, { brandId: brand, limit: 50 }],
+        l20: [CFG.searchPath, { brandId: brand, limit: 20 }],
+        sort: [CFG.searchPath, { brandId: brand, sortBy: "last30dSales" }],
+        reg: [CFG.searchPath, { brandId: brand, region: "US", query: "khamrah" }],
       };
       const out = {};
       for (const [k, v] of Object.entries(variants)) {
-        try { const r = await euka(CFG.searchPath, v); out[k] = { ok: true, items: (r.items || []).length }; }
+        try { const r = await euka(v[0], v[1]); out[k] = { ok: true, items: (r.items || []).length, sample: JSON.stringify(r).slice(0, 300) }; }
         catch (e) { out[k] = { ok: false, error: e.message }; }
       }
-      return send(res, 200, out), true;
+      return send(res, 200, { brand, out }), true;
     }
     if (sub === "/status") {
       const k = await checkKey();
