@@ -21,7 +21,8 @@ const CFG = {
   miCategoryIds: env("EUKA_MI_CATEGORY_IDS", "").split(",").map(s => s.trim()).filter(Boolean),
   region: env("EUKA_REGION", "US"),
   perSku: +env("COMPETITORS_PER_SKU", "5"),
-  refreshHours: +env("COMPETITOR_REFRESH_HOURS", "12"),
+  // Euka's quota is weekly (resets Monday UTC), so by default each SKU is searched once a week.
+  refreshHours: +env("COMPETITOR_REFRESH_HOURS", "168"),
   // A SKU is never searched again within this many hours, even from "Refresh all now".
   minGapHours: +env("COMPETITOR_MIN_GAP_HOURS", "2"),
   concurrency: Math.max(1, +env("EUKA_CONCURRENCY", "2")),
@@ -40,6 +41,14 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ---------- Euka client ----------
 // GET with query params, or POST with a JSON body when `body` is given.
 let lastCall = null; // last Euka response, shown on /api/competitors/status
+// Euka's weekly quota: once it's used up nothing is called until it resets (Monday 00:00 UTC).
+let quotaUntil = 0;
+function nextMondayUtc() {
+  const d = new Date(); d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + (((8 - d.getUTCDay()) % 7) || 7));
+  return +d;
+}
+
 // Shared pacing: one call per minIntervalMs, and after a 429 every worker waits until pauseUntil.
 let nextSlot = 0, pauseUntil = 0, backoffMs = 0;
 async function pace() {
@@ -59,6 +68,7 @@ function rateLimited(res) {
 
 // opts.fast429: give up on a rate limit at once (with err.retryAfter) instead of waiting it out.
 async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
+  if (Date.now() < quotaUntil) { const e = new Error(`Euka weekly quota used up; resets ${new Date(quotaUntil).toISOString()}`); e.status = 429; e.quota = true; throw e; }
   await pace();
   const u = new URL(CFG.base + p);
   for (const [k, v] of Object.entries(params)) {
@@ -77,6 +87,16 @@ async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
     throw new Error(`Euka unreachable: ${e.message}`);
   }
   lastCall = { at: new Date().toISOString(), path: p, status: res.status };
+  if (res.status === 429) {
+    const text = await res.clone().text().catch(() => "");
+    if (/quota exceeded/i.test(text)) {
+      quotaUntil = Math.max(quotaUntil, nextMondayUtc());
+      state.quotaUntil = new Date(quotaUntil).toISOString();
+      const err = new Error(`Euka weekly quota used up; resets ${state.quotaUntil}`);
+      err.status = 429; err.quota = true; err.retryAfter = Math.ceil((quotaUntil - Date.now()) / 1000);
+      throw err;
+    }
+  }
   if (res.status === 429 && opts.fast429) {
     const err = new Error(`Euka rate limit on ${p}`);
     err.status = 429; err.retryAfter = +res.headers.get("retry-after") || null;
@@ -227,6 +247,7 @@ async function enrich(m) {
 
 // ---------- state ----------
 let state = load(FILE, { runAt: null, finishedAt: null, skus: {}, errors: 0 });
+if (state.quotaUntil && Date.parse(state.quotaUntil) > Date.now()) quotaUntil = Date.parse(state.quotaUntil);
 // Results from before product search sent a brandId all failed with "Input validation failed";
 // drop them so those SKUs are searched again now rather than after the retry gap.
 for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed|HTTP 429/.test(v.error || "")) delete state.skus[k];
@@ -372,10 +393,12 @@ async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
   let errors = 0, i = 0, authFailed = false;
   job = (async () => {
     const worker = async () => {
-      while (i < todo.length && !authFailed) {
+      while (i < todo.length && !authFailed && Date.now() >= quotaUntil) {
         const p = todo[i++];
         try { state.skus[p.sku] = await searchSku(profile(p), ownIds); }
         catch (e) {
+          // Out of weekly quota: keep this SKU's last result and stop; the pass resumes after the reset.
+          if (e.quota) { progress.lastError = e.message; break; }
           errors++; progress.lastError = `${p.sku}: ${e.message}`;
           if (e.status === 401 || e.status === 403) authFailed = true;
           state.skus[p.sku] = { ...(state.skus[p.sku] || {}), error: e.message, errorAt: new Date().toISOString() };
@@ -393,7 +416,7 @@ async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
     if (full) { state.finishedAt = new Date().toISOString(); state.errors = errors; }
     state.marketIntel = miState;
     save(FILE, state);
-    console.log(`Competitor run done: ${progress.done}/${progress.total} SKUs, ${errors} errors${authFailed ? " (stopped: Euka rejected the API key)" : ""}`);
+    console.log(`Competitor run done: ${progress.done}/${progress.total} SKUs, ${errors} errors${authFailed ? " (stopped: Euka rejected the API key)" : ""}${Date.now() < quotaUntil ? ` (stopped: Euka weekly quota used up until ${new Date(quotaUntil).toISOString()})` : ""}`);
   })().finally(() => { job = null; });
   return job;
 }
@@ -419,7 +442,7 @@ async function checkKey() {
 // restart this resumes the unfinished SKUs; SKUs searched recently are left alone.
 function schedule(getList) {
   const tick = async () => {
-    if (!CFG.key || job) return;
+    if (!CFG.key || job || Date.now() < quotaUntil) return;
     try {
       const list = await getList(), due = dueList(list, CFG.refreshHours);
       if (!due.length) return;
@@ -449,7 +472,7 @@ async function handle(req, res, url, getList) {
       return send(res, 200, {
         configured: !!CFG.key, running: !!job, progress, runAt: state.runAt, finishedAt: state.finishedAt, errors: state.errors,
         refreshHours: CFG.refreshHours, perSku: CFG.perSku, minScore: CFG.minScore, region: CFG.region,
-        nextRunAt: nextDue(), minGapHours: CFG.minGapHours, saved: savedTo(),
+        nextRunAt: Date.now() < quotaUntil ? new Date(quotaUntil).toISOString() : nextDue(), quotaUntil: Date.now() < quotaUntil ? new Date(quotaUntil).toISOString() : null, minGapHours: CFG.minGapHours, saved: savedTo(),
         needsToken: !!CFG.adminToken, sources: CFG.sources, marketIntel: job ? miState : state.marketIntel || miState,
         skus: state.skus, overrides,
       }), true;
@@ -469,6 +492,7 @@ async function handle(req, res, url, getList) {
     if (sub === "/refresh") {
       const body = await readBody(req).catch(() => ({}));
       if (job) return send(res, 409, { error: "A refresh is already running", progress }), true;
+      if (Date.now() < quotaUntil) return send(res, 200, { ok: true, started: false, message: `Euka's weekly limit is used up. Searching resumes ${new Date(quotaUntil).toUTCString()}.` }), true;
       const list = await getList();
       const only = Array.isArray(body.skus) && body.skus.length ? body.skus.map(String) : null;
       if (!only && !dueList(list, CFG.minGapHours).length) return send(res, 200, { ok: true, started: false, message: `Every SKU was searched in the last ${CFG.minGapHours} hours` }), true;

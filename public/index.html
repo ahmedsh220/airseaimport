@@ -1008,6 +1008,7 @@ function competitorsHtml() {
   const fresh = Object.values(C.skus || {}).filter(x => x.checkedAt && Date.now() - Date.parse(x.checkedAt) < C.refreshHours * 36e5).length;
   const run = (C.running ? `<b>Searching:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} due SKUs… `
     : "") + `${fmtInt(fresh)} SKUs searched in the last ${C.refreshHours} hours${C.errors ? ` · <span class=warn>${C.errors} failed last pass</span>` : ""}${!C.running && C.nextRunAt ? ` · next due ${new Date(C.nextRunAt).toLocaleString()}` : ""}.`
+    + (C.quotaUntil ? ` <span class="pill bad">Euka's weekly limit is used up. Searching resumes ${new Date(C.quotaUntil).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>` : "")
     + (C.saved && !C.saved.persistent ? ` <span class="pill bad" title="Results are kept on the server's temporary disk">Results reset when the server restarts</span>` : "");
   const key = s && s.keyOk === false ? `<span class="pill bad">Euka key problem: ${esc(s.error)}</span>` : "";
   const mi = C.marketIntel?.ok === false && (C.sources || []).includes("market")
