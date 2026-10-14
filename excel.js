@@ -105,15 +105,18 @@ async function getLayout(force) {
   const skuColName = colName(skuCol);
   const skus = await graph("GET", `${wb.base}${rangePath(`${skuColName}${headerRow + 1}:${skuColName}${Math.max(lastRow, headerRow + 1)}`)}?$select=values`);
   const rows = new Map();
-  skus.values.forEach((v, i) => { const k = skuKey(v[0]); if (k && !rows.has(k)) rows.set(k, headerRow + 1 + i); });
+  skus.values.forEach((v, i) => { const k = skuKey(v[0]); if (k) rows.set(k, [...(rows.get(k) || []), headerRow + 1 + i]); });
   layout = { at: Date.now(), headerRow, firstCol, lastCol, skuCol: skuColName, columns, rows };
   return layout;
 }
 
 async function readRow(sku, retry = true) {
-  let L = await getLayout(), row = L.rows.get(skuKey(sku));
-  if (!row) { L = await getLayout(true); row = L.rows.get(skuKey(sku)); } // a row may have been added since
-  if (!row) return null;
+  let L = await getLayout(), found = L.rows.get(skuKey(sku));
+  if (!found) { L = await getLayout(true); found = L.rows.get(skuKey(sku)); } // a row may have been added since
+  if (!found) return null;
+  // Never guess between two rows with the same SKU.
+  if (found.length > 1) throw Object.assign(new Error(`SKU ${sku} is on rows ${found.join(", ")} of "${CFG.sheet}". Remove the duplicate in Excel so the dashboard knows which row to edit.`), { status: 409 });
+  const row = found[0];
   const wb = await workbook();
   const r = await graph("GET", `${wb.base}${rangePath(`A${row}:${colName(L.lastCol)}${row}`)}?$select=values,formulas,text`);
   const at = col => { const i = colIndex(col); return { value: r.values[0][i], formula: r.formulas[0][i], text: r.text[0][i] }; };
@@ -200,7 +203,7 @@ async function handle(req, res, url) {
     return send(res, 404, { error: "Unknown excel endpoint" }), true;
   } catch (e) {
     console.error(`${url.pathname} failed: ${e.message}`);
-    return send(res, e.status === 404 ? 404 : 502, { error: e.message }), true;
+    return send(res, [404, 409].includes(e.status) ? e.status : 502, { error: e.message }), true;
   }
 }
 
