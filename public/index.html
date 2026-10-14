@@ -87,6 +87,7 @@
   .chip { display: inline-flex; gap: 4px; align-items: center; background: var(--accent-soft); color: var(--accent);
           border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12px; font-weight: 600; }
   .chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
+  td.wrap { white-space: normal; min-width: 280px; }
   .calc { color: var(--muted); font-size: 11px; margin-left: 3px; }
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
@@ -452,7 +453,7 @@ const PROD = { h: "Product", v: r => r.name, f: prodCell, prod: true, l: true };
 const TIER = { h: "Tier", v: r => r._tier, f: tierTag, l: true };
 
 // ---------- layout ----------
-const TABS = { overview: "Overview", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors" };
+const TABS = { overview: "Overview", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
 function render() {
   saveState();
   $("tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${ST.tab === k ? "active" : ""}">${v}</button>`).join("");
@@ -461,7 +462,7 @@ function render() {
   renderSide();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = ({ overview: overviewHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml })[ST.tab]();
+  $("main").innerHTML = ({ overview: overviewHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
   if (ST.tab === "overview") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
 }
@@ -743,6 +744,152 @@ function vendorsHtml() {
     ], items, { sort: 1, asc: true, onRow: showDetail, main: `vendor-${k}` })}</section>`;
 }
 
+// ---------- TikTok competitors (Euka) ----------
+// The server searches Euka's TikTok Shop index for each SKU every few hours (competitors.js);
+// this tab compares those listings with our TikTok price and cost.
+let COMP = null, compStatus = null, compPoll = null;
+async function loadCompetitors(withStatus) {
+  try {
+    const res = await fetch("/api/competitors", { cache: "no-store" });
+    if (res.ok) COMP = await res.json();
+    if (withStatus || !compStatus) { const s = await fetch("/api/competitors/status", { cache: "no-store" }); if (s.ok) compStatus = await s.json(); }
+  } catch (e) { console.warn("Competitor data unavailable", e); }
+  clearTimeout(compPoll);
+  if (COMP?.running) compPoll = setTimeout(() => loadCompetitors().then(() => ST.tab === "competitors" && render()), 5000);
+}
+const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+// TikTok P&L from the sheet: 20% fee, we pay ship when price ≥ $30.
+const ttProfit = (r, price) => price == null || r._Q == null ? null : price - price * 0.2 - (price < 30 ? 0 : r._AG) - r._Q;
+const ttPct = (r, price) => { const p = ttProfit(r, price); return p == null ? null : p / (r._Q + p); };
+// Lowest price that keeps the minimum margin: profit ÷ (Q + profit) ≥ m means profit ≥ Q × m ÷ (1 − m).
+function floorPrice(r) {
+  if (r._Q == null) return null;
+  const m = SET.minMargin / 100, need = m < 1 ? r._Q * m / (1 - m) : Infinity, cents = p => Math.ceil(p * 100 - 1e-6) / 100;
+  const free = (r._Q + need) / 0.8;                       // under $30 the buyer pays shipping
+  return free < 30 ? cents(free) : cents(Math.max(30, (r._Q + r._AG + need) / 0.8));
+}
+function compRow(r) {
+  const c = COMP?.skus?.[r.sku], m = c?.matches || [];
+  const prices = m.map(x => x.price).filter(x => x > 0);
+  const our = r._live.tiktok, low = prices.length ? Math.min(...prices) : null, high = prices.length ? Math.max(...prices) : null;
+  const med = median(prices), sold30 = m.reduce((a, x) => a + (x.sold30 || 0), 0), our30 = (r._ch.tt || 0) / 2;
+  const floor = floorPrice(r);
+  // Suggest a cent under the cheapest competitor, but never below the margin floor.
+  const target = low != null ? Math.round((low - 0.01) * 100) / 100 : null;
+  const suggest = target == null ? null : floor != null && target < floor ? floor : target;
+  return { c, m, our, low, med, high, n: m.length, gap: our != null && low != null ? our - low : null,
+    gapPct: our != null && low ? (our - low) / low : null, sold30, our30, share: sold30 + our30 > 0 ? our30 / (sold30 + our30) : null,
+    profitLow: ttProfit(r, low), pctLow: ttPct(r, low), floor, suggest, checkedAt: c?.checkedAt, error: c?.error };
+}
+const CF = { all: "All", undercut: "Undercut", cheapest: "We're cheapest", below: "Comp below our floor", nomatch: "No match", noprice: "No TikTok price" };
+function competitorsHtml() {
+  const s = compStatus, C = COMP;
+  if (!C || !C.configured) {
+    return `<p class="lead">TikTok competitor prices come from <b>Euka</b>. Add the API key on the server to turn this on.</p>
+      <section class="card"><h3>Set up</h3><p class="hint">In Render, open this service → <b>Environment</b>, add the variables below and save. The first refresh starts on its own within a minute of the restart.</p>
+      <div class="tablewrap"><table><thead><tr><th class=l>Variable</th><th class=l>Value</th><th class=l>What it does</th></tr></thead><tbody>
+      <tr><td class=l><b>EUKA_API_KEY</b></td><td class=l>euka_openapi_…</td><td class=l>Required. Euka app → Settings → Integrations → OpenAPI keys</td></tr>
+      <tr><td class=l>ADMIN_TOKEN</td><td class=l>any password</td><td class=l>Optional. Needed to start refreshes or pin/ignore listings from this page</td></tr>
+      <tr><td class=l>OUR_TIKTOK_SHOP_NAMES</td><td class=l>Shop name, Other shop</td><td class=l>Optional. Our own shops, left out of competitors (our listing IDs are already excluded)</td></tr>
+      <tr><td class=l>COMPETITORS_PER_SKU</td><td class=l>5</td><td class=l>Competitor listings kept per SKU</td></tr>
+      <tr><td class=l>COMPETITOR_REFRESH_HOURS</td><td class=l>12</td><td class=l>How often every SKU is re-checked</td></tr>
+      </tbody></table></div><p class="hint" style="margin-top:10px">All settings are listed in <code>.env.example</code> in the repo.</p></section>`;
+  }
+  const list = rows.map(r => ({ r, x: compRow(r) }));
+  const matched = list.filter(o => o.x.n), priced = matched.filter(o => o.x.our != null);
+  const under = priced.filter(o => o.x.gap > 0.005), cheapest = priced.filter(o => o.x.gap <= 0.005), below = matched.filter(o => o.x.floor != null && o.x.low < o.x.floor);
+  const f = ST.compFilter || "all";
+  const shown = { all: list, undercut: under, cheapest, below, nomatch: list.filter(o => !o.x.n), noprice: matched.filter(o => o.x.our == null) }[f] || list;
+  const run = C.running ? `<b>Refreshing:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} SKUs…`
+    : C.finishedAt ? `Last full refresh ${new Date(C.finishedAt).toLocaleString()}${C.errors ? ` · <span class=warn>${C.errors} SKUs failed</span>` : ""} · next ${C.nextRunAt ? new Date(C.nextRunAt).toLocaleString() : "soon"}`
+    : "First refresh starts shortly after the server boots.";
+  const key = s && s.keyOk === false ? `<span class="pill bad">Euka key problem: ${esc(s.error)}</span>` : "";
+  const avgGap = priced.length ? sum(priced, o => o.x.gapPct) / priced.length : null;
+  const kpis = `<section class="kpis">
+    <div class="kpi"><div class="label">SKUs with competitors</div><div class="value">${fmtInt(matched.length)}</div><div class="sub">of ${fmtInt(list.length)} · up to ${C.perSku} each</div></div>
+    <button class="kpi ${under.length ? "alert" : ""}" data-cf="undercut"><div class="label">We're undercut</div><div class="value">${fmtInt(under.length)}</div><div class="sub">a competitor sells for less</div></button>
+    <button class="kpi" data-cf="cheapest"><div class="label">We're cheapest</div><div class="value">${fmtInt(cheapest.length)}</div><div class="sub">at or below every match</div></button>
+    <div class="kpi"><div class="label">Average gap vs lowest</div><div class="value">${avgGap == null ? "—" : (avgGap > 0 ? "+" : "") + fmtPct(avgGap)}</div><div class="sub">our price vs cheapest competitor</div></div>
+    <button class="kpi" data-cf="below"><div class="label">Competitor below our floor</div><div class="value">${fmtInt(below.length)}</div><div class="sub">can't match and keep ${SET.minMargin}% margin</div></button>
+    <div class="kpi"><div class="label">Competitor units, 30 days</div><div class="value">${fmtInt(sum(matched, o => o.x.sold30))}</div><div class="sub">across matched listings (Euka estimate)</div></div>
+  </section>`;
+  const cols = [PROD, TIER,
+    { h: "Our price", v: o => o.x.our, t: "usd", grp: "TikTok price" },
+    { h: "Lowest", v: o => o.x.low, t: "usd", grp: "Competitors" },
+    { h: "Median", v: o => o.x.med, t: "usd", grp: "Competitors" },
+    { h: "Highest", v: o => o.x.high, t: "usd", grp: "Competitors" },
+    { h: "Listings", v: o => o.x.n, grp: "Competitors" },
+    { h: "Gap vs lowest", v: o => o.x.gapPct, grp: "Position", f: o => o.x.gapPct == null ? "<span class=muted>—</span>"
+      : `<span class="${o.x.gap > 0.005 ? "bad" : "good"}">${o.x.gap > 0 ? "+" : ""}${fmtUsd(o.x.gap)} (${fmtPct(o.x.gapPct)})</span>` },
+    { h: "Comp units 30d", v: o => o.x.sold30, grp: "Demand", tip: "Units sold in the last 30 days by the matched listings (Euka)" },
+    { h: "Our units 30d", v: o => o.x.our30, grp: "Demand", tip: "Half of our TikTok 60-day units" },
+    { h: "Our share", v: o => o.x.share, t: "pct", grp: "Demand" },
+    { h: "Profit at lowest", v: o => o.x.profitLow, f: o => money(o.x.profitLow), grp: "If we match", tip: "TikTok P&L at the cheapest competitor's price" },
+    { h: "PFT% at lowest", v: o => o.x.pctLow, f: o => pctPill(o.x.pctLow), grp: "If we match" },
+    { h: "Floor price", v: o => o.x.floor, t: "usd", grp: "If we match", tip: `Lowest price that keeps ${SET.minMargin}% margin` },
+    { h: "Suggested", v: o => o.x.suggest, grp: "If we match", f: o => o.x.suggest == null ? "<span class=muted>—</span>"
+      : `<b>${fmtUsd(o.x.suggest)}</b>${o.x.floor != null && o.x.suggest === o.x.floor && o.x.low < o.x.floor ? `<span class=calc>floor</span>` : ""}`, tip: "A cent under the cheapest competitor, never below the floor" },
+    { h: "Checked", v: o => o.x.checkedAt, f: o => o.x.error ? `<span class=bad title="${esc(o.x.error)}">error</span>` : o.x.checkedAt ? new Date(o.x.checkedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "<span class=muted>not yet</span>" },
+  ].map(c => c.prod || c === TIER ? { ...c, v: o => c.v(o.r), f: o => c.f(o.r), csv: c.prod ? o => `${o.r.sku} ${o.r.name}` : null } : c);
+  return `<p class="lead">Up to ${C.perSku} same-item TikTok Shop listings per SKU from <b>Euka</b>, re-checked every ${C.refreshHours} hours. ${run} ${key}
+      <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""}>Refresh all now</button></p>${kpis}
+    <section class="card"><div class="head"><h3>Price comparison</h3>
+      <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div>
+      <p class="hint">Click a product to see each competitor listing, pin the right one or hide a wrong match.</p>
+      ${table("comp", cols, shown, { sort: 7, onRow: o => showCompetitors(o.r), main: "tiktok-competitors", limit: 2500, empty: f === "all" ? "No competitor data yet. The first refresh is running or hasn't started." : "Nothing in this group." })}</section>`;
+}
+function showCompetitors(r) {
+  const x = compRow(r), ov = COMP?.overrides?.[r.sku] || {};
+  const card = (m, near) => `<tr><td class="l wrap">${m.image ? `<img src="${esc(m.image)}" alt="" width="44" height="44" style="border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:8px">` : ""}
+      <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc((m.title || m.id).slice(0, 90))}</a><br><span class=muted>${esc(m.shop || "unknown shop")} · match ${Math.round(m.score * 100)}%${m.pinned ? " · pinned" : ""}</span></td>
+    <td>${fmtUsd(m.price)}${m.original > m.price ? `<br><span class=muted><s>${fmtUsd(m.original)}</s></span>` : ""}</td><td>${m.shipping ? fmtUsd(m.shipping) : "free"}</td>
+    <td>${fmtInt(m.sold30)}</td><td>${fmtInt(m.sold)}</td><td>${m.price != null ? money(ttProfit(r, m.price)) : "—"}</td>
+    <td>${near ? `<button data-cact="pin" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Pin as match</button>`
+      : `${m.pinned ? `<button data-cact="clear" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Unpin</button>` : ""} <button data-cact="ignore" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Not a match</button>`}</td></tr>`;
+  const head = `<thead><tr><th class=l>Listing</th><th>Price</th><th>Ship</th><th>Sold 30d</th><th>Sold total</th><th>Our profit at this price</th><th></th></tr></thead>`;
+  $("dTitle").textContent = `${r.sku} · ${r.name}`;
+  $("dSub").innerHTML = `TikTok competitors · our price ${fmtUsd(x.our)} · cost to ship ${fmtUsd(r._Q)} · floor ${fmtUsd(x.floor)} · checked ${x.checkedAt ? new Date(x.checkedAt).toLocaleString() : "not yet"}`;
+  $("dBody").innerHTML = `<div class="facts">
+      <div><span>Lowest</span>${fmtUsd(x.low)}</div><div><span>Median</span>${fmtUsd(x.med)}</div><div><span>Highest</span>${fmtUsd(x.high)}</div>
+      <div><span>Suggested price</span><b>${fmtUsd(x.suggest)}</b></div><div><span>Competitor units 30d</span>${fmtInt(x.sold30)}</div><div><span>Our units 30d</span>${fmtInt(x.our30)}</div></div>
+    ${x.error ? `<p class=bad>Last check failed: ${esc(x.error)}</p>` : ""}
+    <h4>Matched listings</h4>${x.m.length ? `<div class="tablewrap"><table>${head}<tbody>${x.m.map(m => card(m)).join("")}</tbody></table></div>` : `<p class=muted>No listing matched well enough.</p>`}
+    ${x.c?.candidates?.length ? `<h4>Close but not matched</h4><div class="tablewrap"><table>${head}<tbody>${x.c.candidates.map(m => card(m, true)).join("")}</tbody></table></div>` : ""}
+    ${(ov.ignore || []).length ? `<h4>Hidden</h4><p>${ov.ignore.map(id => `<span class="chip">${esc(id)}<button data-cact="clear" data-id="${esc(id)}" data-sku="${esc(r.sku)}" title="Show again">×</button></span>`).join(" ")}</p>` : ""}
+    <p class="hint" style="margin-top:12px">Searched Euka for: ${(x.c?.queries || []).map(q => `“${esc(q)}”`).join(", ") || "—"}.
+      <button data-cact="recheck" data-sku="${esc(r.sku)}">Re-check now</button></p>`;
+  if (!$("detail").open) $("detail").showModal();
+}
+async function compPost(pathname, body) {
+  const go = token => fetch(pathname, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-admin-token": token } : {}) }, body: JSON.stringify(body || {}) });
+  let token = ""; try { token = localStorage.getItem("asi-admin-token") || ""; } catch {}
+  let res = await go(token);
+  if (res.status === 401) {
+    token = prompt("Admin token (the ADMIN_TOKEN set on the server):") || "";
+    if (!token) return null;
+    try { localStorage.setItem("asi-admin-token", token); } catch {}
+    res = await go(token);
+  }
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok && res.status !== 202) { alert(out.error || `Request failed (HTTP ${res.status})`); return null; }
+  return out;
+}
+document.addEventListener("click", async e => {
+  const t = e.target.closest("[data-cf],[data-cact],#compRefresh");
+  if (!t) return;
+  e.stopPropagation();
+  if (t.dataset.cf) { ST.compFilter = t.dataset.cf; render(); return; }
+  t.disabled = true;
+  if (t.id === "compRefresh") { if (await compPost("/api/competitors/refresh")) { await loadCompetitors(); render(); } return; }
+  const sku = t.dataset.sku, act = t.dataset.cact;
+  const out = act === "recheck" ? await compPost("/api/competitors/refresh", { skus: [sku] }) : await compPost("/api/competitors/override", { sku, productId: t.dataset.id, action: act });
+  t.disabled = false;
+  if (!out) return;
+  await loadCompetitors();
+  const r = all.find(x => x.sku === sku); if (r) showCompetitors(r);
+  if (ST.tab === "competitors") render();
+}, true);
+
 // ---------- detail ----------
 function showDetail(r) {
   $("dTitle").textContent = `${r.sku} · ${r.name}`;
@@ -773,7 +920,7 @@ function exportCsv() {
   const strip = s => String(s).replace(/<[^>]+>/g, "");
   const cell = v => { v = v instanceof Date ? dayKey(v) : v ?? ""; const s = typeof v === "number" ? String(Math.round(v * 1000) / 1000) : strip(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const cols = lastTable.cols;
-  const lines = [cols.map(c => cell(strip(c.h))).join(","), ...lastTable.list.map(r => cols.map(c => cell(c.prod ? `${r.sku} ${r.name}` : c.v(r))).join(","))];
+  const lines = [cols.map(c => cell(strip(c.h))).join(","), ...lastTable.list.map(r => cols.map(c => cell(c.csv ? c.csv(r) : c.prod ? `${r.sku} ${r.name}` : c.v(r))).join(","))];
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
   a.download = `${lastTable.name}-${dayKey(new Date())}.csv`; a.click();
@@ -820,6 +967,7 @@ $("file").onchange = async e => { const f = e.target.files[0]; if (!f) return;
   try { ingest(JSON.parse(await f.text()), `file ${f.name}`); } catch (err) { setStatus(`<div class="err">Couldn't read ${esc(f.name)}: ${esc(err.message)}</div>`); } };
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
 load();
+if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
 </body>
 </html>

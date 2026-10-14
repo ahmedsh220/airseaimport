@@ -6,6 +6,15 @@ const http2 = require("http2");
 const fs = require("fs");
 const path = require("path");
 
+// Local runs read settings from .env (Render sets them in the dashboard instead). See .env.example.
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, ".env"), "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
+  }
+} catch {}
+const competitors = require("./competitors");
+
 const PORT = process.env.PORT || 3000;
 const API = process.env.PRODUCTS_API || "https://hub.fragrancewholesalerusa.com/api/open/products";
 const CACHE_MS = 5 * 60 * 1000; // the upstream is slow and sometimes cuts off; don't hit it more than needed
@@ -126,6 +135,11 @@ async function products(force) {
   return cache.body;
 }
 
+async function productList() {
+  const d = JSON.parse(await products());
+  return Array.isArray(d) ? d : (d.data || d.products || d.items || []);
+}
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   if (url.pathname === "/api/products") {
@@ -141,6 +155,7 @@ http.createServer(async (req, res) => {
     }
     return;
   }
+  if (await competitors.handle(req, res, url, productList)) return;
   if (url.pathname === "/healthz") { res.writeHead(200); res.end("ok"); return; }
   const route = { "/": "/index.html", "/favicon.ico": "/favicon.svg" }[url.pathname] || url.pathname;
   const file = path.join(PUBLIC, path.normalize(route));
@@ -154,6 +169,7 @@ http.createServer(async (req, res) => {
   console.log(`Dashboard on :${PORT}`);
   // Warm the cache at boot so the first visitor after a restart doesn't wait on the upstream API.
   products(true).then(() => console.log("Products cache warmed"), e => console.warn(`Warm-up failed: ${e.message}`));
+  competitors.schedule(productList);
   // Keep trying in the background so a good copy is ready whenever the API answers in full.
   setInterval(() => {
     if (cache.snapshot || Date.now() - cache.at > CACHE_MS) products(true).catch(() => {});
