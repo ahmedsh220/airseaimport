@@ -172,7 +172,8 @@ http.createServer(async (req, res) => {
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
-    res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream" });
+    // no-cache: browsers check for a new version on every load, so a deploy shows up on the next refresh.
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-cache" });
     res.end(data);
   });
 }).listen(PORT, () => {
