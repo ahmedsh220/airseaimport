@@ -102,6 +102,9 @@
   .coverage summary { cursor: pointer; } details.coverage { padding: 5px 12px; }
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
+  details.colpick { margin-bottom: 10px; } details.colpick input { width: auto; padding: 0; }
+  details.colpick .colgrp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
+  details.colpick .colgrp label { white-space: nowrap; } details.colpick .colg { flex-basis: 100%; }
   #status { padding: 40px; text-align: center; color: var(--muted); }
   #status .err { color: var(--bad); margin-bottom: 12px; }
   dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
@@ -495,19 +498,37 @@ function table(id, cols, list, opts = {}) {
     list = [...list].sort((a, b) => cmp(v(a), v(b), s.asc));
   }
   TABLES[id] = { cols, list, onRow: opts.onRow };
-  if (opts.main) lastTable = { name: opts.main, cols, list };
+  // Hidden columns keep their index so sorting (data-i) and SORT state still line up.
+  const vis = cols.map((c, i) => ({ c, i })).filter(x => !opts.hide?.has(colKey(x.c)));
+  if (opts.main) lastTable = { name: opts.main, cols: vis.map(x => x.c), list };
   const limit = opts.limit || 1000, shown = list.slice(0, limit);
-  const grp = cols.some(c => c.grp) ? `<tr class="grp">${groupHeads(cols)}</tr>` : "";
-  const head = cols.map((c, i) => `<th data-t="${id}" data-i="${i}" class="${c.l ? "l" : ""}${s.i === i ? " sorted" + (s.asc ? " asc" : "") : ""}" title="${esc(c.tip || "")}">${c.h}</th>`).join("");
+  const grp = cols.some(c => c.grp) ? `<tr class="grp">${groupHeads(vis.map(x => x.c))}</tr>` : "";
+  const head = vis.map(({ c, i }) => `<th data-t="${id}" data-i="${i}" class="${c.l ? "l" : ""}${s.i === i ? " sorted" + (s.asc ? " asc" : "") : ""}" title="${esc(c.tip || "")}">${c.h}</th>`).join("");
   const body = shown.map((r, ri) => { const t = rowTier(r);
-    return `<tr class="${opts.onRow ? "click" : ""}" data-t="${id}" data-r="${ri}"${t ? ` data-tier="${esc(t)}" style="--rowc:var(${TIER_COLOR[t] || "--t-other"})"` : ""}>${cols.map(c => {
+    return `<tr class="${opts.onRow ? "click" : ""}" data-t="${id}" data-r="${ri}"${t ? ` data-tier="${esc(t)}" style="--rowc:var(${TIER_COLOR[t] || "--t-other"})"` : ""}>${vis.map(({ c }) => {
     const html = c.f ? c.f(r) : (FMT[c.t || "int"])(c.v(r));
     return `<td class="${c.prod ? "prod" : c.l ? "l" : ""}">${html}</td>`; }).join("")}</tr>`; }).join("");
-  const foot = cols.some(c => c.total) ? `<tfoot><tr>${cols.map((c, i) => `<td class="${c.l || c.prod ? "l" : ""}">${
-    c.total ? (FMT[c.t || "int"])(sum(list, c.v)) : i === 0 ? `Total · ${list.length.toLocaleString()} rows` : ""}</td>`).join("")}</tr></tfoot>` : "";
+  const foot = cols.some(c => c.total) ? `<tfoot><tr>${vis.map(({ c }, j) => `<td class="${c.l || c.prod ? "l" : ""}">${
+    c.total ? (FMT[c.t || "int"])(sum(list, c.v)) : j === 0 ? `Total · ${list.length.toLocaleString()} rows` : ""}</td>`).join("")}</tr></tfoot>` : "";
   const more = list.length > limit ? `<p class="hint">Showing ${limit} of ${list.length.toLocaleString()}. Search or export CSV for the rest.</p>` : "";
   if (!list.length) return `<p class="muted" style="padding:16px 0">${opts.empty || "Nothing matches."}</p>`;
   return `<div class="tablewrap" data-scroll="${id}" style="${opts.height ? `max-height:${opts.height}` : ""}"><table><thead>${grp}<tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${more}`;
+}
+// Column picker for wide tables: hidden column keys per table, remembered in this browser.
+const colKey = c => c.key || c.h;
+const HIDDEN = (() => { try { return JSON.parse(localStorage.getItem("asi-v4-hidden") || "{}"); } catch { return {}; } })();
+const saveHidden = () => { try { localStorage.setItem("asi-v4-hidden", JSON.stringify(HIDDEN)); } catch {} };
+const hiddenSet = id => new Set(HIDDEN[id] || []);
+let colsOpen = false;
+function columnPicker(id, cols, keep = []) {
+  const hide = hiddenSet(id), groups = [];
+  for (const c of cols) { if (keep.includes(colKey(c))) continue; const g = c.grp || "Product"; let x = groups.find(y => y.g === g); if (!x) groups.push(x = { g, cols: [] }); x.cols.push(c); }
+  const shown = cols.filter(c => !hide.has(colKey(c))).length;
+  return `<details class="settings colpick" ${colsOpen ? "open" : ""}><summary>Columns · ${shown} of ${cols.length} shown</summary>
+    <div class="row"><button data-colact="all" data-tbl="${id}">Show all</button><button data-colact="none" data-tbl="${id}">Hide all</button></div>
+    ${groups.map(x => `<div class="colgrp"><label class="colg"><input type=checkbox data-colgrp="${esc(x.g)}" data-tbl="${id}" ${x.cols.every(c => !hide.has(colKey(c))) ? "checked" : ""}> <b>${esc(x.g)}</b></label>
+      ${x.cols.map(c => `<label><input type=checkbox data-colhide="${esc(colKey(c))}" data-tbl="${id}" ${hide.has(colKey(c)) ? "" : "checked"}> ${esc(c.h)}</label>`).join("")}</div>`).join("")}
+  </details>`;
 }
 function groupHeads(cols) {
   const out = []; let cur = null, n = 0;
@@ -756,6 +777,7 @@ function plHtml() {
 }
 
 // ---------- Sheet view (mirrors the Excel columns) ----------
+let SHEET_COLS = [];
 function sheetHtml() {
   const h = H();
   const cols = [
@@ -774,12 +796,12 @@ function sheetHtml() {
     { h: "Qty in case", v: r => r._caseQty, grp: "Stock statistics" },
     { h: "Cases hand", v: r => r._casesHand, f: r => casesFmt(r._casesHand), grp: "Stock statistics" },
     { h: "Stock value", v: r => r._value, t: "usd", grp: "Stock statistics", total: true },
-    { h: `Sold ${SET.window}d`, v: r => r._sold, grp: "Stock statistics", total: true },
+    { h: `Sold ${SET.window}d`, key: "Sold", v: r => r._sold, grp: "Stock statistics", total: true },
     { h: "Returned", v: r => r._returns, grp: "Stock statistics", total: true },
     { h: "Day ave", v: r => r._day, t: "1", grp: "Stock statistics" },
     { h: "Highest day avg", v: r => r._hiDay, t: "1", grp: "Stock statistics" },
     { h: "Monthly sold", v: r => r._monthly, t: "1", grp: "Stock statistics" },
-    { h: `Next ${h}d`, v: r => r._day * h, grp: "Stock statistics" },
+    { h: `Next ${h}d`, key: "Next", v: r => r._day * h, grp: "Stock statistics" },
     ...Object.entries(CHANNELS).map(([k, v]) => ({ h: v, v: r => r._ch[k], f: r => r._ch[k] ? fmtInt(r._ch[k]) : "<span class=muted>0</span>", grp: "Platform sales (60 days)", total: true })),
     { h: "Sold 60 days", v: r => r._ch60, f: r => `<b>${fmtInt(r._ch60)}</b>`, grp: "Platform sales (60 days)", total: true },
     { h: "Need for month", v: r => r._needMonth, grp: "Ordering" },
@@ -789,8 +811,9 @@ function sheetHtml() {
     { h: "Order cost", v: r => r._orderCost, t: "usd", grp: "Ordering", total: true },
   ];
   const list = ST.plat ? rows.filter(r => r._ch[ST.plat] > 0) : rows;
+  SHEET_COLS = cols;
   return `<p class="lead">Your spreadsheet's main columns in the same order, filled from the API. Click any column to sort, any row for details.</p>
-    <section class="card">${table("sheet", cols, list, { sort: 3, asc: true, onRow: showDetail, main: "sheet", limit: 2000 })}</section>`;
+    <section class="card">${columnPicker("sheet", cols, ["SKU #"])}${table("sheet", cols, list, { sort: 3, asc: true, onRow: showDetail, main: "sheet", limit: 2000, hide: hiddenSet("sheet") })}</section>`;
 }
 
 // ---------- Vendors ----------
@@ -1090,6 +1113,8 @@ function exportCsv() {
 
 // ---------- events ----------
 document.addEventListener("click", e => {
+  const ca = e.target.closest("[data-colact]");
+  if (ca) { HIDDEN[ca.dataset.tbl] = ca.dataset.colact === "all" ? [] : SHEET_COLS.map(colKey).filter(k => k !== "SKU #"); saveHidden(); render(); return; }
   const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#horizon button");
   if (!t) return;
   if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.groupPick = null; ST.vendor = ""; render(); window.scrollTo(0, 0); }
@@ -1115,13 +1140,20 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const t = e.target;
+  if (t.dataset.colhide || t.dataset.colgrp) {
+    const id = t.dataset.tbl, hide = hiddenSet(id);
+    const keys = t.dataset.colhide ? [t.dataset.colhide] : SHEET_COLS.filter(c => (c.grp || "Product") === t.dataset.colgrp && colKey(c) !== "SKU #").map(colKey);
+    for (const k of keys) t.checked ? hide.delete(k) : hide.add(k);
+    HIDDEN[id] = [...hide]; saveHidden(); render(); return;
+  }
   if (t.id === "groupBy") { ST.group = t.value; ST.groupPick = null; render(); }
   else if (t.id === "livePrices") { SET.livePrices = t.checked; saveSettings(); reEnrich(); }
   else if (t.dataset.set) { const v = +t.value; if (v > 0 || (t.dataset.set === "minMargin" && v >= 0)) { SET[t.dataset.set] = v; saveSettings(); reEnrich(); } }
   else if (t.id === "cat" || t.id === "tier") apply();
 });
 $("q").addEventListener("input", apply);
-document.addEventListener("toggle", e => { if (e.target.matches?.("details.settings")) settingsOpen = e.target.open;
+document.addEventListener("toggle", e => { if (e.target.matches?.("details.colpick")) { colsOpen = e.target.open; return; }
+  if (e.target.matches?.("details.settings")) settingsOpen = e.target.open;
   if (e.target.matches?.("details.coverage")) { ST.coverageOpen = e.target.open; saveState(); } }, true);
 $("dClose").onclick = () => $("detail").close();
 $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
