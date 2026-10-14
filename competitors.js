@@ -22,6 +22,8 @@ const CFG = {
   region: env("EUKA_REGION", "US"),
   perSku: +env("COMPETITORS_PER_SKU", "5"),
   refreshHours: +env("COMPETITOR_REFRESH_HOURS", "12"),
+  // A SKU is never searched again within this many hours, even from "Refresh all now".
+  minGapHours: +env("COMPETITOR_MIN_GAP_HOURS", "2"),
   concurrency: Math.max(1, +env("EUKA_CONCURRENCY", "3")),
   delayMs: +env("EUKA_DELAY_MS", "250"),
   minScore: +env("COMPETITOR_MIN_SCORE", "0.6"),
@@ -285,15 +287,25 @@ function ownIdsFrom(list) {
   return ids;
 }
 
-async function run(list, onlySkus) {
+// Each SKU keeps its last result until it is searched again, and is only searched again once that
+// result is older than the refresh window (or minGapHours for a manual "refresh all"). So a run that
+// is interrupted by a restart picks up where it stopped instead of starting over.
+const ageMs = t => t ? Date.now() - Date.parse(t) : Infinity;
+const lastTry = x => Math.min(ageMs(x?.checkedAt), ageMs(x?.errorAt));
+const isDue = (sku, hours) => lastTry(state.skus[sku]) >= hours * 3600 * 1000;
+const dueList = (list, hours) => list.filter(p => p.sku && p.name && isDue(p.sku, hours));
+
+async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
   if (!CFG.key) throw new Error("EUKA_API_KEY is not set");
   if (job) return job;
   const ownIds = ownIdsFrom(list);
-  const todo = list.filter(p => p.sku && p.name && (!onlySkus || onlySkus.includes(p.sku)));
+  // Named SKUs (a re-check or pin from the page) are searched now; a pass only takes SKUs that are due.
+  const todo = onlySkus ? list.filter(p => p.sku && p.name && onlySkus.includes(p.sku)) : dueList(list, minAgeHours);
   progress = { done: 0, total: todo.length, startedAt: new Date().toISOString(), lastError: null };
   miState = { ok: null, error: null, at: null };
   const full = !onlySkus;
-  if (full) state.runAt = progress.startedAt;
+  if (full && !todo.length) { job = null; return Promise.resolve(); }
+  if (full) { state.runAt = progress.startedAt; state.finishedAt = null; }
   let errors = 0, i = 0, authFailed = false;
   job = (async () => {
     const worker = async () => {
@@ -306,7 +318,7 @@ async function run(list, onlySkus) {
           state.skus[p.sku] = { ...(state.skus[p.sku] || {}), error: e.message, errorAt: new Date().toISOString() };
         }
         progress.done++;
-        if (progress.done % 50 === 0) save(FILE, state);
+        if (progress.done % 10 === 0) save(FILE, state);
         if (CFG.delayMs) await sleep(CFG.delayMs);
       }
     };
@@ -319,6 +331,15 @@ async function run(list, onlySkus) {
   return job;
 }
 
+// When the oldest SKU result falls due again.
+function nextDue() {
+  let oldest = Infinity;
+  for (const x of Object.values(state.skus)) { const t = Date.parse(x.checkedAt || x.errorAt || 0); if (t < oldest) oldest = t; }
+  return Number.isFinite(oldest) ? new Date(oldest + CFG.refreshHours * 3600 * 1000).toISOString() : null;
+}
+// Whether results survive a restart: only when COMPETITOR_DATA_DIR points at a persistent disk.
+const savedTo = () => ({ dir: CFG.dataDir, persistent: !!process.env.COMPETITOR_DATA_DIR });
+
 async function checkKey() {
   if (!CFG.key) return (me = { at: Date.now(), ok: false, info: null, error: "EUKA_API_KEY is not set" });
   if (Date.now() - me.at < 10 * 60 * 1000 && me.ok !== null) return me;
@@ -327,13 +348,17 @@ async function checkKey() {
   return me;
 }
 
-// Kick off a full run when the saved one is older than the refresh window.
+// Every 15 minutes, search the SKUs whose last result is older than the refresh window. After a
+// restart this resumes the unfinished SKUs; SKUs searched recently are left alone.
 function schedule(getList) {
   const tick = async () => {
     if (!CFG.key || job) return;
-    const age = state.runAt ? Date.now() - Date.parse(state.runAt) : Infinity;
-    if (age < CFG.refreshHours * 3600 * 1000) return;
-    try { const list = await getList(); console.log(`Starting competitor run for ${list.length} products`); run(list).catch(e => console.warn(`Competitor run failed: ${e.message}`)); }
+    try {
+      const list = await getList(), due = dueList(list, CFG.refreshHours);
+      if (!due.length) return;
+      console.log(`Competitor run: ${due.length} of ${list.length} SKUs due (older than ${CFG.refreshHours}h)`);
+      run(list).catch(e => console.warn(`Competitor run failed: ${e.message}`));
+    }
     catch (e) { console.warn(`Competitor run skipped, products unavailable: ${e.message}`); }
   };
   setTimeout(tick, 15000).unref();
@@ -357,7 +382,7 @@ async function handle(req, res, url, getList) {
       return send(res, 200, {
         configured: !!CFG.key, running: !!job, progress, runAt: state.runAt, finishedAt: state.finishedAt, errors: state.errors,
         refreshHours: CFG.refreshHours, perSku: CFG.perSku, minScore: CFG.minScore, region: CFG.region,
-        nextRunAt: state.runAt ? new Date(Date.parse(state.runAt) + CFG.refreshHours * 3600 * 1000).toISOString() : null,
+        nextRunAt: nextDue(), minGapHours: CFG.minGapHours, saved: savedTo(),
         needsToken: !!CFG.adminToken, sources: CFG.sources, marketIntel: job ? miState : state.marketIntel || miState,
         skus: state.skus, overrides,
       }), true;
@@ -379,7 +404,8 @@ async function handle(req, res, url, getList) {
       if (job) return send(res, 409, { error: "A refresh is already running", progress }), true;
       const list = await getList();
       const only = Array.isArray(body.skus) && body.skus.length ? body.skus.map(String) : null;
-      const p = run(list, only);
+      if (!only && !dueList(list, CFG.minGapHours).length) return send(res, 200, { ok: true, started: false, message: `Every SKU was searched in the last ${CFG.minGapHours} hours` }), true;
+      const p = run(list, only, CFG.minGapHours);
       if (only && only.length <= 3) { await p; return send(res, 200, { ok: true, skus: Object.fromEntries(only.map(s => [s, state.skus[s]])) }), true; }
       return send(res, 202, { ok: true, started: true, total: progress.total }), true;
     }

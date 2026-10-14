@@ -960,9 +960,11 @@ function competitorsHtml() {
   const under = priced.filter(o => o.x.gap > 0.005), cheapest = priced.filter(o => o.x.gap <= 0.005), below = matched.filter(o => o.x.floor != null && o.x.low < o.x.floor);
   const f = ST.compFilter || "all";
   const shown = { all: list, undercut: under, cheapest, below, nomatch: list.filter(o => !o.x.n), noprice: matched.filter(o => o.x.our == null) }[f] || list;
-  const run = C.running ? `<b>Refreshing:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} SKUs…`
-    : C.finishedAt ? `Last full refresh ${new Date(C.finishedAt).toLocaleString()}${C.errors ? ` · <span class=warn>${C.errors} SKUs failed</span>` : ""} · next ${C.nextRunAt ? new Date(C.nextRunAt).toLocaleString() : "soon"}`
-    : "First refresh starts shortly after the server boots.";
+  // Each SKU is re-searched only when its result is older than the refresh window; results are overwritten one by one.
+  const fresh = Object.values(C.skus || {}).filter(x => x.checkedAt && Date.now() - Date.parse(x.checkedAt) < C.refreshHours * 36e5).length;
+  const run = (C.running ? `<b>Searching:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} due SKUs… `
+    : "") + `${fmtInt(fresh)} SKUs searched in the last ${C.refreshHours} hours${C.errors ? ` · <span class=warn>${C.errors} failed last pass</span>` : ""}${!C.running && C.nextRunAt ? ` · next due ${new Date(C.nextRunAt).toLocaleString()}` : ""}.`
+    + (C.saved && !C.saved.persistent ? ` <span class="pill bad" title="Results are kept on the server's temporary disk">Results reset when the server restarts</span>` : "");
   const key = s && s.keyOk === false ? `<span class="pill bad">Euka key problem: ${esc(s.error)}</span>` : "";
   const mi = C.marketIntel?.ok === false && (C.sources || []).includes("market")
     ? `<span class="pill bad" title="${esc(C.marketIntel.error || "")}">Market intelligence unavailable, using product search only</span>` : "";
@@ -995,7 +997,7 @@ function competitorsHtml() {
   ].map(c => c.prod || c === TIER ? { ...c, v: o => c.v(o.r), f: o => c.f(o.r), csv: c.prod ? o => `${o.r.sku} ${o.r.name}` : null } : c);
   return `<p class="lead">Up to ${C.perSku} same-item TikTok Shop listings per SKU from <b>Euka</b>, re-checked every ${C.refreshHours} hours. ${run} ${key}
       ${mi}
-      <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""}>Refresh all now</button></p>${kpis}
+      <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""} title="Searches SKUs not searched in the last ${C.minGapHours || 2} hours">Refresh all now</button></p>${kpis}
     <section class="card"><div class="head"><h3>Price comparison</h3>
       <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div>
       <p class="hint">Click a product to see each competitor listing, pin the right one or hide a wrong match.</p>
@@ -1043,7 +1045,7 @@ document.addEventListener("click", async e => {
   e.stopPropagation();
   if (t.dataset.cf) { ST.compFilter = t.dataset.cf; render(); return; }
   t.disabled = true;
-  if (t.id === "compRefresh") { if (await compPost("/api/competitors/refresh")) { await loadCompetitors(); render(); } return; }
+  if (t.id === "compRefresh") { const out = await compPost("/api/competitors/refresh"); if (out?.message) alert(out.message); if (out) { await loadCompetitors(); render(); } return; }
   const sku = t.dataset.sku, act = t.dataset.cact;
   const out = act === "recheck" ? await compPost("/api/competitors/refresh", { skus: [sku] }) : await compPost("/api/competitors/override", { sku, productId: t.dataset.id, action: act });
   t.disabled = false;
