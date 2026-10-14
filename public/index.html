@@ -948,6 +948,8 @@ async function loadCompetitors(withStatus) {
   try {
     const res = await fetch("/api/competitors", { cache: "no-store" });
     if (res.ok) COMP = await res.json();
+    // The server is briefly down while a new version deploys (502): keep what's shown and try again.
+    else if (res.status >= 500) { clearTimeout(compPoll); compPoll = setTimeout(() => loadCompetitors().then(() => ST.tab === "competitors" && !$("detail").open && render()), 15000); return; }
     if (withStatus || !compStatus) { const s = await fetch("/api/competitors/status", { cache: "no-store" }); if (s.ok) compStatus = await s.json(); }
   } catch (e) { console.warn("Competitor data unavailable", e); }
   clearTimeout(compPoll);
@@ -1073,6 +1075,7 @@ async function compPost(pathname, body) {
     res = await go(token);
   }
   const out = await res.json().catch(() => ({}));
+  if (res.status === 409) return { message: "A refresh is already running. New results appear as each product is searched." };
   if (!res.ok && res.status !== 202) { alert(out.error || `Request failed (HTTP ${res.status})`); return null; }
   return out;
 }
