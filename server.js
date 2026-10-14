@@ -14,6 +14,7 @@ try {
   }
 } catch {}
 const auth = require("./auth");
+const catalog = require("./catalog");
 const competitors = require("./competitors");
 const excel = require("./excel");
 const tiktokSales = require("./tiktok-sales");
@@ -159,6 +160,7 @@ http.createServer(async (req, res) => {
     }
     return;
   }
+  if (await catalog.handle(req, res, url, productList, () => ({ fetchedAt: new Date(cache.at).toISOString() }))) return;
   if (await competitors.handle(req, res, url, productList)) return;
   if (await excel.handle(req, res, url)) return;
   if (await tiktokSales.handle(req, res, url)) return;

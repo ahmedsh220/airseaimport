@@ -87,6 +87,8 @@ const readForm = req => new Promise(resolve => {
 async function gate(req, res, url) {
   const p = url.pathname;
   if (p === "/healthz" || p === "/favicon.svg" || p === "/favicon.ico") return false;
+  // The customer catalog has its own password (catalog.js).
+  if (p === "/catalog" || p.startsWith("/catalog/")) return false;
   if (!token()) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
     res.end("The dashboard is locked: set ADMIN_TOKEN in Render → Environment to sign in.");
@@ -126,4 +128,6 @@ async function gate(req, res, url) {
   return true;
 }
 
-module.exports = { gate };
+// Shared with catalog.js, which runs its own sign-in with the same rules.
+const isAdmin = req => !!session(req);
+module.exports = { gate, isAdmin, cookies, device, same, secure, esc, readForm, ipOf };

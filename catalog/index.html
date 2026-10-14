@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wholesale Catalog · Fragrance Wholesaler USA</title>
+<style>
+  :root { --text: #14181f; --muted: #5d6675; --border: #d9dde3; --red: #e00000; --green: #d9ead3; --head: #156082; --bg: #fff; --soft: #f4f5f7; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Aptos Narrow", "Arial Narrow", Arial, system-ui, sans-serif; }
+  button, input, select { font: inherit; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+  button { cursor: pointer; font-weight: 600; } button:hover { border-color: #111; }
+  button.primary { background: #111; color: #fff; border-color: #111; }
+  button:disabled { opacity: .5; cursor: progress; }
+  .brand { text-align: center; padding: 16px 16px 6px; }
+  .logos { display: flex; align-items: center; justify-content: center; gap: 2vw; flex-wrap: wrap; }
+  .logos img { height: 92px; width: auto; object-fit: contain; }
+  .logos img.main { height: 130px; }
+  .logos img.wide { height: 64px; }
+  .addr { font-family: Arial, sans-serif; font-size: 15px; margin-top: 4px; }
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
+  .bar input[type=search] { flex: 1 1 220px; max-width: 380px; }
+  .bar .sp { flex: 1; }
+  .meta { color: var(--muted); font-size: 12px; }
+  #status { color: var(--muted); font-size: 13px; }
+  .wrap { overflow-x: auto; padding: 0 16px 48px; }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; margin-top: 12px; }
+  th { text-align: left; color: var(--head); font-weight: 700; font-size: 15px; padding: 8px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  th.price { background: var(--green); color: #111; text-align: center; font-family: Arial, sans-serif; }
+  td { padding: 6px 8px; border-bottom: 1px solid #eceef1; vertical-align: middle; font-size: 15px; }
+  td.pic { width: 84px; } td.pic img { width: 70px; height: 70px; object-fit: contain; display: block; background: #fff; }
+  td.pic .none { width: 70px; height: 70px; display: grid; place-items: center; color: #b4bac3; font-size: 11px; background: var(--soft); border-radius: 4px; }
+  td.price { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.price small { display: block; color: var(--muted); font-size: 11px; }
+  td.sku, td.upc { max-width: 170px; overflow-wrap: break-word; }
+  td.new { width: 52px; text-align: center; }
+  .tag { background: var(--red); color: #fff; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 3px; }
+  tr.sec td { background: var(--red); color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .03em; padding: 7px 8px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  @media (max-width: 640px) { .logos img { height: 54px; } .logos img.main { height: 90px; } .logos img.wide { height: 40px; } }
+</style>
+</head>
+<body>
+<div class="brand">
+  <div class="logos">
+    <img src="/catalog/assets/logo-lattafa.png" alt="Lattafa">
+    <img src="/catalog/assets/logo-arabiyat.jpg" alt="Arabiyat">
+    <img class="main" src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
+    <img class="wide" src="/catalog/assets/logo-bharara.png" alt="Bharara">
+    <img src="/catalog/assets/logo-armaf.jpg" alt="Armaf">
+  </div>
+  <div class="addr">47-25 27th St Suite 1, Long Island City, NY 11101</div>
+  <div class="addr">(929) 257-3502</div>
+</div>
+<div class="bar">
+  <input type="search" id="q" placeholder="Search name, SKU or UPC">
+  <select id="sec"><option value="">All categories</option></select>
+  <label class="meta"><input type="checkbox" id="onlyNew"> New only</label>
+  <span id="status"></span>
+  <span class="sp"></span>
+  <button class="primary" id="pdf">Download PDF</button>
+  <button class="primary" id="xlsx">Download Excel</button>
+  <a class="meta" href="/catalog/logout">Sign out</a>
+</div>
+<div class="wrap">
+  <div class="meta" id="asof"></div>
+  <table>
+    <thead><tr><th></th><th>PICTURE</th><th>SKU</th><th>UPC</th><th>NAME</th><th>CATEGORY</th><th class="price">PIECE PRICE</th><th class="price">CASE PRICE</th></tr></thead>
+    <tbody id="rows"><tr><td colspan="8" class="empty">Loading the catalog…</td></tr></tbody>
+  </table>
+</div>
+
+<script>
+const ADDRESS = "47-25 27th St Suite 1, Long Island City, NY 11101", PHONE = "(929) 257-3502";
+const LOGOS = { lattafa: "/catalog/assets/logo-lattafa.png", arabiyat: "/catalog/assets/logo-arabiyat.jpg", main: "/catalog/assets/logo-fwusa.jpg", bharara: "/catalog/assets/logo-bharara.png", armaf: "/catalog/assets/logo-armaf.jpg" };
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const money = n => n == null ? "Contact Sales" : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let data = { items: [], sections: [] };
+
+function shown() {
+  const q = $("q").value.trim().toLowerCase(), sec = $("sec").value, onlyNew = $("onlyNew").checked;
+  return data.items.filter(i => (!sec || i.section === sec) && (!onlyNew || i.isNew)
+    && (!q || (i.name + " " + i.sku + " " + i.upc + " " + i.category).toLowerCase().includes(q)));
+}
+// Items grouped under their section headings, in catalog order.
+function grouped(items) {
+  const out = [];
+  for (const s of data.sections) { const g = items.filter(i => i.section === s); if (g.length) out.push([s, g]); }
+  return out;
+}
+function render() {
+  const items = shown();
+  $("status").textContent = `${items.length.toLocaleString()} products`;
+  if (!items.length) { $("rows").innerHTML = `<tr><td colspan="8" class="empty">No products match.</td></tr>`; return; }
+  $("rows").innerHTML = grouped(items).map(([s, g]) => `<tr class="sec"><td colspan="8">${esc(s)}</td></tr>` + g.map(i => `<tr>
+    <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
+    <td class="pic">${i.img ? `<img loading="lazy" src="/catalog/img/${encodeURIComponent(i.sku)}" alt="" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>'}</td>
+    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td>${esc(i.name)}</td><td>${esc(i.category)}</td>
+    <td class="price">${money(i.piece)}</td><td class="price">${money(i.case)}${i.case != null && i.qty ? `<small>${i.qty} pcs</small>` : ""}</td></tr>`).join("")).join("");
+}
+
+async function load() {
+  const r = await fetch("/catalog/data", { cache: "no-store" });
+  if (r.status === 401) { location.href = "/catalog"; return; }
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  data = d;
+  $("sec").innerHTML = '<option value="">All categories</option>' + d.sections.filter(s => d.items.some(i => i.section === s)).map(s => `<option>${esc(s)}</option>`).join("");
+  $("asof").textContent = `Prices as of ${new Date(d.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`;
+  render();
+}
+load().catch(e => { $("rows").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`; });
+let t; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 150); });
+$("sec").addEventListener("change", render); $("onlyNew").addEventListener("change", render);
+
+// ---- Exports ----
+const scripts = {};
+const loadScript = src => scripts[src] ||= new Promise((ok, fail) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => fail(new Error("Couldn't load the export library. Check your connection.")); document.head.append(s); });
+
+// Pictures are shrunk to small JPEGs so the files stay a manageable size.
+const thumbs = new Map();
+function picture(url, max = 220) {
+  if (!thumbs.has(url + max)) thumbs.set(url + max, (async () => {
+    try {
+      const r = await fetch(url); if (!r.ok) return null;
+      const bmp = await createImageBitmap(await r.blob());
+      const k = Math.min(1, max / Math.max(bmp.width, bmp.height)), w = Math.max(1, Math.round(bmp.width * k)), h = Math.max(1, Math.round(bmp.height * k));
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, w, h); x.drawImage(bmp, 0, 0, w, h);
+      return { data: c.toDataURL("image/jpeg", 0.8), w, h };
+    } catch { return null; }
+  })());
+  return thumbs.get(url + max);
+}
+async function pictures(items, label) {
+  const out = new Map(); let done = 0, next = 0;
+  const work = async () => { while (next < items.length) { const i = items[next++];
+    if (i.img) out.set(i.sku, await picture(`/catalog/img/${encodeURIComponent(i.sku)}`));
+    if (++done % 20 === 0) $("status").textContent = `${label}: loading pictures ${done.toLocaleString()} / ${items.length.toLocaleString()}…`; } };
+  await Promise.all(Array.from({ length: 8 }, work));
+  return out;
+}
+async function logos() {
+  const out = {}; for (const [k, u] of Object.entries(LOGOS)) out[k] = await picture(u, 600); return out;
+}
+const fileDate = () => new Date().toISOString().slice(0, 10);
+function save(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+async function run(btn, label, fn) {
+  const btns = [$("pdf"), $("xlsx")]; btns.forEach(b => b.disabled = true);
+  try { await fn(); } catch (e) { alert(`${label} failed: ${e.message}`); }
+  finally { btns.forEach(b => b.disabled = false); render(); }
+}
+
+$("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
+  const items = shown();
+  await loadScript("https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js");
+  const [pics, logo] = [await pictures(items, "Excel"), await logos()];
+  $("status").textContent = "Excel: building the file…";
+  const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet("Catalog", {
+    views: [{ state: "frozen", ySplit: 6, showGridLines: true }],
+    pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "6:6" },
+  });
+  ws.columns = [8, 14, 14, 18, 74, 18, 17, 17].map(width => ({ width }));
+  const font = { name: "Aptos Narrow", size: 12 };
+  ws.getRow(1).height = 115; ws.getRow(2).height = 26; ws.getRow(3).height = 17; ws.getRow(4).height = 26; ws.getRow(5).height = 2; ws.getRow(6).height = 28;
+  const img = (pic, col, row, w, h) => { if (!pic) return; const k = Math.min(w / pic.w, h / pic.h);
+    ws.addImage(wb.addImage({ base64: pic.data, extension: "jpeg" }), { tl: { col, row }, ext: { width: pic.w * k, height: pic.h * k }, editAs: "oneCell" }); };
+  // ExcelJS turns the fraction of a column into a fixed offset, not one scaled to the column's width,
+  // so each logo starts in its own column: Lattafa B, Arabiyat D, main logo E, Bharara F, Armaf H.
+  img(logo.lattafa, 1.2, 0.1, 120, 120); img(logo.arabiyat, 3.1, 0.1, 125, 125);
+  img(logo.main, 4.9, 0.05, 320, 150); img(logo.bharara, 5.05, 0.3, 220, 95); img(logo.armaf, 7.0, 0.1, 115, 115);
+  // Same address, phone and price headings as the printed catalog.
+  ws.mergeCells("A2:H2"); ws.mergeCells("A3:H3");
+  Object.assign(ws.getCell("A2"), { value: ADDRESS, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
+  Object.assign(ws.getCell("A3"), { value: PHONE, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
+  Object.assign(ws.getCell("E4"), { value: `Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, font: { ...font, size: 10, italic: true, color: { argb: "FF5D6675" } }, alignment: { horizontal: "left", vertical: "middle" } });
+  for (const c of ["G4", "H4"]) Object.assign(ws.getCell(c), { value: c === "G4" ? "PIECE PRICE" : "CASE PRICE", font: { name: "Arial", size: 12, bold: true },
+    fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAD3" } }, alignment: { horizontal: "center", vertical: "middle" } });
+  ["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", "PIECE PRICE", "CASE PRICE"].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
+    { value: h, font: { ...font, bold: true, color: { argb: "FF156082" } }, alignment: { horizontal: k >= 6 ? "center" : "left", vertical: "middle" } }));
+  let r = 7;
+  for (const [s, g] of grouped(items)) {
+    const row = ws.getRow(r++); row.height = 30;
+    for (let c = 1; c <= 8; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
+    Object.assign(row.getCell(3), { value: s, font: { ...font, bold: true, color: { argb: "FFFFFFFF" } }, alignment: { vertical: "middle" } });
+    for (const i of g) {
+      const row = ws.getRow(r); row.height = 62;
+      [i.isNew ? "NEW" : "", "", i.sku, i.upc, i.name, i.category, i.piece ?? "Contact Sales", i.case ?? "Contact Sales"].forEach((v, k) => {
+        const cell = row.getCell(k + 1); cell.value = v; cell.font = k === 0 ? { ...font, bold: true, color: { argb: "FFE00000" } } : font;
+        cell.alignment = { vertical: "middle", horizontal: k >= 6 || k === 0 ? "center" : "left", wrapText: k >= 2 && k <= 4 };
+        if (k >= 6 && typeof v === "number") cell.numFmt = '"$"#,##0.00';
+        if (k === 2 || k === 3) cell.numFmt = "@";
+      });
+      img(pics.get(i.sku), 1.08, r - 1 + 0.05, 74, 74);
+      r++;
+    }
+  }
+  save(new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `fragrance-wholesaler-usa-catalog-${fileDate()}.xlsx`);
+});
+
+$("pdf").onclick = () => run($("pdf"), "PDF", async () => {
+  const items = shown();
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+  const [pics, logo] = [await pictures(items, "PDF"), await logos()];
+  $("status").textContent = "PDF: building the file…";
+  const doc = new jspdf.jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
+  const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+  const fit = (pic, cx, y, w, h) => { if (!pic) return; const k = Math.min(w / pic.w, h / pic.h); doc.addImage(pic.data, "JPEG", cx - pic.w * k / 2, y + (h - pic.h * k) / 2, pic.w * k, pic.h * k); };
+  fit(logo.lattafa, W / 2 - 300, 22, 70, 70); fit(logo.arabiyat, W / 2 - 200, 22, 76, 76); fit(logo.main, W / 2, 10, 170, 100);
+  fit(logo.bharara, W / 2 + 190, 30, 130, 60); fit(logo.armaf, W / 2 + 300, 22, 70, 70);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(11); doc.setTextColor(20);
+  doc.text(ADDRESS, W / 2, 120, { align: "center" }); doc.text(PHONE, W / 2, 135, { align: "center" });
+  doc.setFontSize(8); doc.setTextColor(93, 102, 117);
+  doc.text(`Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`, W / 2, 148, { align: "center" });
+  const body = [];
+  for (const [s, g] of grouped(items)) {
+    body.push([{ content: s, colSpan: 8, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
+    for (const i of g) body.push([i.isNew ? "NEW" : "", { content: "", sku: i.sku }, i.sku, i.upc, i.name, i.category, money(i.piece), money(i.case)]);
+  }
+  doc.autoTable({
+    startY: 158, margin: { left: 24, right: 24, bottom: 30 }, theme: "plain",
+    head: [["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", "PIECE PRICE", "CASE PRICE"]], body,
+    styles: { fontSize: 8.5, valign: "middle", cellPadding: 3, minCellHeight: 50, lineColor: [236, 238, 241], lineWidth: { bottom: 0.5 } },
+    headStyles: { textColor: [21, 96, 130], fontStyle: "bold", fontSize: 9, minCellHeight: 0 },
+    columnStyles: { 0: { cellWidth: 30, halign: "center", textColor: [224, 0, 0], fontStyle: "bold" }, 1: { cellWidth: 56 }, 2: { cellWidth: 62 }, 3: { cellWidth: 82 },
+      5: { cellWidth: 82 }, 6: { cellWidth: 70, halign: "center" }, 7: { cellWidth: 70, halign: "center" } },
+    didParseCell: h => { if (h.section === "head" && h.column.index >= 6) { h.cell.styles.fillColor = [217, 234, 211]; h.cell.styles.textColor = 20; h.cell.styles.halign = "center"; } },
+    didDrawCell: h => { const sku = h.section === "body" && h.cell.raw && h.cell.raw.sku; const p = sku && pics.get(sku);
+      if (p) fit(p, h.cell.x + h.cell.width / 2, h.cell.y + 3, h.cell.width - 6, h.cell.height - 6); },
+  });
+  const n = doc.getNumberOfPages();
+  for (let k = 1; k <= n; k++) { doc.setPage(k); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Fragrance Wholesaler USA · ${PHONE} · Page ${k} of ${n}`, W / 2, H - 14, { align: "center" }); }
+  doc.save(`fragrance-wholesaler-usa-catalog-${fileDate()}.pdf`);
+});
+</script>
+</body>
+</html>
