@@ -1,21 +1,36 @@
 # airseaimport
 
-Single-page reports dashboard for the product data at
-`https://hub.fragrancewholesalerusa.com/api/open/products`.
+Reports dashboard for Air Sea Import, built on the product data at
+`https://hub.fragrancewholesalerusa.com/api/open/products`, plus TikTok competitor prices from Euka, edits back into the pricing workbook in OneDrive, and two customer wholesale catalogs. Deployed on Render as a Node web service.
 
-`npm start` (or `yarn start`) runs `server.js`, which serves `public/index.html` and proxies the API at `/api/products` (60s cache) so the browser never hits CORS. Once loaded, the last good product list stays in memory and is served right away while a fresh copy loads in the background, so pages never wait on a slow API. Nothing product-related is stored in the repo; everything comes from the live API. Deployed on Render as a Node web service.
+## Run it
 
-Layout: `server.js` (entry point), `lib/` (server modules), `public/` (dashboard pages) with browser scripts in `public/js/`, `catalog/index.html` (customer catalog page), `media/` (all logos and the icon, served at `/media/`).
+Node 18 or newer, no npm dependencies. Copy `.env.example` to `.env`, set at least `ADMIN_TOKEN`, then `npm start` and open `http://localhost:3000`. On Render the same settings go under the service's Environment tab.
 
-The page builds:
+`server.js` serves `public/index.html` and proxies the API at `/api/products` so the browser never hits CORS. The last good product list stays in memory and is served right away while a fresh copy loads in the background (every 5 minutes at most), so pages never wait on the slow upstream API. Nothing product-related is stored in the repo; everything comes from the live API.
 
-- KPI tiles: SKUs, units on hand, inventory value, 90-day sales, stockouts, low stock, dead stock, on order, return rate, September revenue/margin
-- Charts: 60-day sales by channel, top 15 sellers, stock health (days of cover), cheapest-vendor wins
-- Report tables (sortable, searchable, CSV export): Reorder, Top sellers, Vendor pricing, Dead stock, Channel mix, Returns, All products
+Layout: `server.js` (entry point), `lib/` (server modules), `public/` (dashboard pages) with browser scripts in `public/js/`, `catalog/index.html` (customer catalog page), `media/` (logos and the icon, served at `/media/`), `docs/` (design notes).
 
-A sticky filter bar picks the date field and range (default: today), category and tier. KPI tiles and chart bars open the matching report. Click any product for its full vendor price comparison. **Catalog management** in the top bar opens the catalog management page (`/catalog-admin.html`).
+## Docs
 
-Data notes: on hand uses `live_qoh`; our cost is `actual_cost` when above 0, else `cost`; vendor columns (`lux`, `edge`, `tahir`, …) are supplier prices; `*_60_days` are 60-day sales projections per channel; `sales_sep_sale_price` and `sales_sep_shipping_price_we_paid` are September totals.
+- [docs/architecture.md](docs/architecture.md): how the server, sign-in, data sources, routes and saved files fit together.
+- [docs/assistant.md](docs/assistant.md): plan for the in-dashboard assistant (our own MCP server plus a chat panel), including how business data is kept safe. Planned, not built yet.
+
+## The dashboard
+
+Tabs:
+
+- **Overview**: projected sales for the chosen period (7 to 90 days), reorder now, runs out soon, out of stock but still selling, stock value; units sold by platform; running out first; top sellers.
+- **Actions**: cash tied up in stock beyond a 60, 90 or 180-day cover target, and products a vendor quotes cheaper than we pay.
+- **Reorder**: what to order, grouped by vendor or other fields, using the sheet's rule (reorder when days of stock is at or under 28, order day average × 45 minus stock and on order, in whole cases).
+- **Profit & Loss**: per-platform price, fee, shipping and profit using the Excel sheet's formulas, optionally with live listing prices.
+- **Sheet view**: every product with the workbook's columns.
+- **Vendors**: supplier price lists from the API; click a vendor for their prices.
+- **TikTok competitors**: see below.
+
+The side panel shows sales by platform; click one to focus every tab on it. The filter bar picks category and tier. Click any product for its detail view (vendor prices, platform P&L, competitors, Excel row). Report tables sort, search and export to CSV. The sales window, order multiplier, trigger days, minimum margin and misc cost are editable in settings and remembered per browser. **Catalog management** in the top bar opens `/catalog-admin.html`.
+
+Data notes: on hand uses `live_qoh` (falling back to `qoh`); our cost is `actual_cost` when above 0, else `purchase_cost`, else `cost`; vendor columns (`lux`, `edge`, `tahir`, …) are supplier prices; `*_60_days` are 60-day units per channel; `sales_90_days` drives the day average; `sales_sep_sale_price` and `sales_sep_shipping_price_we_paid` are September totals.
 
 ## TikTok competitors (Euka)
 
