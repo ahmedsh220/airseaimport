@@ -79,6 +79,14 @@ async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
   return JSON.parse(text);
 }
 
+// Social Intelligence reads are made "for" one of the key's Euka brands (required).
+let brandCache = (process.env.EUKA_BRAND_ID || "").trim() || null;
+async function brandId() {
+  if (!brandCache) brandCache = (await euka("/me")).brandIds?.[0] || (await euka("/brands"))?.[0]?.id || null;
+  if (!brandCache) throw new Error("This Euka key has no brand");
+  return brandCache;
+}
+
 // Market Intelligence wraps results as { success, data, message, code }.
 const MI_BASE = { region: "US", language: "en-US", currency: "USD", date_range: "last30Day" };
 async function mi(p, body) {
@@ -196,6 +204,9 @@ async function enrich(m) {
 
 // ---------- state ----------
 let state = load(FILE, { runAt: null, finishedAt: null, skus: {}, errors: 0 });
+// Results from before product search sent a brandId all failed with "Input validation failed";
+// drop them so those SKUs are searched again now rather than after the retry gap.
+for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed/.test(v.error || "") && !v.matches) delete state.skus[k];
 let overrides = load(OVERRIDES, {}); // { sku: { ignore: [productId], pin: [productId] } }
 let job = null;
 let progress = { done: 0, total: 0, startedAt: null, lastError: null };
@@ -248,7 +259,8 @@ async function searchSku(pr, ownIds) {
     let socialErr = null;
     if (useSocial()) {
       try {
-        const data = await euka(CFG.searchPath, { query: q, region: CFG.region, limit: 50, sortBy: "last30dSales" });
+        // brandId is required; Euka rejects any `limit`, so each call returns its default 20.
+        const data = await euka(CFG.searchPath, { brandId: await brandId(), query: q, region: CFG.region, sortBy: "last30dSales" });
         calls++;
         for (const it of data.items || []) add(slim(it, 0));
       } catch (e) { if (!useMi() || e.status === 401 || e.status === 403) throw e; socialErr = e; }
@@ -273,7 +285,7 @@ async function searchSku(pr, ownIds) {
     if (seen.has(id)) { seen.get(id).score = 1; seen.get(id).pinned = true; continue; }
     let got = null;
     if (useSocial()) {
-      try { got = slim(await euka(`${CFG.searchPath}/${encodeURIComponent(id)}`, { region: CFG.region }), 1); calls++; }
+      try { got = slim(await euka(`${CFG.searchPath}/${encodeURIComponent(id)}`, { brandId: await brandId(), region: CFG.region }), 1); calls++; }
       catch (e) { console.warn(`Pinned ${id} for ${pr.sku}: ${e.message}`); }
     }
     if (!got && useMi()) {
@@ -314,8 +326,12 @@ function ownIdsFrom(list) {
 // result is older than the refresh window (or minGapHours for a manual "refresh all"). So a run that
 // is interrupted by a restart picks up where it stopped instead of starting over.
 const ageMs = t => t ? Date.now() - Date.parse(t) : Infinity;
-const lastTry = x => Math.min(ageMs(x?.checkedAt), ageMs(x?.errorAt));
-const isDue = (sku, hours) => lastTry(state.skus[sku]) >= hours * 3600 * 1000;
+// A SKU whose last search failed is retried after minGapHours instead of waiting the full window.
+const isDue = (sku, hours) => {
+  const x = state.skus[sku];
+  if (x?.error && ageMs(x.errorAt) >= CFG.minGapHours * 3600 * 1000) return true;
+  return Math.min(ageMs(x?.checkedAt), ageMs(x?.errorAt)) >= hours * 3600 * 1000;
+};
 const dueList = (list, hours) => list.filter(p => p.sku && p.name && isDue(p.sku, hours));
 
 async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
@@ -410,24 +426,6 @@ async function handle(req, res, url, getList) {
         skus: state.skus, overrides,
       }), true;
     }
-    if (sub === "/diag") {
-      // Temporary: why product search answers 400. Fixed variants only, no caller input.
-      const brand = (await euka("/me")).brandIds?.[0];
-      const variants = {
-        q1: [CFG.searchPath, { brandId: brand, query: "khamrah" }],
-        q2: [CFG.searchPath, { brandId: brand, query: "lattafa khamrah" }],
-        l50: [CFG.searchPath, { brandId: brand, limit: 50 }],
-        l20: [CFG.searchPath, { brandId: brand, limit: 20 }],
-        sort: [CFG.searchPath, { brandId: brand, sortBy: "last30dSales" }],
-        reg: [CFG.searchPath, { brandId: brand, region: "US", query: "khamrah" }],
-      };
-      const out = {};
-      for (const [k, v] of Object.entries(variants)) {
-        try { const r = await euka(v[0], v[1]); out[k] = { ok: true, items: (r.items || []).length, sample: JSON.stringify(r).slice(0, 300) }; }
-        catch (e) { out[k] = { ok: false, error: e.message }; }
-      }
-      return send(res, 200, { brand, out }), true;
-    }
     if (sub === "/status") {
       const k = await checkKey();
       return send(res, 200, { configured: !!CFG.key, keyOk: k.ok, key: k.info, error: k.error, running: !!job, progress, lastCall }), true;
@@ -435,7 +433,7 @@ async function handle(req, res, url, getList) {
     const pm = sub.match(/^\/product\/([^/]+)$/);
     if (pm) {
       if (!CFG.key) return send(res, 400, { error: "EUKA_API_KEY is not set on the server" }), true;
-      return send(res, 200, await euka(`${CFG.searchPath}/${encodeURIComponent(decodeURIComponent(pm[1]))}`, { region: CFG.region })), true;
+      return send(res, 200, await euka(`${CFG.searchPath}/${encodeURIComponent(decodeURIComponent(pm[1]))}`, { brandId: await brandId(), region: CFG.region })), true;
     }
     if (req.method !== "POST") return send(res, 405, { error: "POST only" }), true;
     if (!authorized(req, url)) return send(res, 401, { error: "Admin token required" }), true;
