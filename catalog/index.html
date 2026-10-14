@@ -103,7 +103,7 @@ function shown() {
     && (!q || (i.name + " " + i.sku + " " + i.upc + " " + i.category).toLowerCase().includes(q)));
 }
 // Price columns the owner chose to show (set in the dashboard's Customer catalog tab).
-const priceCols = () => [data.showPrices !== false && ["PIECE PRICE", i => i.piece], data.showCasePrices !== false && ["CASE PRICE", i => i.case]].filter(Boolean);
+const priceCols = () => [data.showPrices !== false && ["PIECE PRICE", i => i.piece], data.showCasePrices !== false && ["CASE PRICE", i => i.caseUnit]].filter(Boolean);
 const nCols = () => 6 + priceCols().length;
 // Items grouped under their section headings, in catalog order.
 function grouped(items) {
@@ -121,7 +121,7 @@ function render() {
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${i.img ? `<img loading="lazy" src="${BASE}/img/${encodeURIComponent(i.sku)}" alt="${esc(i.name)}" data-zoom="${esc(i.sku)}" title="Click for a bigger picture" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>'}</td>
     <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td>${esc(i.name)}</td><td>${esc(i.category)}</td>
-    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.case != null && i.qty ? `<small>${i.qty} pcs${i.caseUnit != null ? ` × ${money(i.caseUnit)}` : ""}</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
+    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
 }
 
 async function load() {
