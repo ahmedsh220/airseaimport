@@ -41,9 +41,10 @@
   const isIn = (i, s = CA.draft) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
   // Same rules as catalog.js pricesFor(): piece = cost + piece markup (or the SKU's own price), case = (cost + case markup) × qty.
   const r2 = n => Math.round(n * 100) / 100;
-  const rulePiece = i => i.cost != null ? r2(i.cost * (1 + (+CA.draft.pieceMarkupPct || 0) / 100)) : null;
+  const rnd = n => { const t = +CA.draft.roundTo || 0; return t > 0 ? r2(Math.round(n / t) * t) : r2(n); };
+  const rulePiece = i => i.cost != null ? rnd(i.cost * (1 + (+CA.draft.pieceMarkupPct || 0) / 100)) : null;
   const price = i => CA.draft.prices[i.sku] ?? rulePiece(i);
-  const caseUnit = i => i.cost != null ? r2(i.cost * (1 + (+CA.draft.caseMarkupPct || 0) / 100)) : null;
+  const caseUnit = i => i.cost != null ? rnd(i.cost * (1 + (+CA.draft.caseMarkupPct || 0) / 100)) : null;
   const usd = v => v == null ? "<span class=muted>Contact Sales</span>" : fmtUsd(v);
   const when = t => t ? new Date(t).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "";
 
@@ -90,6 +91,7 @@
         <fieldset><legend>Wholesale pricing rules</legend>
           <label class="rule">Piece price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="pieceMarkupPct" value="${d.pieceMarkupPct}" style="width:72px">%</label>
           <label class="rule">Case price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="caseMarkupPct" value="${d.caseMarkupPct}" style="width:72px">% per piece</label>
+          <label class="rule">Round both to the nearest <select data-ca-round>${[[0, "no rounding"], [0.05, "$0.05"], [0.1, "$0.10"], [0.25, "$0.25"], [0.5, "$0.50"], [1, "$1.00"]].map(([v, l]) => `<option value="${v}" ${+d.roundTo === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
         </fieldset>
         <fieldset><legend>Which products</legend>
           <label><input type="radio" name="caMode" data-ca="mode" value="all" ${d.mode === "all" ? "checked" : ""}><span>Every product in the API, except the ones you remove<small>New API products appear on their own.</small></span></label>
@@ -156,6 +158,7 @@
       changed(); paint(); return;
     }
     if (t.dataset.ca) { d[t.dataset.ca] = t.checked; changed(); paint(); return; }
+    if (t.dataset.caRound != null) { d.roundTo = Number(t.value); changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caPct) { const n = Number(t.value); if (t.value.trim() === "" || !Number.isFinite(n)) return; d[t.dataset.caPct] = n; changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caSku) { setIn(bySku().get(t.dataset.caSku), t.checked); changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caPrice != null) {

@@ -151,8 +151,9 @@ function build(list) {
 // Saved next to the competitor results, on the Render disk when COMPETITOR_DATA_DIR points there.
 const DATA_DIR = process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR || path.join(__dirname, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "catalog-settings.json");
-// Wholesale pricing rules: piece price = cost + pieceMarkupPct, case price = (cost + caseMarkupPct) × qty in case.
-const BASE = { enabled: true, pieceMarkupPct: 12, caseMarkupPct: 8, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
+// Wholesale pricing rules: piece price = cost + pieceMarkupPct, case price = (cost + caseMarkupPct) × qty in case,
+// with the piece and per-piece case prices rounded to the nearest roundTo (0 = no rounding).
+const BASE = { enabled: true, pieceMarkupPct: 12, caseMarkupPct: 8, roundTo: 0.5, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
 const fresh = c => ({ ...BASE, ...c.defaults });
 let store = {};
 try {
@@ -170,6 +171,7 @@ function clean(c, input, by) {
   const pct = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= -100 && n <= 1000 ? round2(n) : d; };
   return {
     enabled: input.enabled !== false, pieceMarkupPct: pct(input.pieceMarkupPct, BASE.pieceMarkupPct), caseMarkupPct: pct(input.caseMarkupPct, BASE.caseMarkupPct),
+    roundTo: [0, 0.01, 0.05, 0.1, 0.25, 0.5, 1].includes(Number(input.roundTo)) ? Number(input.roundTo) : BASE.roundTo,
     showPrices: input.showPrices === true, showCasePrices: input.showCasePrices === true,
     mode: input.mode === "selected" ? "selected" : "all", hidden: skuList(input.hidden), added: skuList(input.added), prices,
     passwordHash: pw ? hashPassword(pw) : input.clearPassword ? null : settingsOf(c).passwordHash,
@@ -186,8 +188,9 @@ function save(c, next) {
 // Whether a product shows in the catalog under its settings.
 // Prices under a catalog's rules. A price set for the SKU in Catalog management replaces the piece price.
 function pricesFor(i, s) {
-  const piece = s.prices[i.sku] ?? (i.cost != null ? round2(i.cost * (1 + s.pieceMarkupPct / 100)) : null);
-  const unit = i.cost != null ? round2(i.cost * (1 + s.caseMarkupPct / 100)) : null;
+  const rnd = n => s.roundTo > 0 ? round2(Math.round(n / s.roundTo) * s.roundTo) : round2(n);
+  const piece = s.prices[i.sku] ?? (i.cost != null ? rnd(i.cost * (1 + s.pieceMarkupPct / 100)) : null);
+  const unit = i.cost != null ? rnd(i.cost * (1 + s.caseMarkupPct / 100)) : null;
   return { piece, caseUnit: unit, case: unit != null && i.qty ? round2(unit * i.qty) : null };
 }
 const listed = (i, s) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
