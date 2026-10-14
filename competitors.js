@@ -414,18 +414,18 @@ async function handle(req, res, url, getList) {
       // Temporary: why product search answers 400. Fixed variants only, no caller input.
       const brand = (await euka("/me")).brandIds?.[0];
       const variants = {
-        current: { query: "lattafa khamrah", region: CFG.region, limit: 50, sortBy: "last30dSales" },
-        noSort: { query: "lattafa khamrah", region: CFG.region, limit: 50 },
-        noRegion: { query: "lattafa khamrah", limit: 50 },
-        withBrand: { query: "lattafa khamrah", region: CFG.region, limit: 50, brandId: brand },
-        bare: {},
+        brandOnly: [CFG.searchPath, { brandId: brand }],
+        brandRegion: [CFG.searchPath, { brandId: brand, region: CFG.region }],
+        brandQuery: [CFG.searchPath, { brandId: brand, region: CFG.region, query: "lattafa khamrah", limit: 50 }],
+        categories: ["/social-intelligence/categories", { brandId: brand }],
+        brands: ["/social-intelligence/brands", { brandId: brand }],
       };
       const out = {};
       for (const [k, v] of Object.entries(variants)) {
-        try { const r = await euka(CFG.searchPath, v); out[k] = { ok: true, items: (r.items || []).length }; }
+        try { const r = await euka(v[0], v[1]); out[k] = { ok: true, items: (r.items || []).length, sample: JSON.stringify(r).slice(0, 300) }; }
         catch (e) { out[k] = { ok: false, error: e.message }; }
       }
-      return send(res, 200, out), true;
+      return send(res, 200, { brand, out }), true;
     }
     if (sub === "/status") {
       const k = await checkKey();
