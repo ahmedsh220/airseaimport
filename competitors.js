@@ -206,7 +206,7 @@ async function enrich(m) {
 let state = load(FILE, { runAt: null, finishedAt: null, skus: {}, errors: 0 });
 // Results from before product search sent a brandId all failed with "Input validation failed";
 // drop them so those SKUs are searched again now rather than after the retry gap.
-for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed/.test(v.error || "") && !v.matches) delete state.skus[k];
+for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed/.test(v.error || "")) delete state.skus[k];
 let overrides = load(OVERRIDES, {}); // { sku: { ignore: [productId], pin: [productId] } }
 let job = null;
 let progress = { done: 0, total: 0, startedAt: null, lastError: null };
@@ -358,6 +358,10 @@ async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
         }
         progress.done++;
         if (progress.done % 10 === 0) save(FILE, state);
+        if (progress.done % 50 === 0) {
+          const v = Object.values(state.skus);
+          console.log(`Competitor progress ${progress.done}/${progress.total}: ${v.filter(x => x.matches?.length).length} SKUs with matches, ${v.filter(x => x.error).length} with errors${progress.lastError ? `; last error ${progress.lastError.slice(0, 200)}` : ""}`);
+        }
         if (CFG.delayMs) await sleep(CFG.delayMs);
       }
     };
