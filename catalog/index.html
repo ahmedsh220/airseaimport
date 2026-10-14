@@ -182,14 +182,6 @@ function picture(url, max = 220) {
   })());
   return thumbs.get(url + max);
 }
-async function pictures(items, label) {
-  const out = new Map(); let done = 0, next = 0;
-  const work = async () => { while (next < items.length) { const i = items[next++];
-    if (i.img) out.set(i.sku, await picture(`${BASE}/img/${encodeURIComponent(i.sku)}`));
-    if (++done % 20 === 0) $("status").textContent = `${label}: loading pictures ${done.toLocaleString()} / ${items.length.toLocaleString()}…`; } };
-  await Promise.all(Array.from({ length: 8 }, work));
-  return out;
-}
 async function logos() {
   const out = {}; for (const [k, u] of Object.entries(LOGOS)) out[k] = await picture(u, 600); return out;
 }
@@ -204,45 +196,44 @@ async function run(btn, label, fn) {
 $("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
   const items = shown();
   await loadScript("https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js");
-  const [pics, logo] = [await pictures(items, "Excel"), await logos()];
+  const logo = await logos();
   $("status").textContent = "Excel: building the file…";
   const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet("Catalog", {
     views: [{ state: "frozen", ySplit: 6, showGridLines: true }],
     pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: "6:6" },
   });
-  const pc = priceCols(), N = 6 + pc.length, last = "ABCDEFGH"[N - 1];
-  ws.columns = [8, 14, 14, 18, 74, 18, 17, 17].slice(0, N).map(width => ({ width }));
+  const pc = priceCols(), N = 5 + pc.length, last = "ABCDEFG"[N - 1];
+  ws.columns = [8, 16, 18, 74, 18, 17, 17].slice(0, N).map(width => ({ width }));
   const font = { name: "Aptos Narrow", size: 12 };
   ws.getRow(1).height = 115; ws.getRow(2).height = 26; ws.getRow(3).height = 17; ws.getRow(4).height = 26; ws.getRow(5).height = 2; ws.getRow(6).height = 28;
   const img = (pic, col, row, w, h) => { if (!pic) return; const k = Math.min(w / pic.w, h / pic.h);
     ws.addImage(wb.addImage({ base64: pic.data, extension: "jpeg" }), { tl: { col, row }, ext: { width: pic.w * k, height: pic.h * k }, editAs: "oneCell" }); };
   // ExcelJS turns the fraction of a column into a fixed offset, not one scaled to the column's width,
-  // so each logo starts in its own column: Lattafa B, Arabiyat D, main logo E, Bharara F, Armaf in the last column (left out when both price columns are hidden).
-  img(logo.lattafa, 1.2, 0.1, 120, 120); img(logo.arabiyat, 3.1, 0.1, 125, 125);
-  img(logo.main, 4.9, 0.05, 320, 150); img(logo.bharara, 5.05, 0.3, 220, 95); if (N > 6) img(logo.armaf, N - 1, 0.1, 115, 115);
+  // so each logo starts in its own column: Lattafa B, Arabiyat C, main logo and Bharara in D (NAME), Armaf in the last column (only with both price columns).
+  img(logo.lattafa, 1.1, 0.1, 110, 110); img(logo.arabiyat, 2.1, 0.1, 120, 120);
+  img(logo.main, 3.05, 0.05, 300, 150); img(logo.bharara, 3.6, 0.3, 200, 95); if (N > 6) img(logo.armaf, N - 1, 0.1, 115, 115);
   // Same address, phone and price headings as the printed catalog.
   ws.mergeCells(`A2:${last}2`); ws.mergeCells(`A3:${last}3`);
   Object.assign(ws.getCell("A2"), { value: ADDRESS, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
   Object.assign(ws.getCell("A3"), { value: PHONE, font: { name: "Arial", size: 12 }, alignment: { horizontal: "center", vertical: "middle" } });
-  if (pc.length) Object.assign(ws.getCell("E4"), { value: `Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, font: { ...font, size: 10, italic: true, color: { argb: "FF5D6675" } }, alignment: { horizontal: "left", vertical: "middle" } });
-  pc.forEach(([h], k) => Object.assign(ws.getRow(4).getCell(7 + k), { value: h, font: { name: "Arial", size: 12, bold: true },
+  if (pc.length) Object.assign(ws.getCell("D4"), { value: `Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`, font: { ...font, size: 10, italic: true, color: { argb: "FF5D6675" } }, alignment: { horizontal: "left", vertical: "middle" } });
+  pc.forEach(([h], k) => Object.assign(ws.getRow(4).getCell(6 + k), { value: h, font: { name: "Arial", size: 12, bold: true },
     fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9EAD3" } }, alignment: { horizontal: "center", vertical: "middle" } }));
-  ["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
-    { value: h, font: { ...font, bold: true, color: { argb: "FF156082" } }, alignment: { horizontal: k >= 6 ? "center" : "left", vertical: "middle" } }));
+  ["", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
+    { value: h, font: { ...font, bold: true, color: { argb: "FF156082" } }, alignment: { horizontal: k >= 5 ? "center" : "left", vertical: "middle" } }));
   let r = 7;
   for (const [s, g] of grouped(items)) {
     const row = ws.getRow(r++); row.height = 30;
     for (let c = 1; c <= N; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
-    Object.assign(row.getCell(3), { value: s, font: { ...font, bold: true, color: { argb: "FFFFFFFF" } }, alignment: { vertical: "middle" } });
+    Object.assign(row.getCell(2), { value: s, font: { ...font, bold: true, color: { argb: "FFFFFFFF" } }, alignment: { vertical: "middle" } });
     for (const i of g) {
-      const row = ws.getRow(r); row.height = 62;
-      [i.isNew ? "NEW" : "", "", i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => f(i) ?? "Contact Sales")].forEach((v, k) => {
+      const row = ws.getRow(r); row.height = 20;
+      [i.isNew ? "NEW" : "", i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => f(i) ?? "Contact Sales")].forEach((v, k) => {
         const cell = row.getCell(k + 1); cell.value = v; cell.font = k === 0 ? { ...font, bold: true, color: { argb: "FFE00000" } } : font;
-        cell.alignment = { vertical: "middle", horizontal: k >= 6 || k === 0 ? "center" : "left", wrapText: k >= 2 && k <= 4 };
-        if (k >= 6 && typeof v === "number") cell.numFmt = '"$"#,##0.00';
-        if (k === 2 || k === 3) cell.numFmt = "@";
+        cell.alignment = { vertical: "middle", horizontal: k >= 5 || k === 0 ? "center" : "left", wrapText: k >= 1 && k <= 3 };
+        if (k >= 5 && typeof v === "number") cell.numFmt = '"$"#,##0.00';
+        if (k === 1 || k === 2) cell.numFmt = "@";
       });
-      img(pics.get(i.sku), 1.08, r - 1 + 0.05, 74, 74);
       r++;
     }
   }
@@ -253,7 +244,7 @@ $("pdf").onclick = () => run($("pdf"), "PDF", async () => {
   const items = shown();
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
-  const [pics, logo] = [await pictures(items, "PDF"), await logos()];
+  const logo = await logos();
   $("status").textContent = "PDF: building the file…";
   const doc = new jspdf.jsPDF({ orientation: "landscape", unit: "pt", format: "letter" });
   const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
@@ -266,19 +257,17 @@ $("pdf").onclick = () => run($("pdf"), "PDF", async () => {
   if (priceCols().length) doc.text(`Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`, W / 2, 148, { align: "center" });
   const pc = priceCols(), body = [];
   for (const [s, g] of grouped(items)) {
-    body.push([{ content: s, colSpan: 6 + pc.length, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
-    for (const i of g) body.push([i.isNew ? "NEW" : "", { content: "", sku: i.sku }, i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => money(f(i)))]);
+    body.push([{ content: s, colSpan: 5 + pc.length, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
+    for (const i of g) body.push([i.isNew ? "NEW" : "", i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => money(f(i)))]);
   }
   doc.autoTable({
     startY: 158, margin: { left: 24, right: 24, bottom: 30 }, theme: "plain",
-    head: [["", "PICTURE", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)]], body,
-    styles: { fontSize: 8.5, valign: "middle", cellPadding: 3, minCellHeight: 50, lineColor: [236, 238, 241], lineWidth: { bottom: 0.5 } },
+    head: [["", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)]], body,
+    styles: { fontSize: 8.5, valign: "middle", cellPadding: 3, minCellHeight: 16, lineColor: [236, 238, 241], lineWidth: { bottom: 0.5 } },
     headStyles: { textColor: [21, 96, 130], fontStyle: "bold", fontSize: 9, minCellHeight: 0 },
-    columnStyles: { 0: { cellWidth: 30, halign: "center", textColor: [224, 0, 0], fontStyle: "bold" }, 1: { cellWidth: 56 }, 2: { cellWidth: 62 }, 3: { cellWidth: 82 },
-      5: { cellWidth: 82 }, 6: { cellWidth: 70, halign: "center" }, 7: { cellWidth: 70, halign: "center" } },
-    didParseCell: h => { if (h.section === "head" && h.column.index >= 6) { h.cell.styles.fillColor = [217, 234, 211]; h.cell.styles.textColor = 20; h.cell.styles.halign = "center"; } },
-    didDrawCell: h => { const sku = h.section === "body" && h.cell.raw && h.cell.raw.sku; const p = sku && pics.get(sku);
-      if (p) fit(p, h.cell.x + h.cell.width / 2, h.cell.y + 3, h.cell.width - 6, h.cell.height - 6); },
+    columnStyles: { 0: { cellWidth: 30, halign: "center", textColor: [224, 0, 0], fontStyle: "bold" }, 1: { cellWidth: 70 }, 2: { cellWidth: 82 },
+      4: { cellWidth: 90 }, 5: { cellWidth: 70, halign: "center" }, 6: { cellWidth: 70, halign: "center" } },
+    didParseCell: h => { if (h.section === "head" && h.column.index >= 5) { h.cell.styles.fillColor = [217, 234, 211]; h.cell.styles.textColor = 20; h.cell.styles.halign = "center"; } },
   });
   const n = doc.getNumberOfPages();
   for (let k = 1; k <= n; k++) { doc.setPage(k); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Fragrance Wholesaler USA · ${PHONE} · Page ${k} of ${n}`, W / 2, H - 14, { align: "center" }); }
