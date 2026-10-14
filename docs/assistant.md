@@ -69,7 +69,10 @@ The rules the build follows, in order of importance:
 5. **Keys stay on the server.** The model key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) is only in Render → Environment. The browser talks to our server only.
 6. **Provider data terms.** API traffic to OpenAI and Anthropic is not used for training by default. For extra cover, ask the provider for zero data retention on the account (OpenAI's "Private Intelligence" tier, or Anthropic's ZDR agreement).
 7. **Untrusted text stays data.** Product names, notes and Euka listing titles come from outside and could contain instructions. The system prompt says tool results are data, the tools can't act on anything, and the panel renders answers as plain text with no images or auto-loading links, so a crafted product name can't make the page send data elsewhere.
-8. **Limits and a log.** Per-session rate limit (20 questions per 10 minutes by default), a cap on tool calls per question (8) and on tokens per answer, and a log line per question in `assistant-log.jsonl` in the data dir: time, question, tools called and how many rows each returned (not the data itself). Readable at `GET /api/assistant/log`.
+8. **Never all three at once.** Real MCP leaks (a GitHub issue that steered an agent into private repos, a support ticket that got an agent to dump database tokens) needed untrusted text, broad private access and a way to send data out together. Here the tools are narrow and there is no way out, so injected text has nothing to act with.
+9. **Only our own code.** No third-party MCP servers are installed; the few npm packages are pinned to exact versions and reviewed when bumped.
+10. **OAuth for outside agents.** When `/mcp` is turned on for a Dot, ChatGPT or Claude, it should use OAuth 2.1 sign-in as the MCP spec describes, with `MCP_TOKEN` only as a stopgap.
+11. **Limits, a log and an alert.** Per-session rate limit (20 questions per 10 minutes by default), a cap on tool calls per question (8) and on tokens per answer, and a log line per question in `assistant-log.jsonl` in the data dir: time, question, tools called and how many rows each returned (not the data itself). Readable at `GET /api/assistant/log`. Unusual volume (for example more than 60 questions in an hour, or one session paging through many SKUs) writes a warning to the Render log.
 
 ## Model choice
 
