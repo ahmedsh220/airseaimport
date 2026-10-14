@@ -125,7 +125,8 @@ function score(pr, item) {
   return Math.max(0, Math.min(1, s));
 }
 
-const productUrl = id => `https://www.tiktok.com/view/product/${encodeURIComponent(id)}`;
+// /view/product/ links hit a TikTok security check (502 in browsers); /shop/pdp/ opens the listing.
+const productUrl = id => `https://www.tiktok.com/shop/pdp/${encodeURIComponent(id)}`;
 const num = v => v == null || v === "" || isNaN(+v) ? null : +v;
 function slim(item, s) {
   return {
@@ -141,7 +142,7 @@ function slim(item, s) {
 // A Market Intelligence rank row in the same shape. Its unit_price is the average selling price over
 // the period, not the listed price, so it is only used as the price when the listing has no other.
 function slimMi(row) {
-  const avg = num(row.unit_price);
+  const avg = num(row.unit_price) || null;  // 0 when the listing sold nothing this period
   return {
     sources: ["market"], id: String(row.product_id), title: row.product_name || null, shop: row.seller_name || null,
     shopId: row.seller_id || null, price: avg, priceIsAvg: avg != null, original: null, shipping: null, currency: "USD",
