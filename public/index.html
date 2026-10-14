@@ -98,7 +98,8 @@
   .coverage { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px;
               padding: 8px 12px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
   .coverage.partial { border-left-color: var(--warn); }
-  .coverage b { color: var(--text); } .coverage div + div { margin-top: 3px; }
+  .coverage b { color: var(--text); } .coverage div { margin-top: 3px; }
+  .coverage summary { cursor: pointer; } details.coverage { padding: 5px 12px; }
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
   #status { padding: 40px; text-align: center; color: var(--muted); }
@@ -447,24 +448,19 @@ const soldCell = x => `${fmtInt(x.v)}${x.src === "est" ? `<span class="est" titl
 // Days since the product was first added; a product younger than the period has less history than it.
 const ageDays = r => { const d = parseDate(r.first_added_date); return d ? Math.floor((Date.now() - d) / 864e5) : null; };
 const apiSyncedAt = () => { let m = 0; for (const r of all) { const d = parseDate(r.updated_at); if (d && +d > m) m = +d; } return m ? new Date(m) : null; };
+// One collapsed line saying whether the period's numbers are exact; details on click.
 function coverageHtml() {
-  const n = H(), plat = ST.plat ? platName(ST.plat) : "All platforms", synced = apiSyncedAt();
-  const ttOk = !!TTS?.windows, w = TTS?.windows?.[n];
-  let what;
-  if (ST.plat === "tt" && ttOk) what = `<b>exact TikTok units</b> from TikTok Shop analytics (via Euka), ${esc(w.start)} to ${esc(w.end)}`;
-  else if (n === 60) what = `<b>exact units</b> from the products API's 60-day platform columns`;
-  else if (n === 90 && !ST.plat) what = `<b>exact all-platform units</b> from the products API's 90-day total`;
-  else if (n === 90) what = `<b>estimated</b>: the API keeps only a 60-day split by platform, so ${esc(plat)} is scaled from 60 days`;
-  else what = `<b>estimated</b>: the products API has no ${n}-day sales, so units are the 60-day figure scaled to ${n} days`;
-  const partial = !(ST.plat === "tt" && ttOk) && !(n === 60) && !(n === 90 && !ST.plat);
+  const n = H(), synced = apiSyncedAt(), ttOk = !!TTS?.windows;
+  const exact = (ST.plat === "tt" && ttOk) || n === 60 || (n === 90 && !ST.plat);
   const young = n >= 30 ? rows.filter(r => { const a = ageDays(r); return a != null && a < n && soldIn(r, n).v > 0; }).length : 0;
-  const tt = ttOk
-    ? `TikTok analytics reported through <b>${esc(TTS.end)}</b>${TTS.end < dayKey(new Date(Date.now() - 864e5)) ? " (TikTok is running behind)" : ""}.`
-    : TTS?.error ? `Exact TikTok numbers for any period need TikTok Shop connected in Euka: ${esc(TTS.error)}.` : "";
-  return `<div class="coverage ${partial ? "partial" : ""}">
-    <div><b>Last ${n} days · ${esc(plat)}:</b> ${what}.</div>
-    <div>Data cutoff: products API synced <b>${synced ? synced.toLocaleString() : "unknown"}</b>; its windows end at that sync. ${tt}</div>
-    ${young ? `<div>${fmtInt(young)} selling products were added less than ${n} days ago, so they have less than ${n} days of history.</div>` : ""}</div>`;
+  const lines = [
+    exact ? null : `No ${n}-day sales in the products API, so units are scaled from 60 days.`,
+    `Products API updated ${synced ? synced.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "unknown"}.`,
+    ttOk ? `TikTok data through ${esc(TTS.end)}.` : `Exact TikTok numbers need your TikTok Shop connected in Euka.`,
+    young ? `${fmtInt(young)} products are newer than ${n} days.` : null,
+  ].filter(Boolean);
+  return `<details class="coverage ${exact ? "" : "partial"}" ${ST.coverageOpen ? "open" : ""}>
+    <summary>Last ${n} days: <b>${exact ? "exact" : "estimated"}</b></summary>${lines.map(l => `<div>${l}</div>`).join("")}</details>`;
 }
 
 // ---------- formatting ----------
@@ -1124,7 +1120,8 @@ document.addEventListener("change", e => {
   else if (t.id === "cat" || t.id === "tier") apply();
 });
 $("q").addEventListener("input", apply);
-document.addEventListener("toggle", e => { if (e.target.matches?.("details.settings")) settingsOpen = e.target.open; }, true);
+document.addEventListener("toggle", e => { if (e.target.matches?.("details.settings")) settingsOpen = e.target.open;
+  if (e.target.matches?.("details.coverage")) { ST.coverageOpen = e.target.open; saveState(); } }, true);
 $("dClose").onclick = () => $("detail").close();
 $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
 $("reload").onclick = () => load(true);
