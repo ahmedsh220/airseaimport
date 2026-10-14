@@ -5,86 +5,173 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wholesale Catalog · Fragrance Wholesaler USA</title>
 <style>
-  :root { --text: #14181f; --muted: #5d6675; --border: #d9dde3; --red: #e00000; --green: #d9ead3; --head: #156082; --bg: #fff; --soft: #f4f5f7; }
-  * { box-sizing: border-box; }
+  :root { --text: #14181f; --muted: #5d6675; --border: #d9dde3; --red: #e00000; --green: #d9ead3; --head: #156082; --bg: #fff; --soft: #f4f5f7; --hh: 0px; }
+  * { box-sizing: border-box; } [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Aptos Narrow", "Arial Narrow", Arial, system-ui, sans-serif; }
   button, input, select { font: inherit; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
   button { cursor: pointer; font-weight: 600; } button:hover { border-color: #111; }
   button.primary { background: #111; color: #fff; border-color: #111; }
   button:disabled { opacity: .5; cursor: progress; }
-  .brand { text-align: center; padding: 16px 16px 6px; }
+  /* Brand bar and toolbar stay pinned; the brand bar shrinks to one slim row once the list is scrolled. */
+  header#top { position: sticky; top: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
+  .brand { text-align: center; padding: 14px 16px 4px; }
   .logos { display: flex; align-items: center; justify-content: center; gap: 2vw; flex-wrap: wrap; }
-  .logos img { height: 92px; width: auto; object-fit: contain; }
-  .logos img.main { height: 130px; }
-  .logos img.wide { height: 64px; }
-  .addr { font-family: Arial, sans-serif; font-size: 15px; margin-top: 4px; }
-  .bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
-  .bar input[type=search] { flex: 1 1 220px; max-width: 380px; }
+  .logos img { height: 84px; width: auto; object-fit: contain; transition: height .15s; }
+  .logos img.main { height: 120px; } .logos img.wide { height: 58px; }
+  .logos .wm { font-family: Didot, "Bodoni 72", "Bodoni MT", Georgia, serif; letter-spacing: .14em; font-size: 20px; white-space: nowrap; transition: font-size .15s; }
+  .addr { font-family: Arial, sans-serif; font-size: 15px; margin-top: 2px; }
+  header.compact .brand { padding: 4px 16px 0; }
+  header.compact .logos { flex-wrap: nowrap; overflow: hidden; gap: 18px; }
+  header.compact .logos img { height: 30px; } header.compact .logos img.main { height: 40px; } header.compact .logos img.wide { height: 22px; }
+  header.compact .logos .wm { font-size: 12px; }
+  header.compact .addr { display: none; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
+  .bar input[type=search] { flex: 1 1 200px; max-width: 360px; }
   .bar .sp { flex: 1; }
+  .seg { display: inline-flex; } .seg button { border-radius: 0; font-weight: 500; } .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+  .seg button.on { background: #111; color: #fff; border-color: #111; }
+  .filters { display: none; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 0 16px 10px; }
+  .filters.open { display: flex; }
+  .filters label { display: inline-flex; gap: 6px; align-items: center; }
+  .filters input[type=number] { width: 86px; }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
   .meta { color: var(--muted); font-size: 12px; }
   #status { color: var(--muted); font-size: 13px; }
-  .wrap { overflow-x: auto; padding: 0 16px 48px; }
-  table { border-collapse: collapse; width: 100%; min-width: 860px; margin-top: 12px; }
-  th { text-align: left; color: var(--head); font-weight: 700; font-size: 15px; padding: 8px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  .wrap { overflow-x: clip; padding: 0 16px 48px; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; margin-top: 12px; }
+  th { position: sticky; top: var(--hh); z-index: 3; background: #fff; text-align: left; color: var(--head); font-weight: 700; font-size: 15px; padding: 8px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
   th.price { background: var(--green); color: #111; text-align: center; font-family: Arial, sans-serif; }
   td { padding: 6px 8px; border-bottom: 1px solid #eceef1; vertical-align: middle; font-size: 15px; }
   td.pic { width: 84px; } td.pic img { width: 70px; height: 70px; object-fit: contain; display: block; background: #fff; }
-  td.pic .none { width: 70px; height: 70px; display: grid; place-items: center; color: #b4bac3; font-size: 11px; background: var(--soft); border-radius: 4px; }
+  .none { width: 70px; height: 70px; display: grid; place-items: center; color: #b4bac3; font-size: 11px; background: var(--soft); border-radius: 4px; }
   td.price { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
   td.price small { display: block; color: var(--muted); font-size: 11px; }
-  td.sku, td.upc { max-width: 170px; overflow-wrap: break-word; }
-  td.new { width: 52px; text-align: center; }
+  td.sku { min-width: 80px; max-width: 170px; overflow-wrap: break-word; } td.upc { min-width: 120px; max-width: 170px; overflow-wrap: break-word; }
+  td.nm { min-width: 220px; overflow-wrap: anywhere; } td.new { width: 52px; text-align: center; } td.add { width: 96px; text-align: right; }
   .tag { background: var(--red); color: #fff; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 3px; }
   tr.sec td { background: var(--red); color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .03em; padding: 7px 8px; }
-  td.pic img { cursor: zoom-in; }
-  dialog#zoom { border: 0; border-radius: 12px; padding: 0; background: #fff; color: var(--text); overflow: auto; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
-  dialog#zoom::backdrop { background: rgba(15,17,21,.6); }
-  #zoom .zimg { background: #fff; display: grid; place-items: center; height: min(70vh, 640px); padding: 12px; position: relative; }
-  #zoom .zimg { overflow: hidden; } #zoom .zimg img { max-width: 100%; max-height: calc(min(70vh, 640px) - 24px); object-fit: contain; }
-  #zoom .zinfo { padding: 12px 16px 16px; border-top: 1px solid var(--border); }
-  #zoom .zinfo b { display: block; font-size: 16px; margin-bottom: 2px; }
-  #zoom .zinfo .meta { font-size: 13px; }
-  #zoom .x { position: absolute; top: 8px; right: 8px; border-radius: 999px; width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
+  img[data-zoom] { cursor: zoom-in; }
+  button.add { padding: 5px 10px; white-space: nowrap; } button.add.in { background: var(--green); border-color: #9cc48f; }
+  /* Tile view */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 12px; }
+  .tiles h3 { grid-column: 1 / -1; margin: 10px 0 0; padding: 7px 10px; background: var(--red); color: #fff; font-size: 15px; letter-spacing: .03em; border-radius: 6px; }
+  .tile { position: relative; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; transition: box-shadow .15s; }
+  .tile:hover { box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+  .tile .ph { aspect-ratio: 1; display: grid; place-items: center; background: #fff; padding: 10px; border-bottom: 1px solid #eceef1; }
+  .tile .ph img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .tile .ph .none { width: 100%; height: 100%; }
+  .tile .tag { position: absolute; top: 8px; left: 8px; }
+  .tile .bd { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .tile .nm { font-weight: 700; font-size: 15px; line-height: 1.25; }
+  .tile .sk { color: var(--muted); font-size: 12px; overflow-wrap: break-word; }
+  .tile .pr { display: flex; gap: 12px; margin-top: auto; padding-top: 6px; font-variant-numeric: tabular-nums; }
+  .tile .pr div { flex: 1; } .tile .pr b { display: block; font-size: 17px; } .tile .pr small { color: var(--muted); font-size: 11px; }
+  .tile button.add { margin-top: 8px; width: 100%; }
+  /* Zoom and cart dialogs */
+  dialog { border: 0; border-radius: 12px; padding: 0; background: #fff; color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  dialog::backdrop { background: rgba(15,17,21,.6); }
+  dialog#zoom { overflow: auto; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
+  #zoom .zimg { background: #fff; display: grid; place-items: center; height: min(70vh, 640px); padding: 12px; position: relative; overflow: hidden; }
+  #zoom .zimg img { max-width: 100%; max-height: calc(min(70vh, 640px) - 24px); object-fit: contain; }
+  #zoom .zinfo { padding: 12px 16px 16px; border-top: 1px solid var(--border); display: flex; gap: 12px; align-items: center; }
+  #zoom .zinfo > div { flex: 1; } #zoom .zinfo b { display: block; font-size: 16px; margin-bottom: 2px; } #zoom .zinfo .meta { font-size: 13px; }
+  .x { position: absolute; top: 8px; right: 8px; border-radius: 999px; width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
   #zoom .nav { position: absolute; top: 50%; transform: translateY(-50%); border-radius: 999px; width: 40px; height: 40px; padding: 0; font-size: 20px; background: rgba(255,255,255,.9); }
   #zoom .prev { left: 8px; } #zoom .next { right: 8px; }
+  dialog#cart { width: min(820px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; }
+  #cart .in { padding: 18px 18px 16px; position: relative; }
+  #cart h2 { margin: 0 0 4px; font-size: 20px; }
+  #cart .note { background: #fff7e0; border: 1px solid #f0d58a; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin: 8px 0 12px; }
+  #cart table { margin-top: 0; } #cart th { position: static; font-size: 13px; } #cart td { font-size: 14px; }
+  #cart td input[type=number] { width: 70px; }
+  #cart .who { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 12px 0; }
+  #cart .who input, #cart textarea { width: 100%; }
+  #cart textarea { font: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; min-height: 54px; }
+  #cart .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  #cart .tot { font-size: 16px; font-weight: 700; text-align: right; margin-top: 8px; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
-  @media (max-width: 640px) { .logos img { height: 54px; } .logos img.main { height: 90px; } .logos img.wide { height: 40px; } }
+  /* Narrower screens: drop UPC and category from the list (both stay searchable and show in tiles); below that the list scrolls sideways. */
+  @media (max-width: 1200px) { .upc, .cat { display: none; } }
+  @media (max-width: 900px) { .wrap { overflow-x: auto; } }
+  @media (max-width: 640px) {
+    .brand { padding: 8px 10px 2px; } .logos { gap: 6px 14px; } .logos img { height: 38px; } .logos img.main { height: 60px; } .logos img.wide { height: 26px; } .logos .wm { font-size: 11px; } .addr { font-size: 12px; }
+    .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .tile .nm { font-size: 13px; } .tile .pr b { font-size: 15px; }
+    .bar { gap: 6px; padding: 6px 10px; } .bar input[type=search] { flex-basis: 100%; max-width: none; } .bar .sp { display: none; }
+    .bar button { padding: 5px 8px; font-size: 13px; } .filters { padding: 0 10px 8px; }
+    header.compact .logos .wm, header.compact #status, header.compact #signout { display: none; } header.compact .logos { gap: 12px; }
+  }
 </style>
 </head>
 <body>
-<div class="brand">
-  <div class="logos">
-    <img src="/catalog/assets/logo-lattafa.png" alt="Lattafa">
-    <img src="/catalog/assets/logo-arabiyat.jpg" alt="Arabiyat">
-    <img class="main" src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
-    <img class="wide" src="/catalog/assets/logo-bharara.png" alt="Bharara">
-    <img src="/catalog/assets/logo-armaf.jpg" alt="Armaf">
+<header id="top">
+  <div class="brand">
+    <div class="logos">
+      <img src="/catalog/assets/logo-lattafa.png" alt="Lattafa">
+      <img src="/catalog/assets/logo-arabiyat.jpg" alt="Arabiyat">
+      <span class="wm">GIORGIO ARMANI</span>
+      <img class="main" src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
+      <span class="wm">DOLCE&amp;GABBANA</span>
+      <img class="wide" src="/catalog/assets/logo-bharara.png" alt="Bharara">
+      <img src="/catalog/assets/logo-armaf.jpg" alt="Armaf">
+    </div>
+    <div class="addr">47-25 27th St Suite 1, Long Island City, NY 11101 · (929) 257-3502</div>
   </div>
-  <div class="addr">47-25 27th St Suite 1, Long Island City, NY 11101</div>
-  <div class="addr">(929) 257-3502</div>
-</div>
-<div class="bar">
-  <input type="search" id="q" placeholder="Search name, SKU or UPC">
-  <select id="sec"><option value="">All categories</option></select>
-  <label class="meta"><input type="checkbox" id="onlyNew"> New only</label>
-  <span id="status"></span>
-  <span class="sp"></span>
-  <button class="primary" id="pdf">Download PDF</button>
-  <button class="primary" id="xlsx">Download Excel</button>
-  <a class="meta" id="signout" href="/catalog/logout">Sign out</a>
-</div>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Search name, SKU or UPC">
+    <button id="fBtn" type="button">Filters</button>
+    <span class="seg"><button id="vList" type="button">List</button><button id="vTiles" type="button">Tiles</button></span>
+    <span id="status"></span>
+    <span class="sp"></span>
+    <button id="cartBtn" type="button">Cart<span class="badge" id="cartN" hidden></span></button>
+    <button class="primary" id="pdf">PDF</button>
+    <button class="primary" id="xlsx">Excel</button>
+    <a class="meta" id="signout" href="/catalog/logout">Sign out</a>
+  </div>
+  <div class="filters" id="filters">
+    <select id="sec"><option value="">All categories</option></select>
+    <select id="cat"><option value="">All types</option></select>
+    <span class="pf"><label>Price $<input type="number" id="pMin" min="0" step="1" placeholder="min"></label> <label>to <input type="number" id="pMax" min="0" step="1" placeholder="max"></label></span>
+    <label><input type="checkbox" id="onlyNew"> New only</label>
+    <label><input type="checkbox" id="onlyPic"> With photo</label>
+    <label><input type="checkbox" id="onlyCart"> In my cart</label>
+    <select id="sort"><option value="">Catalog order</option><option value="name">Name A–Z</option><option value="pa" class="pf">Price low to high</option><option value="pd" class="pf">Price high to low</option><option value="new">Newest first</option></select>
+    <button type="button" id="fClear">Clear filters</button>
+  </div>
+</header>
 <div class="wrap">
-  <div class="meta" id="asof"></div>
-  <table>
-    <thead><tr><th></th><th>PICTURE</th><th>SKU</th><th>UPC</th><th>NAME</th><th>CATEGORY</th><th class="price">PIECE PRICE</th><th class="price">CASE PRICE</th></tr></thead>
-    <tbody id="rows"><tr><td colspan="8" class="empty">Loading the catalog…</td></tr></tbody>
+  <div class="meta" id="asof" style="margin-top:8px"></div>
+  <table id="list">
+    <thead><tr></tr></thead>
+    <tbody id="rows"><tr><td class="empty">Loading the catalog…</td></tr></tbody>
   </table>
+  <div class="tiles" id="tiles" hidden></div>
 </div>
 
 <dialog id="zoom" aria-label="Product picture">
   <div class="zimg"><img id="zImg" alt=""><button class="x" id="zClose" aria-label="Close">×</button>
     <button class="nav prev" id="zPrev" aria-label="Previous product">‹</button><button class="nav next" id="zNext" aria-label="Next product">›</button></div>
-  <div class="zinfo"><b id="zName"></b><div class="meta" id="zMeta"></div></div>
+  <div class="zinfo"><div><b id="zName"></b><div class="meta" id="zMeta"></div></div><button class="add" id="zAdd" type="button">Add to cart</button></div>
+</dialog>
+
+<dialog id="cart" aria-label="Your order">
+  <div class="in">
+    <button class="x" id="cClose" aria-label="Close">×</button>
+    <h2>Your order</h2>
+    <div class="note" id="cNote"></div>
+    <div id="cBody"></div>
+    <div class="who">
+      <input id="cName" placeholder="Your name">
+      <input id="cCompany" placeholder="Company">
+      <input id="cPhone" placeholder="Phone or email">
+    </div>
+    <textarea id="cNotes" placeholder="Notes for us (delivery, pickup, questions)"></textarea>
+    <div class="act">
+      <button class="primary" id="cCopy" type="button">Copy order</button>
+      <button id="cShare" type="button" hidden>Share</button>
+      <button id="cEmpty" type="button">Empty cart</button>
+      <span class="meta" id="cMsg"></span>
+    </div>
+  </div>
 </dialog>
 <script>
 const ADDRESS = "47-25 27th St Suite 1, Long Island City, NY 11101", PHONE = "(929) 257-3502";
@@ -95,33 +182,68 @@ const BASE = location.pathname.startsWith("/catalog2") ? "/catalog2" : "/catalog
 $("signout").href = BASE + "/logout";
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const money = n => n == null ? "Contact Sales" : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 let data = { items: [], sections: [] };
+let view = store.get("asi_view") || (matchMedia("(max-width: 640px)").matches ? "tiles" : "list");
 
+// ---- Sticky header: measure it so the table's header row pins right under it; shrink the brand bar once scrolled ----
+new ResizeObserver(() => document.documentElement.style.setProperty("--hh", $("top").offsetHeight + "px")).observe($("top"));
+addEventListener("scroll", () => { const h = $("top"); if (scrollY > 140) h.classList.add("compact"); else if (scrollY < 10) h.classList.remove("compact"); }, { passive: true });
+
+// ---- Filters ----
+const hasPrices = () => data.showPrices !== false || data.showCasePrices !== false;
+const priceOf = i => data.showPrices !== false && i.piece != null ? i.piece : data.showCasePrices !== false ? i.caseUnit ?? null : null;
 function shown() {
-  const q = $("q").value.trim().toLowerCase(), sec = $("sec").value, onlyNew = $("onlyNew").checked;
-  return data.items.filter(i => (!sec || i.section === sec) && (!onlyNew || i.isNew)
+  const q = $("q").value.trim().toLowerCase(), sec = $("sec").value, cat = $("cat").value, onlyNew = $("onlyNew").checked, onlyPic = $("onlyPic").checked, onlyCart = $("onlyCart").checked;
+  const min = hasPrices() && $("pMin").value !== "" ? +$("pMin").value : null, max = hasPrices() && $("pMax").value !== "" ? +$("pMax").value : null;
+  const out = data.items.filter(i => (!sec || i.section === sec) && (!cat || i.category === cat) && (!onlyNew || i.isNew) && (!onlyPic || i.img) && (!onlyCart || cart.items[i.sku])
+    && (min == null || (priceOf(i) ?? -1) >= min) && (max == null || (priceOf(i) != null && priceOf(i) <= max))
     && (!q || (i.name + " " + i.sku + " " + i.upc + " " + i.category).toLowerCase().includes(q)));
+  const s = $("sort").value, P = i => priceOf(i) ?? Infinity;
+  if (s === "name") out.sort((a, b) => a.name.localeCompare(b.name));
+  if (s === "pa") out.sort((a, b) => P(a) - P(b));
+  if (s === "pd") out.sort((a, b) => (priceOf(b) ?? -1) - (priceOf(a) ?? -1));
+  if (s === "new") out.sort((a, b) => b.isNew - a.isNew);
+  return out;
 }
-// Price columns the owner chose to show (set in the dashboard's Customer catalog tab).
+const sorted = () => !!$("sort").value;
+function activeFilters() { return ["sec", "cat", "pMin", "pMax", "sort"].filter(id => $(id).value !== "").length + ["onlyNew", "onlyPic", "onlyCart"].filter(id => $(id).checked).length; }
+// Price columns the owner chose to show (set in Catalog management).
 const priceCols = () => [data.showPrices !== false && ["PIECE PRICE", i => i.piece], data.showCasePrices !== false && ["CASE PRICE", i => i.caseUnit]].filter(Boolean);
-const nCols = () => 6 + priceCols().length;
-// Items grouped under their section headings, in catalog order.
+const nCols = () => 7 + priceCols().length;
+// Items grouped under their section headings, in catalog order (one group when the customer sorts).
 function grouped(items) {
+  if (sorted()) return [["RESULTS", items]];
   const out = [];
   for (const s of data.sections) { const g = items.filter(i => i.section === s); if (g.length) out.push([s, g]); }
   return out;
 }
+const pic = (i, cls = "") => i.img ? `<img loading="lazy" src="${BASE}/img/${encodeURIComponent(i.sku)}" alt="${esc(i.name)}" data-zoom="${esc(i.sku)}" title="Click for a bigger picture" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>';
+const addBtn = i => { const c = cart.items[i.sku]; return `<button type="button" class="add${c ? " in" : ""}" data-add="${esc(i.sku)}">${c ? `In cart · ${c.n} ${c.unit === "case" ? (c.n === 1 ? "case" : "cases") : "pc"}` : "Add to cart"}</button>`; };
 function render() {
-  const items = shown();
+  const items = shown(), pc = priceCols(), nf = activeFilters();
   $("status").textContent = `${items.length.toLocaleString()} products`;
-  const pc = priceCols();
-  document.querySelector("thead tr").innerHTML = `<th></th><th>PICTURE</th><th>SKU</th><th>UPC</th><th>NAME</th><th>CATEGORY</th>` + pc.map(([h]) => `<th class="price">${h}</th>`).join("");
+  $("fBtn").innerHTML = "Filters" + (nf ? `<span class="badge">${nf}</span>` : "");
+  document.querySelectorAll(".pf").forEach(e => e.hidden = !hasPrices());
+  $("vList").classList.toggle("on", view === "list"); $("vTiles").classList.toggle("on", view === "tiles");
+  $("list").hidden = view !== "list"; $("tiles").hidden = view !== "tiles";
+  const groups = grouped(items);
+  if (view === "tiles") {
+    $("tiles").innerHTML = !items.length ? '<div class="empty" style="grid-column:1/-1">No products match.</div>' : groups.map(([s, g]) => (sorted() ? "" : `<h3>${esc(s)}</h3>`) + g.map(i => `<div class="tile">
+      <div class="ph">${pic(i)}</div>${i.isNew ? '<span class="tag">NEW</span>' : ""}
+      <div class="bd"><div class="nm">${esc(i.name)}</div><div class="sk">${esc(i.sku)}${i.upc ? " · " + esc(i.upc) : ""}</div><div class="sk">${esc(i.category)}${i.qty ? ` · ${i.qty} pcs / case` : ""}</div>
+      ${pc.length ? `<div class="pr">${pc.map(([h, f]) => `<div><small>${h === "PIECE PRICE" ? "Piece" : "Case, per piece"}</small><b>${money(f(i))}</b></div>`).join("")}</div>` : ""}
+      ${addBtn(i)}</div></div>`).join("")).join("");
+    return;
+  }
+  $("list").querySelector("thead tr").innerHTML = `<th></th><th>PICTURE</th><th>SKU</th><th class="upc">UPC</th><th>NAME</th><th class="cat">CATEGORY</th>` + pc.map(([h]) => `<th class="price">${h}</th>`).join("") + "<th></th>";
   if (!items.length) { $("rows").innerHTML = `<tr><td colspan="${nCols()}" class="empty">No products match.</td></tr>`; return; }
-  $("rows").innerHTML = grouped(items).map(([s, g]) => `<tr class="sec"><td colspan="${nCols()}">${esc(s)}</td></tr>` + g.map(i => `<tr>
+  $("rows").innerHTML = groups.map(([s, g]) => (sorted() ? "" : `<tr class="sec"><td colspan="${nCols()}">${esc(s)}</td></tr>`) + g.map(i => `<tr>
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
-    <td class="pic">${i.img ? `<img loading="lazy" src="${BASE}/img/${encodeURIComponent(i.sku)}" alt="${esc(i.name)}" data-zoom="${esc(i.sku)}" title="Click for a bigger picture" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>'}</td>
-    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td>${esc(i.name)}</td><td>${esc(i.category)}</td>
-    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
+    <td class="pic">${pic(i)}</td>
+    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}</td><td class="cat">${esc(i.category)}</td>
+    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}
+    <td class="add">${addBtn(i)}</td></tr>`).join("")).join("");
 }
 
 async function load() {
@@ -131,31 +253,117 @@ async function load() {
   const d = await r.json();
   if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
   data = d;
-  const sec = $("sec").value;
-  $("sec").innerHTML = '<option value="">All categories</option>' + d.sections.filter(s => d.items.some(i => i.section === s)).map(s => `<option>${esc(s)}</option>`).join("");
-  $("sec").value = sec;
+  const opts = (id, all, vals) => { const v = $(id).value; $(id).innerHTML = `<option value="">${all}</option>` + vals.map(s => `<option>${esc(s)}</option>`).join(""); $(id).value = vals.includes(v) ? v : ""; };
+  opts("sec", "All categories", d.sections.filter(s => d.items.some(i => i.section === s)));
+  opts("cat", "All types", [...new Set(d.items.map(i => i.category).filter(Boolean))].sort());
   $("asof").textContent = !priceCols().length ? "Contact sales for pricing." : `Prices as of ${new Date(d.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`;
-  render();
+  render(); paintCart();
 }
-load().catch(e => { $("rows").innerHTML = `<tr><td colspan="8" class="empty">${esc(e.message)}</td></tr>`; });
+load().catch(e => { $("rows").innerHTML = `<tr><td class="empty">${esc(e.message)}</td></tr>`; });
 // Pick up the owner's changes and new prices without a reload (skipped while an export is running).
 setInterval(() => { if (!$("pdf").disabled && document.visibilityState === "visible") load().catch(() => {}); }, 60e3);
 let t; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 150); });
-$("sec").addEventListener("change", render); $("onlyNew").addEventListener("change", render);
+["sec", "cat", "onlyNew", "onlyPic", "onlyCart", "sort"].forEach(id => $(id).addEventListener("change", render));
+["pMin", "pMax"].forEach(id => $(id).addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 250); }));
+$("fBtn").onclick = () => $("filters").classList.toggle("open");
+$("fClear").onclick = () => { ["sec", "cat", "pMin", "pMax", "sort"].forEach(id => $(id).value = ""); ["onlyNew", "onlyPic", "onlyCart"].forEach(id => $(id).checked = false); render(); };
+$("vList").onclick = () => { view = "list"; store.set("asi_view", view); render(); };
+$("vTiles").onclick = () => { view = "tiles"; store.set("asi_view", view); render(); };
+
+// ---- Cart: kept only in this browser, for 6 hours from when it was started (like the sign-in) ----
+const CART_KEY = "asi_cart_" + BASE.slice(1), CART_HOURS = 6;
+const freshCart = () => ({ started: Date.now(), items: {}, who: {} });
+let cart = (() => { const c = store.get(CART_KEY); return c && c.items && Date.now() - c.started < CART_HOURS * 3600e3 ? c : (store.del(CART_KEY), freshCart()); })();
+let cartExpired = false;
+function saveCart() {
+  if (!Object.keys(cart.items).length && !Object.values(cart.who || {}).some(Boolean)) { store.del(CART_KEY); cart = freshCart(); }
+  else if (!store.set(CART_KEY, cart)) $("cMsg").textContent = "This browser isn't saving the cart. Copy your order before leaving the page.";
+  paintCart();
+}
+// Drop the cart once its 6 hours are up, even with the page left open.
+setInterval(() => { if (Object.keys(cart.items).length && Date.now() - cart.started >= CART_HOURS * 3600e3) { cart = freshCart(); store.del(CART_KEY); cartExpired = true; paintCart(); render(); } }, 60e3);
+const bySku = sku => data.items.find(i => i.sku === sku);
+function addToCart(sku) {
+  const i = bySku(sku); if (!i) return;
+  if (!Object.keys(cart.items).length) cart.started = Date.now();
+  const c = cart.items[sku] ||= { n: 0, unit: "piece" }; c.n++;
+  cartExpired = false; saveCart(); render(); if ($("zoom").open) paintZoomAdd();
+}
+// A line's price: pieces at the piece price, cases at the per-piece case price × pieces in a case.
+function line(i, c) {
+  if (!i) return null;
+  if (c.unit === "case") return data.showCasePrices !== false && i.caseUnit != null && i.qty ? i.caseUnit * i.qty * c.n : null;
+  return data.showPrices !== false && i.piece != null ? i.piece * c.n : null;
+}
+function paintCart() {
+  const skus = Object.keys(cart.items), count = skus.length;
+  $("cartN").hidden = !count; $("cartN").textContent = count;
+  const left = Math.max(0, cart.started + CART_HOURS * 3600e3 - Date.now()), h = Math.floor(left / 3600e3), m = Math.floor(left % 3600e3 / 60e3);
+  $("cNote").innerHTML = (cartExpired ? "<b>Your earlier cart expired after 6 hours and was cleared.</b> " : "") +
+    `Your cart is saved only in this browser${count ? `, for about ${h ? h + " h " : ""}${m} min more` : " for 6 hours"}. Clearing your browser history or cache empties it. When you're ready, tap <b>Copy order</b> and paste it into a text or email to us at ${PHONE}.`;
+  if (!$("cart").open) return;
+  const showP = hasPrices();
+  let total = 0, priced = true;
+  $("cBody").innerHTML = !count ? '<div class="empty">Your cart is empty. Use “Add to cart” on any product.</div>' : `<table><thead><tr><th>SKU</th><th>Name</th><th>Qty</th><th>Unit</th>${showP ? '<th class="price">Price</th>' : ""}<th></th></tr></thead><tbody>${skus.map(sku => {
+    const c = cart.items[sku], i = bySku(sku), p = line(i, c); if (p == null) priced = false; else total += p;
+    return `<tr><td class="sku">${esc(sku)}</td><td>${i ? esc(i.name) : `<span class="meta">No longer in the catalog</span>`}</td>
+      <td><input type="number" min="1" step="1" value="${c.n}" data-cn="${esc(sku)}"></td>
+      <td><select data-cu="${esc(sku)}"><option value="piece" ${c.unit !== "case" ? "selected" : ""}>Pieces</option><option value="case" ${c.unit === "case" ? "selected" : ""}>Cases${i && i.qty ? ` (${i.qty} pcs)` : ""}</option></select></td>
+      ${showP ? `<td class="price">${money(p)}</td>` : ""}<td><button type="button" data-cx="${esc(sku)}" aria-label="Remove">✕</button></td></tr>`; }).join("")}</tbody></table>
+    ${showP ? `<div class="tot">Estimated total: ${money(total)}${priced ? "" : " + items priced by sales"}</div>` : ""}`;
+  for (const k of ["name", "company", "phone"]) { const el = $("c" + k[0].toUpperCase() + k.slice(1)); if (document.activeElement !== el) el.value = cart.who?.[k] || ""; }
+  if (document.activeElement !== $("cNotes")) $("cNotes").value = cart.who?.notes || "";
+}
+function orderText() {
+  const showP = hasPrices(), w = cart.who || {};
+  let total = 0, priced = true;
+  const lines = Object.entries(cart.items).map(([sku, c], k) => {
+    const i = bySku(sku), p = line(i, c); if (p == null) priced = false; else total += p;
+    const qty = c.unit === "case" ? `${c.n} ${c.n === 1 ? "case" : "cases"}${i && i.qty ? ` (${c.n * i.qty} pcs)` : ""}` : `${c.n} ${c.n === 1 ? "piece" : "pieces"}`;
+    return `${k + 1}. ${sku} — ${i ? i.name : "(not in catalog)"} — ${qty}${showP ? ` — ${money(p)}` : ""}`;
+  });
+  return [`ORDER REQUEST · Fragrance Wholesaler USA`, new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }),
+    w.name && `Name: ${w.name}`, w.company && `Company: ${w.company}`, w.phone && `Contact: ${w.phone}`, "",
+    ...lines, "", showP ? `Estimated total: ${money(total)}${priced ? "" : " + items priced by sales"} (final prices confirmed by sales)` : "Please send pricing.",
+    w.notes && `\nNotes: ${w.notes}`].filter(v => v != null && v !== false).join("\n");
+}
+$("cartBtn").onclick = () => { $("cMsg").textContent = ""; $("cart").showModal(); paintCart(); };
+$("cClose").onclick = () => $("cart").close();
+$("cart").addEventListener("click", e => { if (e.target === $("cart")) $("cart").close(); });
+$("cart").addEventListener("input", e => {
+  const t = e.target;
+  if (t.dataset.cn) { const n = Math.floor(+t.value); if (n >= 1) { cart.items[t.dataset.cn].n = n; saveCart(); render(); } return; }
+  const k = { cName: "name", cCompany: "company", cPhone: "phone", cNotes: "notes" }[t.id];
+  if (k) { (cart.who ||= {})[k] = t.value; saveCart(); }
+});
+$("cart").addEventListener("change", e => { const t = e.target; if (t.dataset.cu) { cart.items[t.dataset.cu].unit = t.value; saveCart(); render(); } });
+$("cart").addEventListener("click", e => { const b = e.target.closest("[data-cx]"); if (b) { delete cart.items[b.dataset.cx]; saveCart(); render(); } });
+$("cEmpty").onclick = () => { if (confirm("Empty your cart?")) { cart = freshCart(); store.del(CART_KEY); paintCart(); render(); } };
+$("cCopy").onclick = async () => {
+  if (!Object.keys(cart.items).length) { $("cMsg").textContent = "Add products first."; return; }
+  const txt = orderText();
+  try { await navigator.clipboard.writeText(txt); $("cMsg").textContent = "Copied. Paste it into a text or email to us."; }
+  catch { const a = document.createElement("textarea"); a.value = txt; document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); $("cMsg").textContent = "Copied. Paste it into a text or email to us."; }
+};
+if (navigator.share) { $("cShare").hidden = false; $("cShare").onclick = () => Object.keys(cart.items).length && navigator.share({ title: "Order request", text: orderText() }).catch(() => {}); }
+document.addEventListener("click", e => { const b = e.target.closest("button[data-add]"); if (b) addToCart(b.dataset.add); });
 
 // ---- Bigger picture: click a product's picture; arrows step through the products shown ----
 let zoomList = [], zoomAt = 0;
+function paintZoomAdd() { const i = zoomList[zoomAt], c = i && cart.items[i.sku]; $("zAdd").dataset.add = i ? i.sku : ""; $("zAdd").classList.toggle("in", !!c); $("zAdd").textContent = c ? `In cart · ${c.n} · add 1` : "Add to cart"; }
 function zoom(k) {
   zoomAt = (k + zoomList.length) % zoomList.length;
   const i = zoomList[zoomAt];
   $("zImg").src = `${BASE}/img/${encodeURIComponent(i.sku)}`; $("zImg").alt = i.name;
   $("zName").textContent = i.name;
   const price = priceCols().map(([h, f]) => `${h.toLowerCase().replace(/^./, c => c.toUpperCase())}: ${money(f(i))}`);
-  $("zMeta").textContent = [`SKU ${i.sku}`, i.upc && `UPC ${i.upc}`, i.category, ...price, i.qty && data.showCasePrices !== false ? `${i.qty} pcs per case` : ""].filter(Boolean).join(" · ");
+  $("zMeta").textContent = [`SKU ${i.sku}`, i.upc && `UPC ${i.upc}`, i.category, ...price, i.qty ? `${i.qty} pcs per case` : ""].filter(Boolean).join(" · ");
+  paintZoomAdd();
   if (!$("zoom").open) $("zoom").showModal();
 }
-$("rows").addEventListener("click", e => {
-  const img = e.target.closest("img[data-zoom]"); if (!img) return;
+$("zAdd").removeAttribute("data-add");
+document.addEventListener("click", e => {
+  const img = e.target.closest(".wrap img[data-zoom]"); if (!img) return;
   zoomList = shown().filter(i => i.img); zoom(zoomList.findIndex(i => i.sku === img.dataset.zoom));
 });
 $("zClose").onclick = () => $("zoom").close();

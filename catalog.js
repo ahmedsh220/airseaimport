@@ -214,7 +214,7 @@ function customerView(c, data) {
     const pr = pricesFor(i, s);
     return { sku: i.sku, upc: i.upc, name: i.name, category: i.category, section: i.section, isNew: i.isNew, img: i.img,
       piece: s.showPrices ? pr.piece : undefined,
-      caseUnit: s.showCasePrices ? pr.caseUnit : undefined, qty: s.showCasePrices ? i.qty : undefined };
+      caseUnit: s.showCasePrices ? pr.caseUnit : undefined, qty: i.qty };
   });
   return { catalog: c.name, fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };
 }
