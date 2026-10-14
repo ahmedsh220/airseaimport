@@ -137,6 +137,7 @@
     <button id="uploadBtn" type="button">Load JSON file</button>
     <input type="file" id="file" accept=".json,application/json" hidden>
     <button id="csv">Export table CSV</button>
+    <a id="signout" href="/logout" hidden><button type="button">Sign out</button></a>
   </div>
 </header>
 <div id="status">Fetching products…</div>
@@ -1163,6 +1164,25 @@ $("uploadBtn").onclick = () => $("file").click();
 $("file").onchange = async e => { const f = e.target.files[0]; if (!f) return;
   try { ingest(JSON.parse(await f.text()), `file ${f.name}`); } catch (err) { setStatus(`<div class="err">Couldn't read ${esc(f.name)}: ${esc(err.message)}</div>`); } };
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
+// Signed-in session (auth.js): send the user back to sign in when it runs out or the server says so.
+if (location.protocol.startsWith("http")) {
+  const toLogin = () => location.assign("/login?next=" + encodeURIComponent(location.pathname + location.hash));
+  const origFetch = window.fetch;
+  window.fetch = async (...args) => {
+    const res = await origFetch(...args);
+    const u = new URL(args[0] instanceof Request ? args[0].url : String(args[0]), location.href);
+    if (res.status === 401 && u.origin === location.origin && u.pathname.startsWith("/api/") && res.headers.get("content-type")?.includes("json")) {
+      const body = await res.clone().json().catch(() => ({}));
+      if (body.login) toLogin();
+    }
+    return res;
+  };
+  $("signout").hidden = false;
+  origFetch("/api/session", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(s => {
+    const left = s?.expiresAt ? Date.parse(s.expiresAt) - Date.now() : null;
+    if (left != null) setTimeout(toLogin, Math.max(0, Math.min(left, 2 ** 31 - 1)));
+  }).catch(() => {});
+}
 load();
 if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all.length) render(); });
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });

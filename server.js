@@ -13,6 +13,7 @@ try {
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
   }
 } catch {}
+const auth = require("./auth");
 const competitors = require("./competitors");
 const excel = require("./excel");
 const tiktokSales = require("./tiktok-sales");
@@ -144,6 +145,7 @@ async function productList() {
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
+  if (await auth.gate(req, res, url)) return;
   if (url.pathname === "/api/products") {
     try {
       const body = await products(url.searchParams.has("refresh"));

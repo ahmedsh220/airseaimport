@@ -36,3 +36,7 @@ Each product's detail view has an **Excel sheet** section showing that SKU's row
 Setup: in the Microsoft Entra admin center, create an app registration, add the Microsoft Graph **application** permission `Files.ReadWrite.All`, grant admin consent, and create a client secret. Set `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` (and `ADMIN_TOKEN`) in Render → Environment. Other options are in `.env.example`.
 
 API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=` (the SKU's row, with which cells are editable), `POST /api/excel/edit` (`{ sku, editor, changes: [{ col, header, expected, value }] }`, needs `x-admin-token`).
+
+## Sign-in
+
+The whole dashboard is locked behind `ADMIN_TOKEN` (`auth.js`). Visitors get a sign-in page; the right token starts a session on that browser for `SESSION_HOURS` (default 6), after which they sign in again. Sessions are tied to the browser that signed in, wrong tokens are limited to 10 tries per 15 minutes per IP, and changing `ADMIN_TOKEN` on Render signs everyone out. Without `ADMIN_TOKEN` set the dashboard serves nothing. Scripts can still call `/api/*` with an `x-admin-token` header. Only `/healthz` is public.
