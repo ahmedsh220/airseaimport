@@ -44,7 +44,7 @@ API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=`
 - It reads the same products API as the dashboard (5-minute cache), so prices follow the API. Opened-box, deleted and discontinued SKUs are left out.
 - Piece price is the API's `cost` (the workbook's WHOLESALE COST) plus `CATALOG_MARKUP_PCT`; case price is piece price × `qty_in_case`. `CATALOG_PRICE=contact` shows "Contact Sales" instead.
 - The API has no picture field, so pictures come from the Jomashop listing data in the API (`igloo_jomashop`), then NocNoc (`igloo_nocnoc`), then any other product with the same UPC. Products with none show "No photo". Pictures are served through `/catalog/img/<sku>`, which only fetches the URL found for that SKU.
-- Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. A signed-in admin can open the catalog too; a catalog sign-in never opens the dashboard or `/api/*`.
+- Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
 - Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
 
 ## Sign-in

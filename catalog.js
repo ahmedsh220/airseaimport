@@ -24,7 +24,6 @@ function limited(ip) {
 const failed = ip => { const f = fails.get(ip) || { n: 0, since: Date.now() }; f.n++; fails.set(ip, f); };
 
 function signedIn(req) {
-  if (auth.isAdmin(req)) return true;
   const raw = auth.cookies(req)[COOKIE];
   if (!raw || !password()) return false;
   const [data, sig] = raw.split(".");
@@ -167,7 +166,7 @@ async function handle(req, res, url, productList, meta) {
     });
     return true;
   }
-  if (!password() && !auth.isAdmin(req)) {
+  if (!password()) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
     res.end("The catalog is locked: set CATALOG_PASSWORD in Render → Environment.");
     return true;
