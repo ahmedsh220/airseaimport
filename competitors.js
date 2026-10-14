@@ -37,6 +37,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---------- Euka client ----------
 // GET with query params, or POST with a JSON body when `body` is given.
+let lastCall = null; // last Euka response, shown on /api/competitors/status
 async function euka(p, params = {}, attempt = 1, body = null) {
   const u = new URL(CFG.base + p);
   for (const [k, v] of Object.entries(params)) {
@@ -49,12 +50,16 @@ async function euka(p, params = {}, attempt = 1, body = null) {
     if (body) headers["content-type"] = "application/json";
     res = await fetch(u, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
   } catch (e) {
+    console.warn(`Euka ${p} attempt ${attempt} failed: ${e.message}`);
+    lastCall = { at: new Date().toISOString(), path: p, error: e.message };
     if (attempt < 4) { await sleep(attempt * 2000); return euka(p, params, attempt + 1, body); }
     throw new Error(`Euka unreachable: ${e.message}`);
   }
+  lastCall = { at: new Date().toISOString(), path: p, status: res.status };
   if (res.status === 429 || res.status >= 500) {
     if (attempt < 5) {
       const wait = (+res.headers.get("retry-after") || attempt * 3) * 1000;
+      console.warn(`Euka ${p} HTTP ${res.status}, retrying in ${Math.round(Math.min(wait, 60000) / 1000)}s (attempt ${attempt})`);
       await sleep(Math.min(wait, 60000));
       return euka(p, params, attempt + 1, body);
     }
@@ -389,7 +394,7 @@ async function handle(req, res, url, getList) {
     }
     if (sub === "/status") {
       const k = await checkKey();
-      return send(res, 200, { configured: !!CFG.key, keyOk: k.ok, key: k.info, error: k.error, running: !!job, progress }), true;
+      return send(res, 200, { configured: !!CFG.key, keyOk: k.ok, key: k.info, error: k.error, running: !!job, progress, lastCall }), true;
     }
     const pm = sub.match(/^\/product\/([^/]+)$/);
     if (pm) {
