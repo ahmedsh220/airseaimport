@@ -13,7 +13,8 @@
   button.primary { background: #111; color: #fff; border-color: #111; }
   button:disabled { opacity: .5; cursor: progress; }
   /* Brand bar and toolbar stay pinned; the brand bar shrinks to one slim row once the list is scrolled. */
-  header#top { position: sticky; top: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
+  /* Fixed, with a spacer holding its full height, so shrinking it never moves the page (it used to make the page jump back to the top). */
+  header#top { position: fixed; top: 0; left: 0; right: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
   .brand { text-align: center; padding: 14px 16px 6px; }
   .brand .main { display: block; height: 130px; width: auto; margin: 0 auto 6px; transition: height .15s; }
   .logos { display: flex; align-items: center; justify-content: center; gap: 10px 18px; flex-wrap: wrap; }
@@ -153,6 +154,7 @@
     <button type="button" id="fClear">Clear filters</button>
   </div>
 </header>
+<div id="topSpace"></div>
 <div class="wrap">
   <div class="meta" id="asof" style="margin-top:8px"></div>
   <table id="list">
@@ -206,7 +208,8 @@ const stockTag = i => i.stock ? `<span class="st ${i.stock}">${STOCK[i.stock]}</
 let view = store.get("asi_view") || (matchMedia("(max-width: 640px)").matches ? "tiles" : "list");
 
 // ---- Sticky header: measure it so the table's header row pins right under it; shrink the brand bar once scrolled ----
-new ResizeObserver(() => document.documentElement.style.setProperty("--hh", $("top").offsetHeight + "px")).observe($("top"));
+// --hh: the header's current height (the table header pins under it). The spacer keeps the full, unshrunk height.
+new ResizeObserver(() => { const h = $("top").offsetHeight; document.documentElement.style.setProperty("--hh", h + "px"); if (!$("top").classList.contains("compact")) $("topSpace").style.height = h + "px"; }).observe($("top"));
 addEventListener("scroll", () => { const h = $("top"); if (scrollY > 140) h.classList.add("compact"); else if (scrollY < 10) h.classList.remove("compact"); }, { passive: true });
 
 // ---- Filters ----
