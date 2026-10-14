@@ -61,6 +61,13 @@
   .tile .ph img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .tile .ph .none { width: 100%; height: 100%; }
   .tile .tag { position: absolute; top: 8px; left: 8px; }
+  .st { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+  .st.in { background: #dff3e4; color: #146c2e; } .st.qoh { background: #fff1d6; color: #8a5a00; } .st.ask { background: var(--soft); color: var(--muted); }
+  td.nm .st { margin-left: 6px; vertical-align: 1px; } .tile .st { align-self: flex-start; }
+  .stockpick { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 0 16px 8px; }
+  .stockpick .seg button { padding: 6px 12px; } .stockpick .seg button b { font-weight: 700; }
+  .stockpick .meta { font-size: 12px; max-width: 640px; }
+  @media (max-width: 640px) { .stockpick { padding: 0 10px 6px; } header.compact .stockpick .meta { display: none; } }
   .tile .bd { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .tile .nm { font-weight: 700; font-size: 15px; line-height: 1.25; }
   .tile .sk { color: var(--muted); font-size: 12px; overflow-wrap: break-word; }
@@ -131,6 +138,10 @@
     <button class="primary" id="xlsx">Excel</button>
     <a class="meta" id="signout" href="/catalog/logout">Sign out</a>
   </div>
+  <div class="stockpick">
+    <span class="seg" role="group" aria-label="Which products to show"><button id="sIn" type="button">In stock now <span id="nIn"></span></button><button id="sAll" type="button">All products we carry <span id="nAll"></span></button></span>
+    <span class="meta"><span class="st in">In stock</span> on our shelf now, ships right away. <span class="st qoh">Available to order</span> held in our inventory, ask us for timing. <span class="st ask">Ask us</span> we carry it, check availability.</span>
+  </div>
   <div class="filters" id="filters">
     <select id="sec"><option value="">All categories</option></select>
     <select id="cat"><option value="">All types</option></select>
@@ -189,6 +200,9 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const money = n => n == null ? "Contact Sales" : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }, del(k) { try { localStorage.removeItem(k); } catch {} } };
 let data = { items: [], sections: [] };
+let stockMode = store.get("asi_stock") === "in" ? "in" : "all";
+const STOCK = { in: "In stock", qoh: "Available to order", ask: "Ask us" };
+const stockTag = i => i.stock ? `<span class="st ${i.stock}">${STOCK[i.stock]}</span>` : "";
 let view = store.get("asi_view") || (matchMedia("(max-width: 640px)").matches ? "tiles" : "list");
 
 // ---- Sticky header: measure it so the table's header row pins right under it; shrink the brand bar once scrolled ----
@@ -201,7 +215,7 @@ const priceOf = i => data.showPrices !== false && i.piece != null ? i.piece : da
 function shown() {
   const q = $("q").value.trim().toLowerCase(), sec = $("sec").value, cat = $("cat").value, onlyNew = $("onlyNew").checked, onlyPic = $("onlyPic").checked, onlyCart = $("onlyCart").checked;
   const min = hasPrices() && $("pMin").value !== "" ? +$("pMin").value : null, max = hasPrices() && $("pMax").value !== "" ? +$("pMax").value : null;
-  const out = data.items.filter(i => (!sec || i.section === sec) && (!cat || i.category === cat) && (!onlyNew || i.isNew) && (!onlyPic || i.img) && (!onlyCart || cart.items[i.sku])
+  const out = data.items.filter(i => (!sec || i.section === sec) && (!cat || i.category === cat) && (stockMode !== "in" || i.stock === "in") && (!onlyNew || i.isNew) && (!onlyPic || i.img) && (!onlyCart || cart.items[i.sku])
     && (min == null || (priceOf(i) ?? -1) >= min) && (max == null || (priceOf(i) != null && priceOf(i) <= max))
     && (!q || (i.name + " " + i.sku + " " + i.upc + " " + i.category).toLowerCase().includes(q)));
   const s = $("sort").value, P = i => priceOf(i) ?? Infinity;
@@ -230,13 +244,15 @@ function render() {
   $("status").textContent = `${items.length.toLocaleString()} products`;
   $("fBtn").innerHTML = "Filters" + (nf ? `<span class="badge">${nf}</span>` : "");
   document.querySelectorAll(".pf").forEach(e => e.hidden = !hasPrices());
+  $("sIn").classList.toggle("on", stockMode === "in"); $("sAll").classList.toggle("on", stockMode === "all");
+  $("nIn").textContent = `(${data.items.filter(i => i.stock === "in").length.toLocaleString()})`; $("nAll").textContent = `(${data.items.length.toLocaleString()})`;
   $("vList").classList.toggle("on", view === "list"); $("vTiles").classList.toggle("on", view === "tiles");
   $("list").hidden = view !== "list"; $("tiles").hidden = view !== "tiles";
   const groups = grouped(items);
   if (view === "tiles") {
     $("tiles").innerHTML = !items.length ? '<div class="empty" style="grid-column:1/-1">No products match.</div>' : groups.map(([s, g]) => (sorted() ? "" : `<h3>${esc(s)}</h3>`) + g.map(i => `<div class="tile">
       <div class="ph">${pic(i)}</div>${i.isNew ? '<span class="tag">NEW</span>' : ""}
-      <div class="bd"><div class="nm">${esc(i.name)}</div><div class="sk">${esc(i.sku)}${i.upc ? " · " + esc(i.upc) : ""}</div><div class="sk">${esc(i.category)}${i.qty ? ` · ${i.qty} pcs / case` : ""}</div>
+      <div class="bd">${stockTag(i)}<div class="nm">${esc(i.name)}</div><div class="sk">${esc(i.sku)}${i.upc ? " · " + esc(i.upc) : ""}</div><div class="sk">${esc(i.category)}${i.qty ? ` · ${i.qty} pcs / case` : ""}</div>
       ${pc.length ? `<div class="pr">${pc.map(([h, f]) => `<div><small>${h === "PIECE PRICE" ? "Piece" : "Case, per piece"}</small><b>${money(f(i))}</b></div>`).join("")}</div>` : ""}
       ${addBtn(i)}</div></div>`).join("")).join("");
     return;
@@ -246,7 +262,7 @@ function render() {
   $("rows").innerHTML = groups.map(([s, g]) => (sorted() ? "" : `<tr class="sec"><td colspan="${nCols()}">${esc(s)}</td></tr>`) + g.map(i => `<tr>
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${pic(i)}</td>
-    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}</td><td class="cat">${esc(i.category)}</td>
+    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}${stockTag(i)}</td><td class="cat">${esc(i.category)}</td>
     ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}
     <td class="add">${addBtn(i)}</td></tr>`).join("")).join("");
 }
@@ -272,6 +288,8 @@ let t; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(
 ["pMin", "pMax"].forEach(id => $(id).addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 250); }));
 $("fBtn").onclick = () => $("filters").classList.toggle("open");
 $("fClear").onclick = () => { ["sec", "cat", "pMin", "pMax", "sort"].forEach(id => $(id).value = ""); ["onlyNew", "onlyPic", "onlyCart"].forEach(id => $(id).checked = false); render(); };
+$("sIn").onclick = () => { stockMode = "in"; store.set("asi_stock", stockMode); render(); };
+$("sAll").onclick = () => { stockMode = "all"; store.set("asi_stock", stockMode); render(); };
 $("vList").onclick = () => { view = "list"; store.set("asi_view", view); render(); };
 $("vTiles").onclick = () => { view = "tiles"; store.set("asi_view", view); render(); };
 
@@ -396,7 +414,7 @@ function zoom(k) {
   $("zImg").src = `${BASE}/img/${encodeURIComponent(i.sku)}`; $("zImg").alt = i.name;
   $("zName").textContent = i.name;
   const price = priceCols().map(([h, f]) => `${h.toLowerCase().replace(/^./, c => c.toUpperCase())}: ${money(f(i))}`);
-  $("zMeta").textContent = [`SKU ${i.sku}`, i.upc && `UPC ${i.upc}`, i.category, ...price, i.qty ? `${i.qty} pcs per case` : ""].filter(Boolean).join(" · ");
+  $("zMeta").textContent = [STOCK[i.stock], `SKU ${i.sku}`, i.upc && `UPC ${i.upc}`, i.category, ...price, i.qty ? `${i.qty} pcs per case` : ""].filter(Boolean).join(" · ");
   paintZoomAdd();
   if (!$("zoom").open) $("zoom").showModal();
 }
