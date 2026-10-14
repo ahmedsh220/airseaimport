@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Air Sea Import Reports</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/media/favicon.svg" type="image/svg+xml">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
   :root {
@@ -350,8 +350,8 @@ async function fetchVia(API, force) {
       setStatus(`Direct load failed, trying the server copy (attempt ${attempt} of 2)…`);
       const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store", signal: AbortSignal.timeout(60000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      viaSource = res.headers.get("x-source") === "snapshot"
-        ? `backup copy from ${new Date(res.headers.get("x-fetched-at")).toLocaleString()} (the live API is cutting its response off right now)`
+      viaSource = res.headers.get("x-source") === "stale"
+        ? `last good copy from ${new Date(res.headers.get("x-fetched-at")).toLocaleString()} (the live API isn't answering right now)`
         : `live API via server, fetched ${new Date(res.headers.get("x-fetched-at") || Date.now()).toLocaleTimeString()}`;
       return await res.text();
     } catch (e) {
@@ -1209,6 +1209,6 @@ load();
 if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all.length) render(); });
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
-<script src="excel-edit.js"></script>
+<script src="/js/excel-edit.js"></script>
 </body>
 </html>

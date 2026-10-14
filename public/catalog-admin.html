@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catalog management · Air Sea Import</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/media/favicon.svg" type="image/svg+xml">
 <!-- Same look as the dashboard: this block is copied from index.html. -->
 <style>
   :root {
@@ -154,7 +154,7 @@ const fmtUsd = v => v == null ? "—" : v.toLocaleString(undefined, { style: "cu
 const ST = { tab: "catalog" };
 const render = () => { $("main").innerHTML = window.catalogAdminHtml(); };
 </script>
-<script src="catalog-admin.js"></script>
+<script src="/js/catalog-admin.js"></script>
 <script>
 // Sign-in ran out: back to the sign-in page, then here.
 const origFetch = window.fetch;

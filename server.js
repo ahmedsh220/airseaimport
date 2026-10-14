@@ -13,23 +13,21 @@ try {
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
   }
 } catch {}
-const auth = require("./auth");
-const catalog = require("./catalog");
-const competitors = require("./competitors");
-const excel = require("./excel");
-const tiktokSales = require("./tiktok-sales");
+const auth = require("./lib/auth");
+const catalog = require("./lib/catalog");
+const competitors = require("./lib/competitors");
+const excel = require("./lib/excel");
+const tiktokSales = require("./lib/tiktok-sales");
 
 const PORT = process.env.PORT || 3000;
 const API = process.env.PRODUCTS_API || "https://hub.fragrancewholesalerusa.com/api/open/products";
 const CACHE_MS = 5 * 60 * 1000; // the upstream is slow and sometimes cuts off; don't hit it more than needed
 const PUBLIC = path.join(__dirname, "public");
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" };
+// Every image (logos, icon) lives in media/ and is served at /media/.
+const MEDIA = path.join(__dirname, "media");
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg" };
 
-// Backup copy of the product list (from the user's 2026-10-13 upload), served only when the
-// live API can't be read and nothing fresher has been fetched yet.
-const SNAPSHOT = path.join(__dirname, "data-snapshot.json");
-const SNAPSHOT_AT = "2026-10-13T17:40:23Z";
-let cache = { at: 0, body: null, snapshot: false };
+let cache = { at: 0, body: null, stale: false };
 let inflight = null;
 
 // Some upstream protection rejects bare server requests, so look like a normal browser call.
@@ -120,22 +118,22 @@ async function fetchUpstream() {
   throw last;
 }
 
+// Share one upstream call between concurrent requests.
+function refresh() {
+  return inflight ||= fetchUpstream().then(body => { cache = { at: Date.now(), body, stale: false }; })
+    .catch(e => { if (cache.body) cache.stale = true; console.warn(`Products refresh failed: ${e.message}`); throw e; })
+    .finally(() => { inflight = null; });
+}
+
+// Once a copy is in memory, pages never wait on the upstream API: an old copy is served right away
+// while a fresh one loads in the background. Only the very first load after a restart waits.
 async function products(force) {
-  if (!force && cache.body && Date.now() - cache.at < CACHE_MS) return cache.body;
-  // Already on the backup copy: answer right away and let the background loop keep trying.
-  if (!force && cache.snapshot) return cache.body;
-  // Share one upstream call between concurrent requests.
-  inflight ||= fetchUpstream().then(body => { cache = { at: Date.now(), body, snapshot: false }; }).finally(() => { inflight = null; });
-  try {
-    await inflight;
-  } catch (e) {
-    // Upstream down or slow: serve the last good copy rather than failing the page.
-    if (!cache.body) {
-      try { cache = { at: Date.parse(SNAPSHOT_AT), body: fs.readFileSync(SNAPSHOT, "utf8"), snapshot: true }; }
-      catch { throw e; }
-    }
-    console.warn(`Serving cached products from ${new Date(cache.at).toISOString()}: ${e.message}`);
+  if (cache.body && !force) {
+    if (Date.now() - cache.at >= CACHE_MS) refresh().catch(() => {});
+    return cache.body;
   }
+  try { await refresh(); }
+  catch (e) { if (!cache.body) throw e; }
   return cache.body;
 }
 
@@ -151,7 +149,7 @@ http.createServer(async (req, res) => {
     try {
       const body = await products(url.searchParams.has("refresh"));
       res.writeHead(200, { "content-type": "application/json", "x-fetched-at": new Date(cache.at).toISOString(),
-        "x-source": cache.snapshot ? "snapshot" : "live", "access-control-expose-headers": "x-fetched-at, x-source" });
+        "x-source": cache.stale ? "stale" : "live", "access-control-expose-headers": "x-fetched-at, x-source" });
       res.end(body);
     } catch (e) {
       console.error(`/api/products failed: ${e.message}`);
@@ -167,13 +165,14 @@ http.createServer(async (req, res) => {
   if (await excel.handle(req, res, url)) return;
   if (await tiktokSales.handle(req, res, url)) return;
   if (url.pathname === "/healthz") { res.writeHead(200); res.end("ok"); return; }
-  const route = { "/": "/index.html", "/favicon.ico": "/favicon.svg" }[url.pathname] || url.pathname;
-  const file = path.join(PUBLIC, path.normalize(route));
-  if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
+  const route = { "/": "/index.html", "/favicon.ico": "/media/favicon.svg" }[url.pathname] || url.pathname;
+  const media = route.startsWith("/media/"), root = media ? MEDIA : PUBLIC;
+  const file = path.join(root, path.normalize(media ? route.slice(6) : route));
+  if (!file.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
     // no-cache: browsers check for a new version on every load, so a deploy shows up on the next refresh.
-    res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": "no-cache" });
+    res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": media ? "public, max-age=86400" : "no-cache" });
     res.end(data);
   });
 }).listen(PORT, () => {
@@ -183,6 +182,6 @@ http.createServer(async (req, res) => {
   competitors.schedule(productList);
   // Keep trying in the background so a good copy is ready whenever the API answers in full.
   setInterval(() => {
-    if (cache.snapshot || Date.now() - cache.at > CACHE_MS) products(true).catch(() => {});
+    if (Date.now() - cache.at > CACHE_MS) refresh().catch(() => {});
   }, 2 * 60 * 1000).unref();
 });

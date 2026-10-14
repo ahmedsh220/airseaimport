@@ -14,16 +14,16 @@
   button:disabled { opacity: .5; cursor: progress; }
   /* Brand bar and toolbar stay pinned; the brand bar shrinks to one slim row once the list is scrolled. */
   header#top { position: sticky; top: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
-  .brand { text-align: center; padding: 14px 16px 4px; }
-  .logos { display: flex; align-items: center; justify-content: center; gap: 2vw; flex-wrap: wrap; }
-  .logos img { height: 84px; width: auto; object-fit: contain; transition: height .15s; }
-  .logos img.main { height: 120px; } .logos img.wide { height: 58px; }
-  .logos .wm { font-family: Didot, "Bodoni 72", "Bodoni MT", Georgia, serif; letter-spacing: .14em; font-size: 20px; white-space: nowrap; transition: font-size .15s; }
-  .addr { font-family: Arial, sans-serif; font-size: 15px; margin-top: 2px; }
-  header.compact .brand { padding: 4px 16px 0; }
-  header.compact .logos { flex-wrap: nowrap; overflow: hidden; gap: 18px; }
-  header.compact .logos img { height: 30px; } header.compact .logos img.main { height: 40px; } header.compact .logos img.wide { height: 22px; }
-  header.compact .logos .wm { font-size: 12px; }
+  .brand { text-align: center; padding: 14px 16px 6px; }
+  .brand .main { display: block; height: 130px; width: auto; margin: 0 auto 6px; transition: height .15s; }
+  .logos { display: flex; align-items: center; justify-content: center; gap: 10px 18px; flex-wrap: wrap; }
+  .logos img { height: 54px; width: auto; object-fit: contain; transition: height .15s; }
+  .addr { font-family: Arial, sans-serif; font-size: 15px; margin-top: 6px; }
+  /* Scrolled: company logo and the brand strip share one slim row. */
+  header.compact .brand { display: flex; align-items: center; gap: 18px; padding: 4px 16px 0; }
+  header.compact .brand .main { height: 44px; margin: 0; flex: none; }
+  header.compact .logos { flex: 1; flex-wrap: nowrap; overflow: hidden; justify-content: flex-start; gap: 12px; }
+  header.compact .logos img { height: 30px; }
   header.compact .addr { display: none; }
   .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
   .bar input[type=search] { flex: 1 1 200px; max-width: 360px; }
@@ -94,25 +94,29 @@
   @media (max-width: 1200px) { .upc, .cat { display: none; } }
   @media (max-width: 900px) { .wrap { overflow-x: auto; } }
   @media (max-width: 640px) {
-    .brand { padding: 8px 10px 2px; } .logos { gap: 6px 14px; } .logos img { height: 38px; } .logos img.main { height: 60px; } .logos img.wide { height: 26px; } .logos .wm { font-size: 11px; } .addr { font-size: 12px; }
+    .brand { padding: 8px 10px 2px; } .brand .main { height: 78px; } .logos { gap: 6px 10px; } .logos img { height: 34px; } .addr { font-size: 12px; }
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .tile .nm { font-size: 13px; } .tile .pr b { font-size: 15px; }
     .bar { gap: 6px; padding: 6px 10px; } .bar input[type=search] { flex-basis: 100%; max-width: none; } .bar .sp { display: none; }
     .bar button { padding: 5px 8px; font-size: 13px; } .filters { padding: 0 10px 8px; }
-    header.compact .logos .wm, header.compact #status, header.compact #signout { display: none; } header.compact .logos { gap: 12px; }
+    header.compact #status, header.compact #signout { display: none; } header.compact .brand { gap: 10px; } header.compact .brand .main { height: 32px; } header.compact .logos img { height: 24px; } header.compact .logos { gap: 8px; }
   }
 </style>
 </head>
 <body>
 <header id="top">
   <div class="brand">
+    <img class="main" src="/media/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
     <div class="logos">
-      <img src="/catalog/assets/logo-lattafa.png" alt="Lattafa">
-      <img src="/catalog/assets/logo-arabiyat.jpg" alt="Arabiyat">
-      <span class="wm">GIORGIO ARMANI</span>
-      <img class="main" src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
-      <span class="wm">DOLCE&amp;GABBANA</span>
-      <img class="wide" src="/catalog/assets/logo-bharara.png" alt="Bharara">
-      <img src="/catalog/assets/logo-armaf.jpg" alt="Armaf">
+      <img src="/media/brand-lattafa.jpg" alt="Lattafa">
+      <img src="/media/brand-armaf.jpg" alt="Armaf">
+      <img src="/media/brand-arabiyat.jpg" alt="Arabiyat">
+      <img src="/media/brand-afnan.jpg" alt="Afnan">
+      <img src="/media/brand-maison-alhambra.jpg" alt="Maison Alhambra">
+      <img src="/media/brand-rasasi.jpg" alt="Rasasi">
+      <img src="/media/brand-giorgio-armani.jpg" alt="Giorgio Armani">
+      <img src="/media/brand-bharara.png" alt="Bharara">
+      <img src="/media/brand-paris-corner.jpg" alt="Paris Corner">
+      <img src="/media/brand-fragrance-world.jpg" alt="Fragrance World">
     </div>
     <div class="addr">47-25 27th St Suite 1, Long Island City, NY 11101 · (929) 257-3502</div>
   </div>
@@ -167,6 +171,7 @@
     <textarea id="cNotes" placeholder="Notes for us (delivery, pickup, questions)"></textarea>
     <div class="act">
       <button class="primary" id="cCopy" type="button">Copy order</button>
+      <button id="cPdf" type="button">Download PDF</button>
       <button id="cShare" type="button" hidden>Share</button>
       <button id="cEmpty" type="button">Empty cart</button>
       <span class="meta" id="cMsg"></span>
@@ -175,7 +180,7 @@
 </dialog>
 <script>
 const ADDRESS = "47-25 27th St Suite 1, Long Island City, NY 11101", PHONE = "(929) 257-3502";
-const LOGOS = { lattafa: "/catalog/assets/logo-lattafa.png", arabiyat: "/catalog/assets/logo-arabiyat.jpg", main: "/catalog/assets/logo-fwusa.jpg", bharara: "/catalog/assets/logo-bharara.png", armaf: "/catalog/assets/logo-armaf.jpg" };
+const LOGOS = { lattafa: "/media/brand-lattafa.jpg", arabiyat: "/media/brand-arabiyat.jpg", main: "/media/logo-fwusa.jpg", bharara: "/media/brand-bharara.png", armaf: "/media/brand-armaf.jpg" };
 const $ = id => document.getElementById(id);
 // Catalog 1 lives at /catalog and Catalog 2 at /catalog2; the same page serves both.
 const BASE = location.pathname.startsWith("/catalog2") ? "/catalog2" : "/catalog";
@@ -344,6 +349,40 @@ $("cCopy").onclick = async () => {
   const txt = orderText();
   try { await navigator.clipboard.writeText(txt); $("cMsg").textContent = "Copied. Paste it into a text or email to us."; }
   catch { const a = document.createElement("textarea"); a.value = txt; document.body.append(a); a.select(); document.execCommand("copy"); a.remove(); $("cMsg").textContent = "Copied. Paste it into a text or email to us."; }
+};
+// The order as a PDF the customer can attach to an email or text.
+$("cPdf").onclick = async () => {
+  if (!Object.keys(cart.items).length) { $("cMsg").textContent = "Add products first."; return; }
+  $("cMsg").textContent = "Building the PDF…";
+  try {
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
+    const doc = new jspdf.jsPDF({ unit: "pt", format: "letter" }), W = doc.internal.pageSize.getWidth(), showP = hasPrices(), w = cart.who || {};
+    const logo = await picture(LOGOS.main, 800);
+    if (logo) { const h = 54, lw = logo.w * h / logo.h; doc.addImage(logo.data, "JPEG", (W - lw) / 2, 28, lw, h); }
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(`${ADDRESS} · ${PHONE}`, W / 2, 98, { align: "center" });
+    doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(20); doc.text("Order request", 40, 132);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(10);
+    const info = [new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }), w.name && `Name: ${w.name}`, w.company && `Company: ${w.company}`, w.phone && `Contact: ${w.phone}`].filter(Boolean);
+    info.forEach((t, k) => doc.text(t, 40, 150 + k * 14));
+    let total = 0, priced = true;
+    const body = Object.entries(cart.items).map(([sku, c], k) => {
+      const i = bySku(sku), p = line(i, c); if (p == null) priced = false; else total += p;
+      const qty = c.unit === "case" ? `${c.n} ${c.n === 1 ? "case" : "cases"}${i && i.qty ? ` (${c.n * i.qty} pcs)` : ""}` : `${c.n} ${c.n === 1 ? "piece" : "pieces"}`;
+      return [k + 1, sku, i ? i.name : "(not in catalog)", qty, ...(showP ? [money(p)] : [])];
+    });
+    doc.autoTable({ startY: 160 + info.length * 14, margin: { left: 40, right: 40 }, head: [["#", "SKU", "NAME", "QTY", ...(showP ? ["PRICE"] : [])]], body,
+      styles: { fontSize: 9, cellPadding: 4 }, headStyles: { fillColor: [17, 17, 17] }, columnStyles: { 0: { cellWidth: 22 }, 1: { cellWidth: 70 }, 3: { cellWidth: 90 }, 4: { cellWidth: 70, halign: "right" } } });
+    let y = doc.lastAutoTable.finalY + 20;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+    doc.text(showP ? `Estimated total: ${money(total)}${priced ? "" : " + items priced by sales"}` : "Please send pricing.", W - 40, y, { align: "right" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(90);
+    if (showP) doc.text("Final prices are confirmed by sales.", W - 40, y + 13, { align: "right" });
+    if (w.notes) { doc.setTextColor(20); doc.setFontSize(10); doc.text(doc.splitTextToSize(`Notes: ${w.notes}`, W - 80), 40, y + 36); }
+    doc.save(`order-request-${fileDate()}.pdf`);
+    $("cMsg").textContent = "PDF downloaded. Attach it to a text or email to us.";
+  } catch (e) { $("cMsg").textContent = `PDF failed: ${e.message}`; }
 };
 if (navigator.share) { $("cShare").hidden = false; $("cShare").onclick = () => Object.keys(cart.items).length && navigator.share({ title: "Order request", text: orderText() }).catch(() => {}); }
 document.addEventListener("click", e => { const b = e.target.closest("button[data-add]"); if (b) addToCart(b.dataset.add); });
