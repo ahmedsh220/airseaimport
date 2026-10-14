@@ -140,7 +140,7 @@
   </div>
   <div class="row">
     <button id="reload">Refresh data</button>
-    <button id="catalogBtn" type="button">Catalog management</button>
+    <a href="/catalog-admin.html"><button type="button">Catalog management</button></a>
     <button id="csv">Export table CSV</button>
     <a id="signout" href="/logout" hidden><button type="button">Sign out</button></a>
   </div>
@@ -551,7 +551,7 @@ const PROD = { h: "Product", v: r => r.name, f: prodCell, prod: true, l: true };
 const TIER = { h: "Tier", v: r => r._tier, f: tierTag, l: true };
 
 // ---------- layout ----------
-const TABS = { overview: "Overview", actions: "Actions", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors", catalog: "Customer catalog" };
+const TABS = { overview: "Overview", actions: "Actions", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
 function render() {
   saveState();
   // Re-rendering replaces every table, so remember where each one (and the page) was scrolled.
@@ -563,7 +563,7 @@ function render() {
   renderSide();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = coverageHtml() + ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml, catalog: () => window.catalogAdminHtml() })[ST.tab]();
+  $("main").innerHTML = coverageHtml() + ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
   if (ST.tab === "overview") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
   document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { const s = scrolls[el.dataset.scroll]; if (s) [el.scrollTop, el.scrollLeft] = s; });
@@ -1185,7 +1185,6 @@ $("dClose").onclick = () => $("detail").close();
 $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("detail").close(); });
 $("reload").onclick = () => load(true);
 $("csv").onclick = exportCsv;
-$("catalogBtn").onclick = () => { ST.tab = "catalog"; render(); window.scrollTo(0, 0); };
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
 // Signed-in session (auth.js): send the user back to sign in when it runs out or the server says so.
 if (location.protocol.startsWith("http")) {
@@ -1211,6 +1210,5 @@ if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
 <script src="excel-edit.js"></script>
-<script src="catalog-admin.js"></script>
 </body>
 </html>
