@@ -87,8 +87,8 @@ const readForm = req => new Promise(resolve => {
 async function gate(req, res, url) {
   const p = url.pathname;
   if (p === "/healthz" || p === "/favicon.svg" || p === "/favicon.ico") return false;
-  // The customer catalog has its own password (catalog.js).
-  if (p === "/catalog" || p.startsWith("/catalog/")) return false;
+  // The customer catalogs have their own passwords (catalog.js).
+  if (p === "/catalog" || p.startsWith("/catalog/") || p === "/catalog2" || p.startsWith("/catalog2/")) return false;
   if (!token()) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
     res.end("The dashboard is locked: set ADMIN_TOKEN in Render → Environment to sign in.");

@@ -1,20 +1,41 @@
-// Customer wholesale catalog at /catalog, behind its own password (CATALOG_PASSWORD), separate from
-// the admin dashboard. Built from the live products API on every load, so prices follow the API.
-// Only what the printed catalog shows leaves the server: SKU, UPC, name, category, piece and case
-// price, a "new" flag and a picture. Costs, vendors, stock and sales stay private.
+// Customer wholesale catalogs, each at its own link with its own password, separate from the admin
+// dashboard: Catalog 1 at /catalog (with prices) and Catalog 2 at /catalog2 (without prices by default).
+// Built from the live products API on every load, so prices follow the API. Only what the printed
+// catalog shows leaves the server: SKU, UPC, name, category, piece and case price, a "new" flag and a
+// picture. Costs, vendors, stock and sales stay private. The owner controls both from the dashboard's
+// Customer catalog tab (public/catalog-admin.js).
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const auth = require("./auth");
 
 const DIR = path.join(__dirname, "catalog");
-const COOKIE = "asi_catalog";
 const HOURS = +(process.env.CATALOG_SESSION_HOURS || process.env.SESSION_HOURS || 6);
-const password = () => (process.env.CATALOG_PASSWORD || "").trim();
-const key = () => crypto.createHash("sha256").update("asi-catalog:" + password()).digest();
-const sign = data => crypto.createHmac("sha256", key()).update(data).digest("base64url");
+const CATALOGS = {
+  1: { id: "1", name: "Catalog 1", base: "/catalog", cookie: "asi_catalog", env: "CATALOG_PASSWORD",
+    defaults: { showPrices: true, showCasePrices: true } },
+  2: { id: "2", name: "Catalog 2", base: "/catalog2", cookie: "asi_catalog2", env: "CATALOG2_PASSWORD",
+    defaults: { showPrices: false, showCasePrices: false } },
+};
 
-// Wrong passwords per IP: 10 tries per 15 minutes.
+// A password set from the dashboard (stored hashed) wins over the one in Render's environment.
+const envPassword = c => (process.env[c.env] || "").trim();
+const hasPassword = c => !!(settingsOf(c).passwordHash || envPassword(c));
+function checkPassword(c, given) {
+  const s = settingsOf(c), g = String(given || "").trim();
+  if (!g) return false;
+  if (s.passwordHash) {
+    const [salt, hash] = s.passwordHash.split(":");
+    return auth.same(crypto.scryptSync(g, salt, 32).toString("hex"), hash);
+  }
+  return !!envPassword(c) && auth.same(g, envPassword(c));
+}
+const hashPassword = pw => { const salt = crypto.randomBytes(12).toString("hex"); return `${salt}:${crypto.scryptSync(pw, salt, 32).toString("hex")}`; };
+// Sessions are signed with a key tied to the catalog's current password, so changing it signs everyone out.
+const key = c => crypto.createHash("sha256").update(`asi-catalog${c.id}:` + (settingsOf(c).passwordHash || envPassword(c))).digest();
+const sign = (c, data) => crypto.createHmac("sha256", key(c)).update(data).digest("base64url");
+
+// Wrong passwords per IP: 10 tries per 15 minutes, across both catalogs.
 const fails = new Map();
 function limited(ip) {
   const f = fails.get(ip);
@@ -23,23 +44,23 @@ function limited(ip) {
 }
 const failed = ip => { const f = fails.get(ip) || { n: 0, since: Date.now() }; f.n++; fails.set(ip, f); };
 
-function signedIn(req) {
-  const raw = auth.cookies(req)[COOKIE];
-  if (!raw || !password()) return false;
+function signedIn(c, req) {
+  const raw = auth.cookies(req)[c.cookie];
+  if (!raw || !hasPassword(c)) return false;
   const [data, sig] = raw.split(".");
-  if (!data || !sig || !auth.same(sig, sign(data))) return false;
+  if (!data || !sig || !auth.same(sig, sign(c, data))) return false;
   try {
     const s = JSON.parse(Buffer.from(data, "base64url").toString("utf8"));
-    return s.exp > Date.now() && s.dev === auth.device(req);
+    return s.exp > Date.now() && s.dev === auth.device(req) && s.cat === c.id;
   } catch { return false; }
 }
-function setSession(req, res) {
+function setSession(c, req, res) {
   const exp = Date.now() + HOURS * 3600e3;
-  const data = Buffer.from(JSON.stringify({ exp, dev: auth.device(req), id: crypto.randomBytes(9).toString("base64url") })).toString("base64url");
-  res.setHeader("set-cookie", `${COOKIE}=${data}.${sign(data)}; Path=/catalog; HttpOnly; SameSite=Lax; Max-Age=${HOURS * 3600}${auth.secure(req) ? "; Secure" : ""}`);
+  const data = Buffer.from(JSON.stringify({ exp, cat: c.id, dev: auth.device(req), id: crypto.randomBytes(9).toString("base64url") })).toString("base64url");
+  res.setHeader("set-cookie", `${c.cookie}=${data}.${sign(c, data)}; Path=${c.base}; HttpOnly; SameSite=Lax; Max-Age=${HOURS * 3600}${auth.secure(req) ? "; Secure" : ""}`);
 }
 
-function loginPage(res, status, error = "") {
+function loginPage(c, res, status, error = "") {
   res.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" });
   res.end(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wholesale Catalog · Fragrance Wholesaler USA</title>
@@ -52,7 +73,7 @@ function loginPage(res, status, error = "") {
   button { width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px; background: #111; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
   .err { color: #c52a2a; margin: 10px 0 0; }
 </style></head><body>
-<form method="post" action="/catalog/login">
+<form method="post" action="${c.base}/login">
   <img src="/catalog/assets/logo-fwusa.jpg" alt="Fragrance Wholesaler USA">
   <h1>Wholesale Catalog</h1>
   <p>Enter the catalog password. You'll stay signed in on this device for ${HOURS} hours.</p>
@@ -130,37 +151,46 @@ function build(list) {
   return { items, images };
 }
 
-// ---- Settings the owner controls from the dashboard's Customer catalog tab ----
+// ---- Settings the owner controls from the dashboard's Customer catalog tab, one set per catalog ----
 // Saved next to the competitor results, on the Render disk when COMPETITOR_DATA_DIR points there.
 const DATA_DIR = process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR || path.join(__dirname, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "catalog-settings.json");
-const DEFAULTS = { enabled: true, showPrices: true, showCasePrices: true, mode: "all", hidden: [], added: [], prices: {}, updatedAt: null, updatedBy: null };
-let settings = { ...DEFAULTS };
-try { settings = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8")) }; } catch {}
+const BASE = { enabled: true, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
+const fresh = c => ({ ...BASE, ...c.defaults });
+let store = {};
+try {
+  const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+  store = "enabled" in raw ? { 1: raw } : raw; // the first version saved Catalog 1's settings at the top level
+} catch {}
+const settingsOf = c => ({ ...fresh(c), ...(store[c.id] || {}) });
 const skuList = v => [...new Set((Array.isArray(v) ? v : []).map(x => String(x).trim()).filter(Boolean))].slice(0, 10000);
-function clean(input, by) {
+function clean(c, input, by) {
   const prices = {};
   for (const [k, v] of Object.entries(input.prices && typeof input.prices === "object" ? input.prices : {})) {
     const n = Number(v); if (String(k).trim() && Number.isFinite(n) && n >= 0) prices[String(k).trim()] = round2(n);
   }
+  const pw = typeof input.newPassword === "string" ? input.newPassword.trim() : "";
   return {
-    enabled: input.enabled !== false, showPrices: input.showPrices !== false, showCasePrices: input.showCasePrices !== false,
+    enabled: input.enabled !== false, showPrices: input.showPrices === true, showCasePrices: input.showCasePrices === true,
     mode: input.mode === "selected" ? "selected" : "all", hidden: skuList(input.hidden), added: skuList(input.added), prices,
+    passwordHash: pw ? hashPassword(pw) : input.clearPassword ? null : settingsOf(c).passwordHash,
     updatedAt: new Date().toISOString(), updatedBy: String(by || "").slice(0, 60) || null,
   };
 }
-function save(next) {
+function save(c, next) {
+  const all = { ...store, [c.id]: next };
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SETTINGS_FILE + ".tmp", JSON.stringify(next, null, 1));
+  fs.writeFileSync(SETTINGS_FILE + ".tmp", JSON.stringify(all, null, 1));
   fs.renameSync(SETTINGS_FILE + ".tmp", SETTINGS_FILE);
-  settings = next;
+  store = all;
 }
-// Whether a product shows in the customer catalog under the current settings.
-function listed(i, s = settings) {
-  if (s.hidden.includes(i.sku)) return false;
-  return s.added.includes(i.sku) || (s.mode === "all" && i.auto);
+// Whether a product shows in the catalog under its settings.
+const listed = (i, s) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
+// What the dashboard sees of a catalog's settings: everything but the password hash.
+function publicSettings(c) {
+  const { passwordHash, ...s } = settingsOf(c);
+  return { ...s, name: c.name, url: c.base, password: passwordHash ? "dashboard" : envPassword(c) ? "render" : null, passwordEnv: c.env };
 }
-function piece(i, s = settings) { return s.prices[i.sku] ?? i.piece; }
 
 let built = { at: 0, data: null };
 async function catalog(productList, meta) {
@@ -170,15 +200,15 @@ async function catalog(productList, meta) {
   return built.data;
 }
 // What customers get: only listed products, and prices only when the owner shows them.
-function customerView(data) {
-  const s = settings, hidden = new Set(s.hidden), added = new Set(s.added);
+function customerView(c, data) {
+  const s = settingsOf(c), hidden = new Set(s.hidden), added = new Set(s.added);
   const items = data.items.filter(i => !hidden.has(i.sku) && (added.has(i.sku) || (s.mode === "all" && i.auto))).map(i => {
-    const p = piece(i, s);
+    const p = s.prices[i.sku] ?? i.piece;
     return { sku: i.sku, upc: i.upc, name: i.name, category: i.category, section: i.section, isNew: i.isNew, img: i.img,
       piece: s.showPrices ? p : undefined, case: s.showCasePrices ? (p != null && i.qty ? round2(p * i.qty) : null) : undefined,
       qty: s.showCasePrices ? i.qty : undefined };
   });
-  return { fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };
+  return { catalog: c.name, fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };
 }
 
 const sendJson = (res, status, body) => { res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
@@ -192,13 +222,19 @@ async function handleAdmin(req, res, url, productList, meta) {
   if (url.pathname !== "/api/catalog/settings") return false;
   if (req.method === "POST") {
     let body; try { body = await readJson(req); } catch { return sendJson(res, 400, { error: "Bad JSON" }), true; }
-    try { save(clean(body, body.editor)); } catch (e) { return sendJson(res, 500, { error: `Couldn't save: ${e.message}` }), true; }
-    console.log(`Catalog settings saved by ${settings.updatedBy || "admin"}: ${settings.enabled ? "on" : "off"}, mode ${settings.mode}, ${settings.hidden.length} removed, ${settings.added.length} added, ${Object.keys(settings.prices).length} price overrides`);
-    return sendJson(res, 200, { settings }), true;
+    const c = CATALOGS[body.catalog];
+    if (!c) return sendJson(res, 400, { error: "Unknown catalog" }), true;
+    if (typeof body.newPassword === "string" && body.newPassword.trim() && body.newPassword.trim().length < 6)
+      return sendJson(res, 400, { error: "Use a password of at least 6 characters." }), true;
+    try { save(c, clean(c, body, body.editor)); } catch (e) { return sendJson(res, 500, { error: `Couldn't save: ${e.message}` }), true; }
+    const s = settingsOf(c);
+    console.log(`${c.name} settings saved by ${s.updatedBy || "admin"}: ${s.enabled ? "on" : "off"}, prices ${s.showPrices ? "shown" : "hidden"}, case prices ${s.showCasePrices ? "shown" : "hidden"}, mode ${s.mode}, ${s.hidden.length} removed, ${s.added.length} added, ${Object.keys(s.prices).length} price overrides${body.newPassword ? ", password changed" : ""}`);
+    return sendJson(res, 200, { settings: publicSettings(c) }), true;
   }
   try {
     const data = await catalog(productList, meta);
-    sendJson(res, 200, { settings, persistent: !!(process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR), passwordSet: !!password(),
+    sendJson(res, 200, { catalogs: Object.fromEntries(Object.values(CATALOGS).map(c => [c.id, publicSettings(c)])),
+      persistent: !!(process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR),
       fetchedAt: data.fetchedAt, sections: data.sections, items: data.items });
   } catch (e) { sendJson(res, 502, { error: e.message }); }
   return true;
@@ -230,7 +266,6 @@ const ASSET_TYPES = { ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/
 // Returns true when it answered the request.
 async function handle(req, res, url, productList, meta) {
   const p = url.pathname;
-  if (p !== "/catalog" && !p.startsWith("/catalog/")) return false;
   // Logos are public so the sign-in page can show them.
   if (p.startsWith("/catalog/assets/")) {
     const name = path.basename(p), type = ASSET_TYPES[path.extname(name)];
@@ -241,54 +276,55 @@ async function handle(req, res, url, productList, meta) {
     });
     return true;
   }
-  if (!password()) {
+  const c = Object.values(CATALOGS).find(c => p === c.base || p.startsWith(c.base + "/"));
+  if (!c) return false;
+  const sub = p.slice(c.base.length) || "/";
+  if (!hasPassword(c)) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
-    res.end("The catalog is locked: set CATALOG_PASSWORD in Render → Environment.");
+    res.end(`${c.name} is locked: set its password in the dashboard's Customer catalog tab.`);
     return true;
   }
-  if (!settings.enabled) {
-    if (p === "/catalog" || p === "/catalog/") return offPage(res), true;
+  if (!settingsOf(c).enabled) {
+    if (sub === "/") return offPage(res), true;
     return sendJson(res, 503, { error: "The catalog is turned off." }), true;
   }
-  if (p === "/catalog/logout") {
-    res.setHeader("set-cookie", `${COOKIE}=; Path=/catalog; HttpOnly; SameSite=Lax; Max-Age=0${auth.secure(req) ? "; Secure" : ""}`);
-    res.writeHead(302, { location: "/catalog" }); res.end(); return true;
+  if (sub === "/logout") {
+    res.setHeader("set-cookie", `${c.cookie}=; Path=${c.base}; HttpOnly; SameSite=Lax; Max-Age=0${auth.secure(req) ? "; Secure" : ""}`);
+    res.writeHead(302, { location: c.base }); res.end(); return true;
   }
-  if (p === "/catalog/login") {
-    if (req.method !== "POST") { res.writeHead(302, { location: "/catalog" }); res.end(); return true; }
+  if (sub === "/login") {
+    if (req.method !== "POST") { res.writeHead(302, { location: c.base }); res.end(); return true; }
     const ip = auth.ipOf(req), form = await auth.readForm(req);
-    if (limited(ip)) return loginPage(res, 429, "Too many wrong tries. Wait 15 minutes and try again."), true;
-    if (!password() || !auth.same(String(form.password || "").trim(), password())) { failed(ip); return loginPage(res, 401, "That password isn't right."), true; }
-    fails.delete(ip); setSession(req, res);
-    res.writeHead(303, { location: "/catalog" }); res.end(); return true;
+    if (limited(ip)) return loginPage(c, res, 429, "Too many wrong tries. Wait 15 minutes and try again."), true;
+    if (!checkPassword(c, form.password)) { failed(ip); return loginPage(c, res, 401, "That password isn't right."), true; }
+    fails.delete(ip); setSession(c, req, res);
+    res.writeHead(303, { location: c.base }); res.end(); return true;
   }
-  if (!signedIn(req)) {
-    if (p === "/catalog" || p === "/catalog/") return loginPage(res, 200), true;
-    res.writeHead(401, { "content-type": "application/json", "cache-control": "no-store" });
-    res.end(JSON.stringify({ error: "Sign in required", login: "/catalog" }));
-    return true;
+  if (!signedIn(c, req)) {
+    if (sub === "/") return loginPage(c, res, 200), true;
+    return sendJson(res, 401, { error: "Sign in required", login: c.base }), true;
   }
-  if (p === "/catalog" || p === "/catalog/") {
+  if (sub === "/") {
     fs.readFile(path.join(DIR, "index.html"), (err, data) => {
       if (err) { res.writeHead(500); res.end(); return; }
       res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY" }); res.end(data);
     });
     return true;
   }
-  if (p === "/catalog/data") {
+  if (sub === "/data") {
     try {
-      sendJson(res, 200, customerView(await catalog(productList, meta)));
+      sendJson(res, 200, customerView(c, await catalog(productList, meta)));
     } catch (e) {
-      console.error(`/catalog/data failed: ${e.message}`);
-      res.writeHead(502, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "The product list couldn't be loaded. Try again in a minute." }));
+      console.error(`${p} failed: ${e.message}`);
+      sendJson(res, 502, { error: "The product list couldn't be loaded. Try again in a minute." });
     }
     return true;
   }
-  const m = p.match(/^\/catalog\/img\/([^/]+)$/);
+  const m = sub.match(/^\/img\/([^/]+)$/);
   if (m) {
     const data = await catalog(productList, meta).catch(() => ({ images: new Map(), items: [] }));
     const sku = decodeURIComponent(m[1]), item = data.items.find(i => i.sku === sku);
-    const src = item && listed(item) ? data.images.get(sku) : null;
+    const src = item && listed(item, settingsOf(c)) ? data.images.get(sku) : null;
     if (!src) { res.writeHead(404); res.end(); return true; }
     await proxyImage(res, src);
     return true;
