@@ -160,7 +160,9 @@ http.createServer(async (req, res) => {
     }
     return;
   }
-  if (await catalog.handle(req, res, url, productList, () => ({ fetchedAt: new Date(cache.at).toISOString() }))) return;
+  const catalogMeta = () => ({ fetchedAt: new Date(cache.at).toISOString() });
+  if (await catalog.handle(req, res, url, productList, catalogMeta)) return;
+  if (await catalog.handleAdmin(req, res, url, productList, catalogMeta)) return;
   if (await competitors.handle(req, res, url, productList)) return;
   if (await excel.handle(req, res, url)) return;
   if (await tiktokSales.handle(req, res, url)) return;
