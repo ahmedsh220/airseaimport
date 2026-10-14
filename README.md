@@ -37,6 +37,16 @@ Setup: in the Microsoft Entra admin center, create an app registration, add the 
 
 API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=` (the SKU's row, with which cells are editable), `POST /api/excel/edit` (`{ sku, editor, changes: [{ col, header, expected, value }] }`, needs `x-admin-token`).
 
+## Customer catalog
+
+`/catalog` is the wholesale catalog for customers (`catalog.js`, `catalog/index.html`), laid out like `american_seair_imports_wholesale_2025.xlsx`: brand logos, address and phone, then SKU, UPC, name, category, piece price and case price with a picture of each product, grouped under red category headings (Perfumes, Air Freshner, Deodorant, Car Perfume, Incense, Sunglasses, then Diffusers, Cosmetics, Health & Beauty, Electronics). Customers can search, filter by category, and download what they see as a PDF or an Excel file with the pictures in it.
+
+- It reads the same products API as the dashboard (5-minute cache), so prices follow the API. Opened-box, deleted and discontinued SKUs are left out.
+- Piece price is the API's `cost` (the workbook's WHOLESALE COST) plus `CATALOG_MARKUP_PCT`; case price is piece price × `qty_in_case`. `CATALOG_PRICE=contact` shows "Contact Sales" instead.
+- The API has no picture field, so pictures come from the Jomashop listing data in the API (`igloo_jomashop`), then NocNoc (`igloo_nocnoc`), then any other product with the same UPC. Products with none show "No photo". Pictures are served through `/catalog/img/<sku>`, which only fetches the URL found for that SKU.
+- Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. A signed-in admin can open the catalog too; a catalog sign-in never opens the dashboard or `/api/*`.
+- Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
+
 ## Sign-in
 
-The whole dashboard is locked behind `ADMIN_TOKEN` (`auth.js`). Visitors get a sign-in page; the right token starts a session on that browser for `SESSION_HOURS` (default 6), after which they sign in again. Sessions are tied to the browser that signed in, wrong tokens are limited to 10 tries per 15 minutes per IP, and changing `ADMIN_TOKEN` on Render signs everyone out. Without `ADMIN_TOKEN` set the dashboard serves nothing. Scripts can still call `/api/*` with an `x-admin-token` header. Only `/healthz` is public.
+The whole dashboard is locked behind `ADMIN_TOKEN` (`auth.js`). Visitors get a sign-in page; the right token starts a session on that browser for `SESSION_HOURS` (default 6), after which they sign in again. Sessions are tied to the browser that signed in, wrong tokens are limited to 10 tries per 15 minutes per IP, and changing `ADMIN_TOKEN` on Render signs everyone out. Without `ADMIN_TOKEN` set the dashboard serves nothing. Scripts can still call `/api/*` with an `x-admin-token` header. Only `/healthz` is public. The customer catalog at `/catalog` has its own password (see above).
