@@ -104,7 +104,11 @@
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
   .filterbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 12px;
     padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text); border: 1px solid var(--accent); }
-  details.colpick { margin-bottom: 10px; } details.colpick input { width: auto; padding: 0; }
+  details.colpick { margin-bottom: 10px; }
+  details.colpick > summary { display: inline-block; list-style: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent);
+    padding: 6px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+  details.colpick > summary::-webkit-details-marker { display: none; }
+  details.colpick > summary::before { content: "▸ "; } details.colpick[open] > summary::before { content: "▾ "; } details.colpick input { width: auto; padding: 0; }
   details.colpick .colgrp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
   details.colpick .colgrp label { white-space: nowrap; } details.colpick .colg { flex-basis: 100%; }
   #status { padding: 40px; text-align: center; color: var(--muted); }
@@ -527,7 +531,7 @@ function columnPicker(id, cols, keep = []) {
   const hide = hiddenSet(id), groups = [];
   for (const c of cols) { if (keep.includes(colKey(c))) continue; const g = c.grp || "Product"; let x = groups.find(y => y.g === g); if (!x) groups.push(x = { g, cols: [] }); x.cols.push(c); }
   const shown = cols.filter(c => !hide.has(colKey(c))).length;
-  return `<details class="settings colpick" ${colsOpen ? "open" : ""}><summary>Columns · ${shown} of ${cols.length} shown</summary>
+  return `<details class="settings colpick" ${colsOpen ? "open" : ""}><summary>Choose columns <span class=muted>· ${shown} of ${cols.length} shown</span></summary>
     <div class="row"><button data-colact="all" data-tbl="${id}">Show all</button><button data-colact="none" data-tbl="${id}">Hide all</button></div>
     ${groups.map(x => `<div class="colgrp"><label class="colg"><input type=checkbox data-colgrp="${esc(x.g)}" data-tbl="${id}" ${x.cols.every(c => !hide.has(colKey(c))) ? "checked" : ""}> <b>${esc(x.g)}</b></label>
       ${x.cols.map(c => `<label><input type=checkbox data-colhide="${esc(colKey(c))}" data-tbl="${id}" ${hide.has(colKey(c)) ? "" : "checked"}> ${esc(c.h)}</label>`).join("")}</div>`).join("")}
@@ -794,7 +798,8 @@ let SHEET_COLS = [];
 function sheetCols() {
   const h = H();
   return [
-    { h: "SKU #", v: r => r.sku, t: "text", l: true, grp: "" },
+    // A few SKUs in the API are long names; cut them so they don't stretch the column.
+    { h: "SKU #", v: r => r.sku, f: r => { const k = String(r.sku ?? ""); return k.length > 18 ? `<span title="${esc(k)}">${esc(k.slice(0, 16))}…</span>` : esc(k); }, l: true, grp: "" },
     { h: "Product name", v: r => r.name, f: r => `<span title="${esc(r.name)}">${esc(String(r.name || "").slice(0, 48))}</span>`, l: true, grp: "" },
     { ...TIER, grp: "" },
     { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days), grp: "Inventory" },
