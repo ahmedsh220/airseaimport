@@ -1073,6 +1073,7 @@ function showDetail(r) {
     </tbody></table></div>
     <h4>Vendor quotes</h4>${r._prices.length ? `<div class="facts">${r._prices.map((x, i) => f(VENDORS[x.k] + (i === 0 ? " · cheapest" : ""), `${fmtUsd(x.price)} <span class=muted>${fmtDate(x.date)}</span>`)).join("")}</div>` : `<p class=muted>No vendor quotes in the API.</p>`}`;
   $("detail").showModal();
+  window.excelPanel?.(r);
 }
 
 // ---------- CSV ----------
@@ -1134,5 +1135,6 @@ load();
 if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all.length) render(); });
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
+<script src="excel-edit.js"></script>
 </body>
 </html>

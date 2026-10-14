@@ -24,3 +24,15 @@ How matching works: each product name is cleaned (sizes and words like EDP, spra
 The tab shows our price, the competitors' lowest, median and highest prices, the gap, competitor and our 30-day units, profit at the lowest price using the sheet's TikTok rule, a margin floor price, and a suggested price: a cent under the cheapest competitor, but never below the floor.
 
 API: `GET /api/competitors` returns results, `GET /api/competitors/status` checks the key, `POST /api/competitors/refresh` (`{ "skus": [...] }` is optional) and `POST /api/competitors/override` (`{ sku, productId, action: "ignore" | "pin" | "clear" }`) need `x-admin-token` when `ADMIN_TOKEN` is set.
+
+## Editing the Excel sheet
+
+Each product's detail view has an **Excel sheet** section showing that SKU's row from the master tab of the workbook in OneDrive (`TIKTOK PRICING 786110.xlsx`, sheet `0. MASTER` by default). Type in any column and press **Save to Excel**; the server writes the cells through Microsoft Graph, the same as someone editing the file in Excel Online, so anything syncing from the live file picks the change up.
+
+- Formula columns (everything looked up from Query1 or calculated) are shown read only and are never overwritten. Values starting with `=` are refused.
+- A save checks each cell still holds what the page loaded; if someone changed it in Excel meanwhile, that field is rejected so their edit isn't lost.
+- Saving asks for `ADMIN_TOKEN` and a name; every change is logged to `excel-edits.jsonl` in the data dir (`GET /api/excel/log`).
+
+Setup: in the Microsoft Entra admin center, create an app registration, add the Microsoft Graph **application** permission `Files.ReadWrite.All`, grant admin consent, and create a client secret. Set `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` (and `ADMIN_TOKEN`) in Render → Environment. Other options are in `.env.example`.
+
+API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=` (the SKU's row, with which cells are editable), `POST /api/excel/edit` (`{ sku, editor, changes: [{ col, header, expected, value }] }`, needs `x-admin-token`).
