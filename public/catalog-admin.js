@@ -1,8 +1,8 @@
-// "Customer catalog" tab: for each customer catalog (Catalog 1 at /catalog, Catalog 2 at /catalog2) the
+// Catalog management page (catalog-admin.html): for each customer catalog (Catalog 1 at /catalog, Catalog 2 at /catalog2) the
 // owner turns it on or off, chooses whether piece and case prices show, sets its password, and picks
 // which SKUs are in it, with optional per-SKU prices. Settings are saved through /api/catalog/settings
 // (catalog.js); each catalog and its PDF/Excel downloads follow them within a minute.
-// Uses $, esc, fmtUsd, ST and render from index.html.
+// Uses $, esc, fmtUsd, ST and render from catalog-admin.html.
 (() => {
   const css = document.createElement("style");
   css.textContent = `
@@ -27,7 +27,8 @@
     .ca-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
     .ca-tabs small { font-weight: 400; opacity: .8; margin-left: 4px; }
     .ca-pw { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
-    .ca-pw input { flex: 0 1 260px; }`;
+    .ca-pw input { flex: 0 1 260px; }
+    .ca-opts label.rule { display: block; margin-bottom: 6px; }`;
   document.head.appendChild(css);
 
   const CA = { data: null, cur: "1", per: {}, loading: false, error: "", q: "", filter: "all", saving: false, limit: 300 };
@@ -38,7 +39,11 @@
   const copy = s => JSON.parse(JSON.stringify(s));
   const bySku = () => CA.index || (CA.index = new Map(CA.data.items.map(i => [i.sku, i])));
   const isIn = (i, s = CA.draft) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
-  const price = i => CA.draft.prices[i.sku] ?? i.piece;
+  // Same rules as catalog.js pricesFor(): piece = cost + piece markup (or the SKU's own price), case = (cost + case markup) × qty.
+  const r2 = n => Math.round(n * 100) / 100;
+  const rulePiece = i => i.cost != null ? r2(i.cost * (1 + (+CA.draft.pieceMarkupPct || 0) / 100)) : null;
+  const price = i => CA.draft.prices[i.sku] ?? rulePiece(i);
+  const caseUnit = i => i.cost != null ? r2(i.cost * (1 + (+CA.draft.caseMarkupPct || 0) / 100)) : null;
   const usd = v => v == null ? "<span class=muted>Contact Sales</span>" : fmtUsd(v);
   const when = t => t ? new Date(t).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "";
 
@@ -80,8 +85,12 @@
         <span class="muted">Saved with the changes below. Changing it signs out everyone using this catalog.</span></div>
       <div class="ca-opts">
         <label><input type="checkbox" data-ca="enabled" ${d.enabled ? "checked" : ""}><span><b>Catalog is on</b><small>Turned off, customers see "The catalog is unavailable right now".</small></span></label>
-        <label><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost from the API, or the price you set for a SKU below.</small></span></label>
-        <label><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>Piece price × qty in case.</small></span></label>
+        <label><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost + the piece markup, or the price you set for a SKU below.</small></span></label>
+        <label><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>(Wholesale cost + the case markup) × qty in case.</small></span></label>
+        <fieldset><legend>Wholesale pricing rules</legend>
+          <label class="rule">Piece price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="pieceMarkupPct" value="${d.pieceMarkupPct}" style="width:72px">%</label>
+          <label class="rule">Case price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="caseMarkupPct" value="${d.caseMarkupPct}" style="width:72px">% per piece</label>
+        </fieldset>
         <fieldset><legend>Which products</legend>
           <label><input type="radio" name="caMode" data-ca="mode" value="all" ${d.mode === "all" ? "checked" : ""}><span>Every product in the API, except the ones you remove<small>New API products appear on their own.</small></span></label>
           <label><input type="radio" name="caMode" data-ca="mode" value="selected" ${d.mode === "selected" ? "checked" : ""}><span>Only the SKUs you add<small>New API products stay out until you add them.</small></span></label>
@@ -121,12 +130,12 @@
         <td><input type="checkbox" data-ca-sku="${esc(i.sku)}" ${on ? "checked" : ""} title="In the catalog"></td>
         <td class=l>${esc(i.sku)}${!i.auto ? ' <span class="pill muted" title="Opened box, deleted or discontinued: left out unless you add it">internal</span>' : ""}</td>
         <td class=l>${esc(i.name)}</td><td class=l>${esc(i.category)}</td>
-        <td>${usd(i.piece)}</td>
-        <td><input type="number" min="0" step="0.01" data-ca-price="${esc(i.sku)}" value="${own ? d.prices[i.sku] : ""}" placeholder="${i.piece ?? ""}" title="Leave empty to use the API price"></td>
-        <td>${i.qty ?? "<span class=muted>—</span>"}</td><td>${usd(p != null && i.qty ? Math.round(p * i.qty * 100) / 100 : null)}</td></tr>`;
+        <td>${usd(i.cost)}</td><td>${usd(rulePiece(i))}</td>
+        <td><input type="number" min="0" step="0.01" data-ca-price="${esc(i.sku)}" value="${own ? d.prices[i.sku] : ""}" placeholder="${rulePiece(i) ?? ""}" title="Leave empty to use the rule"></td>
+        <td>${i.qty ?? "<span class=muted>—</span>"}</td><td>${usd(caseUnit(i))}</td><td>${usd(caseUnit(i) != null && i.qty ? r2(caseUnit(i) * i.qty) : null)}</td></tr>`;
     }).join("");
-    return `<div class="tablewrap" id="caTable"><table><thead><tr><th>In</th><th class=l>SKU</th><th class=l>Name</th><th class=l>Category</th><th>API price</th><th>Your price</th><th>Qty / case</th><th>Case price</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="8" class="muted" style="text-align:center;padding:20px">No products match.</td></tr>`}</tbody></table>
+    return `<div class="tablewrap" id="caTable"><table><thead><tr><th>In</th><th class=l>SKU</th><th class=l>Name</th><th class=l>Category</th><th>Wholesale cost</th><th>Piece (rule)</th><th>Your piece price</th><th>Qty / case</th><th>Case per piece</th><th>Case price</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="10" class="muted" style="text-align:center;padding:20px">No products match.</td></tr>`}</tbody></table>
       ${list.length > CA.limit ? `<p class="muted" style="margin:8px">Showing ${CA.limit.toLocaleString()} of ${list.length.toLocaleString()}. <a href="#" data-ca-do="more">Show all</a> or search to narrow it down.</p>` : ""}</div>`;
   }
 
@@ -147,6 +156,7 @@
       changed(); paint(); return;
     }
     if (t.dataset.ca) { d[t.dataset.ca] = t.checked; changed(); paint(); return; }
+    if (t.dataset.caPct) { const n = Number(t.value); if (t.value.trim() === "" || !Number.isFinite(n)) return; d[t.dataset.caPct] = n; changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caSku) { setIn(bySku().get(t.dataset.caSku), t.checked); changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caPrice != null) {
       const sku = t.dataset.caPrice, v = t.value.trim(), n = Number(v);

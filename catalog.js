@@ -3,7 +3,7 @@
 // Built from the live products API on every load, so prices follow the API. Only what the printed
 // catalog shows leaves the server: SKU, UPC, name, category, piece and case price, a "new" flag and a
 // picture. Costs, vendors, stock and sales stay private. The owner controls both from the dashboard's
-// Customer catalog tab (public/catalog-admin.js).
+// Catalog management page (public/catalog-admin.html).
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
@@ -116,13 +116,9 @@ function addedAt(p) {
   return m ? Date.parse(`${m[3]}-${m[1]}-${m[2]}T00:00:00Z`) : Date.parse(p.created_at || "") || 0;
 }
 
-// Price rule (Render → Environment): CATALOG_PRICE=cost shows the API's cost field (the pricing
-// workbook's WHOLESALE COST) plus CATALOG_MARKUP_PCT; CATALOG_PRICE=contact shows "Contact Sales".
-function priceOf(p) {
-  if ((process.env.CATALOG_PRICE || "cost").trim().toLowerCase() === "contact") return null;
-  const c = num(p.cost);
-  return c > 0 ? round2(c * (1 + num(process.env.CATALOG_MARKUP_PCT) / 100)) : null;
-}
+// Wholesale cost from the API (the pricing workbook's WHOLESALE COST). The API has no selling price,
+// so each catalog's prices are this cost plus the markups set in Catalog management.
+const costOf = p => { const c = num(p.cost); return c > 0 ? c : null; };
 
 // Every API product with its catalog fields. auto: the catalog would include it on its own
 // (internal SKUs such as opened boxes, deleted and discontinued are left out unless added by hand).
@@ -144,18 +140,19 @@ function build(list) {
     const qty = Math.round(num(p.qty_in_case));
     items.push({
       sku, upc, name: String(p.name || "").replace(/^\s*\*+\s*/, "").trim(), category, section,
-      piece: priceOf(p), qty: qty > 0 ? qty : null, isNew: Date.now() - addedAt(p) < newDays * 864e5, img: !!img, auto,
+      cost: costOf(p), qty: qty > 0 ? qty : null, isNew: Date.now() - addedAt(p) < newDays * 864e5, img: !!img, auto,
     });
   }
   items.sort((a, b) => SECTIONS.indexOf(a.section) - SECTIONS.indexOf(b.section) || a.name.localeCompare(b.name) || a.sku.localeCompare(b.sku));
   return { items, images };
 }
 
-// ---- Settings the owner controls from the dashboard's Customer catalog tab, one set per catalog ----
+// ---- Settings the owner controls from the dashboard's Catalog management page, one set per catalog ----
 // Saved next to the competitor results, on the Render disk when COMPETITOR_DATA_DIR points there.
 const DATA_DIR = process.env.CATALOG_DATA_DIR || process.env.COMPETITOR_DATA_DIR || path.join(__dirname, "data");
 const SETTINGS_FILE = path.join(DATA_DIR, "catalog-settings.json");
-const BASE = { enabled: true, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
+// Wholesale pricing rules: piece price = cost + pieceMarkupPct, case price = (cost + caseMarkupPct) × qty in case.
+const BASE = { enabled: true, pieceMarkupPct: 12, caseMarkupPct: 8, mode: "all", hidden: [], added: [], prices: {}, passwordHash: null, updatedAt: null, updatedBy: null };
 const fresh = c => ({ ...BASE, ...c.defaults });
 let store = {};
 try {
@@ -170,8 +167,10 @@ function clean(c, input, by) {
     const n = Number(v); if (String(k).trim() && Number.isFinite(n) && n >= 0) prices[String(k).trim()] = round2(n);
   }
   const pw = typeof input.newPassword === "string" ? input.newPassword.trim() : "";
+  const pct = (v, d) => { const n = Number(v); return Number.isFinite(n) && n >= -100 && n <= 1000 ? round2(n) : d; };
   return {
-    enabled: input.enabled !== false, showPrices: input.showPrices === true, showCasePrices: input.showCasePrices === true,
+    enabled: input.enabled !== false, pieceMarkupPct: pct(input.pieceMarkupPct, BASE.pieceMarkupPct), caseMarkupPct: pct(input.caseMarkupPct, BASE.caseMarkupPct),
+    showPrices: input.showPrices === true, showCasePrices: input.showCasePrices === true,
     mode: input.mode === "selected" ? "selected" : "all", hidden: skuList(input.hidden), added: skuList(input.added), prices,
     passwordHash: pw ? hashPassword(pw) : input.clearPassword ? null : settingsOf(c).passwordHash,
     updatedAt: new Date().toISOString(), updatedBy: String(by || "").slice(0, 60) || null,
@@ -185,6 +184,12 @@ function save(c, next) {
   store = all;
 }
 // Whether a product shows in the catalog under its settings.
+// Prices under a catalog's rules. A price set for the SKU in Catalog management replaces the piece price.
+function pricesFor(i, s) {
+  const piece = s.prices[i.sku] ?? (i.cost != null ? round2(i.cost * (1 + s.pieceMarkupPct / 100)) : null);
+  const unit = i.cost != null ? round2(i.cost * (1 + s.caseMarkupPct / 100)) : null;
+  return { piece, caseUnit: unit, case: unit != null && i.qty ? round2(unit * i.qty) : null };
+}
 const listed = (i, s) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
 // What the dashboard sees of a catalog's settings: everything but the password hash.
 function publicSettings(c) {
@@ -203,10 +208,10 @@ async function catalog(productList, meta) {
 function customerView(c, data) {
   const s = settingsOf(c), hidden = new Set(s.hidden), added = new Set(s.added);
   const items = data.items.filter(i => !hidden.has(i.sku) && (added.has(i.sku) || (s.mode === "all" && i.auto))).map(i => {
-    const p = s.prices[i.sku] ?? i.piece;
+    const pr = pricesFor(i, s);
     return { sku: i.sku, upc: i.upc, name: i.name, category: i.category, section: i.section, isNew: i.isNew, img: i.img,
-      piece: s.showPrices ? p : undefined, case: s.showCasePrices ? (p != null && i.qty ? round2(p * i.qty) : null) : undefined,
-      qty: s.showCasePrices ? i.qty : undefined };
+      piece: s.showPrices ? pr.piece : undefined, case: s.showCasePrices ? pr.case : undefined,
+      caseUnit: s.showCasePrices ? pr.caseUnit : undefined, qty: s.showCasePrices ? i.qty : undefined };
   });
   return { catalog: c.name, fetchedAt: data.fetchedAt, sections: data.sections, showPrices: s.showPrices, showCasePrices: s.showCasePrices, items };
 }
@@ -281,7 +286,7 @@ async function handle(req, res, url, productList, meta) {
   const sub = p.slice(c.base.length) || "/";
   if (!hasPassword(c)) {
     res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
-    res.end(`${c.name} is locked: set its password in the dashboard's Customer catalog tab.`);
+    res.end(`${c.name} is locked: set its password on the dashboard's Catalog management page.`);
     return true;
   }
   if (!settingsOf(c).enabled) {

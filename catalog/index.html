@@ -121,7 +121,7 @@ function render() {
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${i.img ? `<img loading="lazy" src="${BASE}/img/${encodeURIComponent(i.sku)}" alt="${esc(i.name)}" data-zoom="${esc(i.sku)}" title="Click for a bigger picture" onerror="this.outerHTML='<div class=none>No photo</div>'">` : '<div class="none">No photo</div>'}</td>
     <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td>${esc(i.name)}</td><td>${esc(i.category)}</td>
-    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.case != null && i.qty ? `<small>${i.qty} pcs</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
+    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.case != null && i.qty ? `<small>${i.qty} pcs${i.caseUnit != null ? ` × ${money(i.caseUnit)}` : ""}</small>` : ""}</td>`).join("")}</tr>`).join("")).join("");
 }
 
 async function load() {
