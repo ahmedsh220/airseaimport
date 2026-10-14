@@ -363,7 +363,7 @@ async function load(force) {
 
 // ---------- state ----------
 let all = [], rows = [], charts = {};
-const ST = (() => { const d = { tab: "overview", plat: "", horizon: 7, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "" };
+const ST = (() => { const d = { tab: "overview", plat: "", horizon: 7, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "", cover: 90, vf: "all" };
   try { return { ...d, ...JSON.parse(localStorage.getItem("asi-v4-state") || "{}"), groupPick: null, vendor: "" }; } catch { return d; } })();
 const saveState = () => { try { localStorage.setItem("asi-v4-state", JSON.stringify(ST)); } catch {} };
 const SORT = {}, TABLES = {};
@@ -453,7 +453,7 @@ const PROD = { h: "Product", v: r => r.name, f: prodCell, prod: true, l: true };
 const TIER = { h: "Tier", v: r => r._tier, f: tierTag, l: true };
 
 // ---------- layout ----------
-const TABS = { overview: "Overview", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
+const TABS = { overview: "Overview", actions: "Actions", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
 function render() {
   saveState();
   $("tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${ST.tab === k ? "active" : ""}">${v}</button>`).join("");
@@ -462,7 +462,7 @@ function render() {
   renderSide();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = ({ overview: overviewHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
+  $("main").innerHTML = ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
   if (ST.tab === "overview") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
 }
@@ -713,6 +713,80 @@ function sheetHtml() {
 }
 
 // ---------- Vendors ----------
+// ---------- Actions ----------
+// Two money lists: stock beyond the cover target (cash to free up) and products a vendor quotes cheaper than we pay.
+const QUOTE_FRESH_DAYS = 90;
+// Lowest TikTok price that doesn't lose money: 20% fee, and we pay shipping at $30 and up (as in PL).
+function tiktokFloor(r) {
+  if (r._Q == null) return null;
+  const noShip = r._Q / 0.8;
+  if (noShip < 30) return noShip;
+  return Math.max(30, (r._Q + r._AG) / 0.8);
+}
+function overstockList() {
+  const cover = ST.cover;
+  return rows.filter(r => r._qoh > 0 && r._AN != null && (!ST.plat || r._ch[ST.plat] > 0)).map(r => {
+    const day = dayFor(r), excess = day > 0 ? Math.max(0, r._qoh - day * cover) : r._qoh;
+    const days = day > 0 ? r._qoh / day : null;
+    const action = day <= 0 ? "Liquidate" : days > 365 ? "Mark down" : "Bundle / promo";
+    return { ...r, _xs: excess, _xsValue: excess * r._AN, _xsDays: days, _action: action, _floor: tiktokFloor(r) };
+  }).filter(r => r._xs >= 1);
+}
+function savingsList() {
+  return rows.filter(r => r._AN > 0 && r._best != null && r._best < r._AN - 0.005 && dayFor(r) > 0).map(r => {
+    const save = r._AN - r._best, q = r._prices[0];
+    const age = q.date ? (Date.now() - q.date) / 864e5 : null;
+    const fresh = age != null && age <= QUOTE_FRESH_DAYS, suspect = r._best < r._AN * 0.5;
+    return { ...r, _save: save, _yearSave: save * dayFor(r) * 365, _orderSave: save * r._orderQty, _qDate: q.date,
+      _fresh: fresh, _suspect: suspect,
+      _note: suspect ? "Over 50% cheaper: check size" : !q.date ? "Quote has no date" : !fresh ? `Quote over ${QUOTE_FRESH_DAYS} days old` : "" };
+  });
+}
+function actionsHtml() {
+  const over = overstockList(), noSale = over.filter(r => dayFor(r) <= 0);
+  const stockValue = sum(rows, r => r._value), xsValue = sum(over, r => r._xsValue);
+  const allSave = savingsList(), solid = allSave.filter(r => r._fresh && !r._suspect);
+  const save = ST.vf === "solid" ? solid : allSave;
+  const seg = (attr, cur, opts) => `<div class="seg">${opts.map(([k, v]) => `<button data-${attr}="${k}" class="${String(cur) === String(k) ? "active" : ""}">${v}</button>`).join("")}</div>`;
+  const kpi = (label, value, sub, alert) => `<div class="kpi ${alert ? "alert" : ""}"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
+  const qDate = r => r._qDate ? `<span class="${r._fresh ? "" : "warn"}">${fmtDate(r._qDate)}</span>` : `<span class=muted>no date</span>`;
+  return `<p class="lead">Where the money is${ST.plat ? ` on <b>${platName(ST.plat)}</b>` : ""}: stock you could turn back into cash, and products a vendor sells cheaper than you pay now. Click a row for the full breakdown; <b>Export CSV</b> saves the vendor list.</p>
+  <section class="kpis">
+    ${kpi("Cash tied up in overstock", fmtUsd(xsValue), `${fmtInt(over.length)} SKUs · ${stockValue ? fmtPct(xsValue / stockValue) : "—"} of stock value`, xsValue)}
+    ${kpi("Of that, not selling at all", fmtUsd(sum(noSale, r => r._xsValue)), `${fmtInt(noSale.length)} SKUs with no sales in the window`)}
+    ${kpi("Vendor savings, per year", fmtUsd(sum(allSave, r => r._yearSave)), `${fmtInt(allSave.length)} selling SKUs with a cheaper quote`)}
+    ${kpi("Savings on recent quotes only", fmtUsd(sum(solid, r => r._yearSave)), `${fmtInt(solid.length)} SKUs · quote within ${QUOTE_FRESH_DAYS} days, under 50% off`)}
+  </section>
+  <section class="card"><div class="head"><div><h3>Overstock: cash to free up</h3>
+    <p class="hint" style="margin:0">Units above ${ST.cover} days of supply at the current day average, valued at platform cost. TikTok floor is the lowest TikTok price that still breaks even (20% fee, shipping from $30).</p></div>
+    <div class="row"><label class="t">Keep</label>${seg("cover", ST.cover, [[60, "60 days"], [90, "90 days"], [180, "180 days"]])}</div></div>
+    ${table("overstock", [PROD, TIER,
+      { h: "Live inv", v: r => r._qoh },
+      { h: "Day ave", v: dayFor, t: "1" },
+      { h: "Days of stock", v: r => r._xsDays, f: r => r._xsDays == null ? "<span class=muted>no sales</span>" : fmtInt(r._xsDays) },
+      { h: "Excess units", v: r => r._xs, total: true },
+      { h: "Cash tied up", v: r => r._xsValue, t: "usd", total: true },
+      { h: "TikTok price", v: r => r._live.tiktok, t: "usd" },
+      { h: "TikTok floor", v: r => r._floor, t: "usd", tip: "Break-even TikTok price" },
+      { h: "Action", v: r => r._action, l: true, f: r => `<span class="pill ${dayFor(r) <= 0 ? "bad" : r._xsDays > 365 ? "warn" : "muted"}">${esc(r._action)}</span>` },
+    ], over, { sort: 6, limit: 200, onRow: showDetail, height: "520px" })}</section>
+  <section class="card"><div class="head"><div><h3>Switch vendor: cheaper quotes</h3>
+    <p class="hint" style="margin:0">Selling products where the cheapest vendor quote is under what you pay now (platform cost). Yearly savings = saving per unit × day average × 365. Confirm the quote before ordering.</p></div>
+    <div class="row"><label class="t">Show</label>${seg("vf", ST.vf, [["all", "All quotes"], ["solid", "Recent quotes only"]])}</div></div>
+    ${table("savings", [PROD,
+      { h: "Current vendor", v: r => r._vendor, t: "text", l: true },
+      { h: "Pay now", v: r => r._AN, t: "usd" },
+      { h: "Best quote", v: r => r._best, t: "usd" },
+      { h: "From", v: r => VENDORS[r._bestVendor], t: "text", l: true },
+      { h: "Quote date", v: r => r._qDate, f: qDate },
+      { h: "Save / unit", v: r => r._save, t: "usd" },
+      { h: "Day ave", v: dayFor, t: "1" },
+      { h: "On next order", v: r => r._orderSave, t: "usd", total: true, tip: "Saving per unit × the reorder quantity" },
+      { h: "Per year", v: r => r._yearSave, t: "usd", total: true },
+      { h: "Check", v: r => r._note, l: true, f: r => r._note ? `<span class="pill warn">${esc(r._note)}</span>` : `<span class="pill good">ok</span>` },
+    ], save, { sort: 9, limit: 300, onRow: showDetail, main: "vendor-savings", height: "520px" })}</section>`;
+}
+
 function vendorsHtml() {
   if (!ST.vendor) {
     const vl = Object.keys(VENDORS).map(k => {
@@ -932,7 +1006,7 @@ function exportCsv() {
 
 // ---------- events ----------
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#horizon button");
+  const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#horizon button");
   if (!t) return;
   if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.groupPick = null; ST.vendor = ""; render(); window.scrollTo(0, 0); }
   else if (t.dataset.plat !== undefined) { ST.plat = t.dataset.plat; ST.groupPick = null; render(); }
@@ -947,6 +1021,8 @@ document.addEventListener("click", e => {
   }
   else if (t.dataset.show) { ST.show = t.dataset.show; render(); }
   else if (t.dataset.pf) { ST.plFilter = t.dataset.pf; render(); }
+  else if (t.dataset.cover) { ST.cover = +t.dataset.cover; render(); }
+  else if (t.dataset.vf) { ST.vf = t.dataset.vf; render(); }
   else if (t.id === "ungroup") { ST.groupPick = null; render(); }
   else if (t.id === "unvendor") { ST.vendor = ""; render(); }
   else if (t.id === "resetSet") { SET = { ...SETTING_DEFAULTS }; saveSettings(); reEnrich(); }
