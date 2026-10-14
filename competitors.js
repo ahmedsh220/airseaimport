@@ -38,7 +38,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ---------- Euka client ----------
 // GET with query params, or POST with a JSON body when `body` is given.
 let lastCall = null; // last Euka response, shown on /api/competitors/status
-async function euka(p, params = {}, attempt = 1, body = null) {
+// opts.fast429: give up on a rate limit at once (with err.retryAfter) instead of waiting it out.
+async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
   const u = new URL(CFG.base + p);
   for (const [k, v] of Object.entries(params)) {
     if (v == null || v === "") continue;
@@ -52,16 +53,21 @@ async function euka(p, params = {}, attempt = 1, body = null) {
   } catch (e) {
     console.warn(`Euka ${p} attempt ${attempt} failed: ${e.message}`);
     lastCall = { at: new Date().toISOString(), path: p, error: e.message };
-    if (attempt < 4) { await sleep(attempt * 2000); return euka(p, params, attempt + 1, body); }
+    if (attempt < 4) { await sleep(attempt * 2000); return euka(p, params, attempt + 1, body, opts); }
     throw new Error(`Euka unreachable: ${e.message}`);
   }
   lastCall = { at: new Date().toISOString(), path: p, status: res.status };
+  if (res.status === 429 && opts.fast429) {
+    const err = new Error(`Euka rate limit on ${p}`);
+    err.status = 429; err.retryAfter = +res.headers.get("retry-after") || null;
+    throw err;
+  }
   if (res.status === 429 || res.status >= 500) {
     if (attempt < 5) {
       const wait = (+res.headers.get("retry-after") || attempt * 3) * 1000;
       console.warn(`Euka ${p} HTTP ${res.status}, retrying in ${Math.round(Math.min(wait, 60000) / 1000)}s (attempt ${attempt})`);
       await sleep(Math.min(wait, 60000));
-      return euka(p, params, attempt + 1, body);
+      return euka(p, params, attempt + 1, body, opts);
     }
   }
   const text = await res.text();
@@ -76,7 +82,7 @@ async function euka(p, params = {}, attempt = 1, body = null) {
 // Market Intelligence wraps results as { success, data, message, code }.
 const MI_BASE = { region: "US", language: "en-US", currency: "USD", date_range: "last30Day" };
 async function mi(p, body) {
-  const r = await euka(`/market-intelligence/tiktok/${p}`, {}, 1, { ...MI_BASE, region: CFG.region === "UK" ? "GB" : CFG.region, ...body });
+  const r = await euka(`/market-intelligence/tiktok/${p}`, {}, 1, { ...MI_BASE, region: CFG.region === "UK" ? "GB" : CFG.region, ...body }, { fast429: true });
   if (r && r.success === false) {
     const err = new Error(`Euka market intelligence: ${r.message || r.code || "request failed"}`);
     err.status = 400; throw err;
@@ -196,9 +202,21 @@ let progress = { done: 0, total: 0, startedAt: null, lastError: null };
 let me = { at: 0, ok: null, info: null, error: null };
 // Whether Market Intelligence answered during the current/last run. Reset at the start of each run.
 let miState = { ok: null, error: null, at: null };
-const useMi = () => CFG.sources.includes("market") && miState.ok !== false;
+const useMi = () => {
+  if (!CFG.sources.includes("market")) return false;
+  if (miState.until && Date.now() >= miState.until) miState = { ok: null, error: null, at: null };
+  return miState.ok !== false;
+};
 const useSocial = () => CFG.sources.includes("social");
 function miFailed(e) {
+  // Rate limited: carry on with product search alone and try market intelligence again later,
+  // rather than stalling every SKU on minute-long retries.
+  if (e.status === 429) {
+    const until = Date.now() + Math.max((e.retryAfter || 0) * 1000, 30 * 60 * 1000);
+    if (miState.ok !== false) console.warn(`Market intelligence rate limited; product search only until ${new Date(until).toISOString()}`);
+    miState = { ok: false, error: `Euka rate limit, paused until ${new Date(until).toISOString()}`, at: new Date().toISOString(), until };
+    return true;
+  }
   // 401 means the key itself is bad, which the social search reports too. Anything else in the 4xx
   // range means MI isn't available to this key, so stop asking for this run.
   if (e.status && e.status >= 400 && e.status < 500 && e.status !== 429) {
@@ -307,7 +325,7 @@ async function run(list, onlySkus, minAgeHours = CFG.refreshHours) {
   // Named SKUs (a re-check or pin from the page) are searched now; a pass only takes SKUs that are due.
   const todo = onlySkus ? list.filter(p => p.sku && p.name && onlySkus.includes(p.sku)) : dueList(list, minAgeHours);
   progress = { done: 0, total: todo.length, startedAt: new Date().toISOString(), lastError: null };
-  miState = { ok: null, error: null, at: null };
+  if (!miState.until) miState = { ok: null, error: null, at: null };
   const full = !onlySkus;
   if (full && !todo.length) { job = null; return Promise.resolve(); }
   if (full) { state.runAt = progress.startedAt; state.finishedAt = null; }
