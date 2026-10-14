@@ -24,7 +24,9 @@ const CFG = {
   refreshHours: +env("COMPETITOR_REFRESH_HOURS", "12"),
   // A SKU is never searched again within this many hours, even from "Refresh all now".
   minGapHours: +env("COMPETITOR_MIN_GAP_HOURS", "2"),
-  concurrency: Math.max(1, +env("EUKA_CONCURRENCY", "3")),
+  concurrency: Math.max(1, +env("EUKA_CONCURRENCY", "2")),
+  // Euka rate-limits the key, so every call is spaced at least this far apart across all workers.
+  minIntervalMs: +env("EUKA_MIN_INTERVAL_MS", "1500"),
   delayMs: +env("EUKA_DELAY_MS", "250"),
   minScore: +env("COMPETITOR_MIN_SCORE", "0.6"),
   ourShops: env("OUR_TIKTOK_SHOP_NAMES", "").split(",").map(s => s.trim().toLowerCase()).filter(Boolean),
@@ -38,8 +40,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // ---------- Euka client ----------
 // GET with query params, or POST with a JSON body when `body` is given.
 let lastCall = null; // last Euka response, shown on /api/competitors/status
+// Shared pacing: one call per minIntervalMs, and after a 429 every worker waits until pauseUntil.
+let nextSlot = 0, pauseUntil = 0, backoffMs = 0;
+async function pace() {
+  for (;;) {
+    const now = Date.now(), at = Math.max(nextSlot, pauseUntil);
+    if (at <= now) { nextSlot = now + CFG.minIntervalMs; return; }
+    await sleep(at - now);
+  }
+}
+function rateLimited(res) {
+  const ra = +res.headers.get("retry-after");
+  backoffMs = Math.min(Math.max(backoffMs * 2, 15000), 10 * 60 * 1000);
+  const wait = ra > 0 && ra < 15 * 60 ? ra * 1000 : backoffMs;
+  pauseUntil = Math.max(pauseUntil, Date.now() + wait);
+  return wait;
+}
+
 // opts.fast429: give up on a rate limit at once (with err.retryAfter) instead of waiting it out.
 async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
+  await pace();
   const u = new URL(CFG.base + p);
   for (const [k, v] of Object.entries(params)) {
     if (v == null || v === "") continue;
@@ -62,14 +82,17 @@ async function euka(p, params = {}, attempt = 1, body = null, opts = {}) {
     err.status = 429; err.retryAfter = +res.headers.get("retry-after") || null;
     throw err;
   }
-  if (res.status === 429 || res.status >= 500) {
-    if (attempt < 5) {
-      const wait = (+res.headers.get("retry-after") || attempt * 3) * 1000;
-      console.warn(`Euka ${p} HTTP ${res.status}, retrying in ${Math.round(Math.min(wait, 60000) / 1000)}s (attempt ${attempt})`);
-      await sleep(Math.min(wait, 60000));
-      return euka(p, params, attempt + 1, body, opts);
-    }
+  if (res.status === 429 && attempt < 8) {
+    const wait = rateLimited(res);
+    console.warn(`Euka ${p} rate limited; all calls paused ${Math.round(wait / 1000)}s (attempt ${attempt})`);
+    return euka(p, params, attempt + 1, body, opts);
   }
+  if (res.status >= 500 && attempt < 5) {
+    console.warn(`Euka ${p} HTTP ${res.status}, retrying in ${attempt * 3}s (attempt ${attempt})`);
+    await sleep(attempt * 3000);
+    return euka(p, params, attempt + 1, body, opts);
+  }
+  if (res.ok) backoffMs = 0;
   const text = await res.text();
   if (!res.ok) {
     const err = new Error(`Euka HTTP ${res.status}: ${text.slice(0, 600).replace(/\s+/g, " ")}`);
@@ -206,7 +229,7 @@ async function enrich(m) {
 let state = load(FILE, { runAt: null, finishedAt: null, skus: {}, errors: 0 });
 // Results from before product search sent a brandId all failed with "Input validation failed";
 // drop them so those SKUs are searched again now rather than after the retry gap.
-for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed/.test(v.error || "")) delete state.skus[k];
+for (const [k, v] of Object.entries(state.skus)) if (/Input validation failed|HTTP 429/.test(v.error || "")) delete state.skus[k];
 let overrides = load(OVERRIDES, {}); // { sku: { ignore: [productId], pin: [productId] } }
 let job = null;
 let progress = { done: 0, total: 0, startedAt: null, lastError: null };
@@ -278,7 +301,8 @@ async function searchSku(pr, ownIds) {
     }
     if (socialErr && !useMi()) throw socialErr;
     const good = [...seen.values()].filter(x => x.score >= CFG.minScore).length;
-    if (good >= CFG.perSku) break;
+    // Shorter fallback searches only run when nothing matched yet, to save rate-limited calls.
+    if (good >= 1) break;
     if (CFG.delayMs) await sleep(CFG.delayMs);
   }
   for (const id of pin) {
