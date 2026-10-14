@@ -102,6 +102,8 @@
   .coverage summary { cursor: pointer; } details.coverage { padding: 5px 12px; }
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
   details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
+  .filterbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 12px;
+    padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text); border: 1px solid var(--accent); }
   details.colpick { margin-bottom: 10px; } details.colpick input { width: auto; padding: 0; }
   details.colpick .colgrp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
   details.colpick .colgrp label { white-space: nowrap; } details.colpick .colg { flex-basis: 100%; }
@@ -378,7 +380,7 @@ async function load(force) {
 
 // ---------- state ----------
 let all = [], rows = [], charts = {};
-const ST = (() => { const d = { tab: "overview", plat: "", horizon: 7, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "", cover: 90, vf: "all" };
+const ST = (() => { const d = { tab: "overview", plat: "", horizon: 7, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "", cover: 90, vf: "all", sheetFilter: "" };
   try { return { ...d, ...JSON.parse(localStorage.getItem("asi-v4-state") || "{}"), groupPick: null, vendor: "" }; } catch { return d; } })();
 const saveState = () => { try { localStorage.setItem("asi-v4-state", JSON.stringify(ST)); } catch {} };
 const SORT = {}, TABLES = {};
@@ -583,12 +585,22 @@ function renderSide() {
 }
 
 // ---------- Overview ----------
+// Overview tiles and the Sheet view share these, so a tile's count matches the rows it opens.
+// sort: the sheet column key to sort by. allPlats: the tile ignores the platform focus.
+const TILE_FILTERS = {
+  top: { label: () => "Selling products, by projected sales", test: r => dayFor(r) > 0, sort: ["Next", false] },
+  reorder: { label: () => "Reorder now", test: r => r._trigger, sort: ["Order cost", false] },
+  runout: { label: () => `Runs out within ${H()} days`, test: r => r._days != null && r._days > 0 && r._days <= H(), sort: ["Days of stock", true] },
+  out: { label: () => "Out of stock, still selling", test: r => r._qoh <= 0 && r._sold > 0, sort: ["Sold", false] },
+  stock: { label: () => "All products, by stock value", test: () => true, sort: ["Stock value", false], allPlats: true },
+};
+const onPlat = r => !ST.plat || r._ch[ST.plat] > 0;
 function overviewHtml() {
   const h = H(), sel = ST.plat ? rows.filter(r => r._ch[ST.plat] > 0) : rows;
   const proj = sum(sel, r => dayFor(r) * h);
-  const order = rows.filter(r => r._trigger && (!ST.plat || r._ch[ST.plat] > 0));
-  const out = rows.filter(r => r._qoh <= 0 && r._sold > 0 && (!ST.plat || r._ch[ST.plat] > 0));
-  const runOut = rows.filter(r => r._days != null && r._days > 0 && r._days <= h && (!ST.plat || r._ch[ST.plat] > 0));
+  const order = rows.filter(r => TILE_FILTERS.reorder.test(r) && onPlat(r));
+  const out = rows.filter(r => TILE_FILTERS.out.test(r) && onPlat(r));
+  const runOut = rows.filter(r => TILE_FILTERS.runout.test(r) && onPlat(r));
   const tile = (go, label, value, sub, alert) => `<button class="kpi ${alert ? "alert" : ""}" data-go="${go}"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></button>`;
   const top = [...sel].filter(r => dayFor(r) > 0).sort((a, b) => dayFor(b) - dayFor(a));
   return `<p class="lead">${ST.plat ? `<b>${platName(ST.plat)}</b>: what` : "What"} will sell in the next <b>${h} days</b> and what to reorder. Projections use each product's day average${ST.plat ? " on this platform (60-day units ÷ 60)" : ` (sold in the window ÷ ${SET.window}, like the sheet's DAY AVE)`}.</p>
@@ -779,9 +791,9 @@ function plHtml() {
 
 // ---------- Sheet view (mirrors the Excel columns) ----------
 let SHEET_COLS = [];
-function sheetHtml() {
+function sheetCols() {
   const h = H();
-  const cols = [
+  return [
     { h: "SKU #", v: r => r.sku, t: "text", l: true, grp: "" },
     { h: "Product name", v: r => r.name, f: r => `<span title="${esc(r.name)}">${esc(String(r.name || "").slice(0, 48))}</span>`, l: true, grp: "" },
     { ...TIER, grp: "" },
@@ -811,10 +823,15 @@ function sheetHtml() {
     { h: "Order qty", v: r => r._orderQty, grp: "Ordering", total: true },
     { h: "Order cost", v: r => r._orderCost, t: "usd", grp: "Ordering", total: true },
   ];
-  const list = ST.plat ? rows.filter(r => r._ch[ST.plat] > 0) : rows;
+}
+function sheetHtml() {
+  const cols = sheetCols(), f = TILE_FILTERS[ST.sheetFilter];
+  const list = rows.filter(r => (f?.allPlats || onPlat(r)) && (!f || f.test(r)));
   SHEET_COLS = cols;
+  const banner = f ? `<div class="filterbar"><span>Showing <b>${esc(f.label())}</b>${ST.plat && !f.allPlats ? ` on ${esc(platName(ST.plat))}` : ""} · ${fmtInt(list.length)} of ${fmtInt(rows.length)} products</span>
+    <button id="clearSheetFilter">Show all products</button></div>` : "";
   return `<p class="lead">Your spreadsheet's main columns in the same order, filled from the API. Click any column to sort, any row for details.</p>
-    <section class="card">${columnPicker("sheet", cols, ["SKU #"])}${table("sheet", cols, list, { sort: 3, asc: true, onRow: showDetail, main: "sheet", limit: 2000, hide: hiddenSet("sheet") })}</section>`;
+    ${banner}<section class="card">${columnPicker("sheet", cols, ["SKU #"])}${table("sheet", cols, list, { sort: 3, asc: true, onRow: showDetail, main: "sheet", limit: 2000, hide: hiddenSet("sheet") })}</section>`;
 }
 
 // ---------- Vendors ----------
@@ -1116,23 +1133,24 @@ function exportCsv() {
 document.addEventListener("click", e => {
   const ca = e.target.closest("[data-colact]");
   if (ca) { HIDDEN[ca.dataset.tbl] = ca.dataset.colact === "all" ? [] : SHEET_COLS.map(colKey).filter(k => k !== "SKU #"); saveHidden(); render(); return; }
-  const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#horizon button");
+  const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#clearSheetFilter,#horizon button");
   if (!t) return;
-  if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.groupPick = null; ST.vendor = ""; render(); window.scrollTo(0, 0); }
+  if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.groupPick = null; ST.vendor = ""; ST.sheetFilter = ""; render(); window.scrollTo(0, 0); }
   else if (t.dataset.plat !== undefined) { ST.plat = t.dataset.plat; ST.groupPick = null; render(); }
   else if (t.dataset.h) { ST.horizon = +t.dataset.h; render(); }
   else if (t.dataset.go) {
-    const go = t.dataset.go;
-    if (go === "reorder") { ST.tab = "reorder"; ST.show = "order"; ST.group = "none"; }
-    else if (go === "out" || go === "runout") { ST.tab = "sheet"; SORT.sheet = { i: 3, asc: true }; }
-    else if (go === "stock") { ST.tab = "sheet"; SORT.sheet = { i: 14, asc: false }; }
-    else { document.getElementById("topCard")?.scrollIntoView({ behavior: "smooth" }); return; }
-    ST.groupPick = null; render(); window.scrollTo(0, 0);
+    const f = TILE_FILTERS[t.dataset.go];
+    if (!f) return;
+    ST.tab = "sheet"; ST.sheetFilter = t.dataset.go; ST.groupPick = null;
+    const i = sheetCols().findIndex(c => colKey(c) === f.sort[0]);
+    if (i >= 0) SORT.sheet = { i, asc: f.sort[1] };
+    render(); window.scrollTo(0, 0);
   }
   else if (t.dataset.show) { ST.show = t.dataset.show; render(); }
   else if (t.dataset.pf) { ST.plFilter = t.dataset.pf; render(); }
   else if (t.dataset.cover) { ST.cover = +t.dataset.cover; render(); }
   else if (t.dataset.vf) { ST.vf = t.dataset.vf; render(); }
+  else if (t.id === "clearSheetFilter") { ST.sheetFilter = ""; render(); }
   else if (t.id === "ungroup") { ST.groupPick = null; render(); }
   else if (t.id === "unvendor") { ST.vendor = ""; render(); }
   else if (t.id === "resetSet") { SET = { ...SETTING_DEFAULTS }; saveSettings(); reEnrich(); }
