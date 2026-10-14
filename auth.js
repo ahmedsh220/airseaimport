@@ -129,5 +129,4 @@ async function gate(req, res, url) {
 }
 
 // Shared with catalog.js, which runs its own sign-in with the same rules.
-const isAdmin = req => !!session(req);
-module.exports = { gate, isAdmin, cookies, device, same, secure, esc, readForm, ipOf };
+module.exports = { gate, cookies, device, same, secure, esc, readForm, ipOf };
