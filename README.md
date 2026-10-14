@@ -15,7 +15,7 @@ Data notes: on hand uses `live_qoh`; our cost is `actual_cost` when above 0, els
 
 ## TikTok competitors (Euka)
 
-The **TikTok competitors** tab compares each SKU's TikTok price with up to 5 same-item TikTok Shop listings found through [Euka's OpenAPI](https://server.euka.ai/docs) (`GET /social-intelligence/products`).
+The **TikTok competitors** tab compares each SKU's TikTok price with up to 5 same-item TikTok Shop listings found through [Euka's OpenAPI](https://server.euka.ai/docs). Each SKU is searched in both `GET /social-intelligence/products` (current listed price, strike-through price, shipping) and `POST /market-intelligence/tiktok/product/rank` (also finds listings with no recent sales, plus commission and growth); kept matches get `product/detail` for their SKU price range, creators and reviews.
 
 Setup: set `EUKA_API_KEY` in Render → Environment (all options are in `.env.example`). The server then checks every SKU in the products API on boot and every 12 hours (`competitors.js`), and saves the results in `COMPETITOR_DATA_DIR`.
 

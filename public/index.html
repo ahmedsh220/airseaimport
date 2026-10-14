@@ -770,7 +770,8 @@ function floorPrice(r) {
 }
 function compRow(r) {
   const c = COMP?.skus?.[r.sku], m = c?.matches || [];
-  const prices = m.map(x => x.price).filter(x => x > 0);
+  // An average selling price (Market Intelligence only, several SKU prices) isn't a listed price.
+  const prices = m.filter(x => !x.priceIsAvg).map(x => x.price).filter(x => x > 0);
   const our = r._live.tiktok, low = prices.length ? Math.min(...prices) : null, high = prices.length ? Math.max(...prices) : null;
   const med = median(prices), sold30 = m.reduce((a, x) => a + (x.sold30 || 0), 0), our30 = (r._ch.tt || 0) / 2;
   const floor = floorPrice(r);
@@ -804,6 +805,8 @@ function competitorsHtml() {
     : C.finishedAt ? `Last full refresh ${new Date(C.finishedAt).toLocaleString()}${C.errors ? ` · <span class=warn>${C.errors} SKUs failed</span>` : ""} · next ${C.nextRunAt ? new Date(C.nextRunAt).toLocaleString() : "soon"}`
     : "First refresh starts shortly after the server boots.";
   const key = s && s.keyOk === false ? `<span class="pill bad">Euka key problem: ${esc(s.error)}</span>` : "";
+  const mi = C.marketIntel?.ok === false && (C.sources || []).includes("market")
+    ? `<span class="pill bad" title="${esc(C.marketIntel.error || "")}">Market intelligence unavailable, using product search only</span>` : "";
   const avgGap = priced.length ? sum(priced, o => o.x.gapPct) / priced.length : null;
   const kpis = `<section class="kpis">
     <div class="kpi"><div class="label">SKUs with competitors</div><div class="value">${fmtInt(matched.length)}</div><div class="sub">of ${fmtInt(list.length)} · up to ${C.perSku} each</div></div>
@@ -832,6 +835,7 @@ function competitorsHtml() {
     { h: "Checked", v: o => o.x.checkedAt, f: o => o.x.error ? `<span class=bad title="${esc(o.x.error)}">error</span>` : o.x.checkedAt ? new Date(o.x.checkedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "<span class=muted>not yet</span>" },
   ].map(c => c.prod || c === TIER ? { ...c, v: o => c.v(o.r), f: o => c.f(o.r), csv: c.prod ? o => `${o.r.sku} ${o.r.name}` : null } : c);
   return `<p class="lead">Up to ${C.perSku} same-item TikTok Shop listings per SKU from <b>Euka</b>, re-checked every ${C.refreshHours} hours. ${run} ${key}
+      ${mi}
       <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""}>Refresh all now</button></p>${kpis}
     <section class="card"><div class="head"><h3>Price comparison</h3>
       <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div>
@@ -841,12 +845,12 @@ function competitorsHtml() {
 function showCompetitors(r) {
   const x = compRow(r), ov = COMP?.overrides?.[r.sku] || {};
   const card = (m, near) => `<tr><td class="l wrap">${m.image ? `<img src="${esc(m.image)}" alt="" width="44" height="44" style="border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:8px">` : ""}
-      <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc((m.title || m.id).slice(0, 90))}</a><br><span class=muted>${esc(m.shop || "unknown shop")} · match ${Math.round(m.score * 100)}%${m.pinned ? " · pinned" : ""}</span></td>
-    <td>${fmtUsd(m.price)}${m.original > m.price ? `<br><span class=muted><s>${fmtUsd(m.original)}</s></span>` : ""}</td><td>${m.shipping ? fmtUsd(m.shipping) : "free"}</td>
-    <td>${fmtInt(m.sold30)}</td><td>${fmtInt(m.sold)}</td><td>${m.price != null ? money(ttProfit(r, m.price)) : "—"}</td>
+      <a href="${esc(m.url)}" target="_blank" rel="noopener">${esc((m.title || m.id).slice(0, 90))}</a><br><span class=muted>${esc(m.shop || "unknown shop")} · match ${Math.round(m.score * 100)}%${m.pinned ? " · pinned" : ""}${m.creators != null ? ` · ${fmtInt(m.creators)} creators, ${fmtInt(m.videos)} videos` : ""}${m.reviews ? ` · ${fmtInt(m.reviews)} reviews` : ""}</span></td>
+    <td>${m.priceIsAvg ? `<span class=muted title="Average selling price over 30 days; not counted in lowest/median">avg ${fmtUsd(m.price)}</span>` : fmtUsd(m.price)}${m.original > m.price ? `<br><span class=muted><s>${fmtUsd(m.original)}</s></span>` : ""}${m.minPrice != null && m.maxPrice > m.minPrice ? `<br><span class=muted title="Cheapest to dearest SKU on this listing">${fmtUsd(m.minPrice)}–${fmtUsd(m.maxPrice)}</span>` : ""}</td><td>${m.shipping ? fmtUsd(m.shipping) : m.shipping === 0 ? "free" : "—"}</td>
+    <td>${fmtInt(m.sold30)}${m.growth != null ? `<br><span class="${m.growth >= 0 ? "good" : "bad"}">${m.growth > 0 ? "+" : ""}${Math.round(m.growth)}%</span>` : ""}</td><td>${fmtInt(m.sold)}</td><td>${m.commission != null ? `${+m.commission.toFixed(1)}%` : "—"}</td><td>${m.price != null ? money(ttProfit(r, m.price)) : "—"}</td>
     <td>${near ? `<button data-cact="pin" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Pin as match</button>`
       : `${m.pinned ? `<button data-cact="clear" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Unpin</button>` : ""} <button data-cact="ignore" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Not a match</button>`}</td></tr>`;
-  const head = `<thead><tr><th class=l>Listing</th><th>Price</th><th>Ship</th><th>Sold 30d</th><th>Sold total</th><th>Our profit at this price</th><th></th></tr></thead>`;
+  const head = `<thead><tr><th class=l>Listing</th><th>Price</th><th>Ship</th><th>Sold 30d</th><th>Sold total</th><th title="Affiliate commission the seller pays creators">Comm.</th><th>Our profit at this price</th><th></th></tr></thead>`;
   $("dTitle").textContent = `${r.sku} · ${r.name}`;
   $("dSub").innerHTML = `TikTok competitors · our price ${fmtUsd(x.our)} · cost to ship ${fmtUsd(r._Q)} · floor ${fmtUsd(x.floor)} · checked ${x.checkedAt ? new Date(x.checkedAt).toLocaleString() : "not yet"}`;
   $("dBody").innerHTML = `<div class="facts">

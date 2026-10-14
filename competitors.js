@@ -1,7 +1,11 @@
 // TikTok Shop competitor prices from Euka's OpenAPI (https://server.euka.ai/docs).
-// For every SKU in the products API we search Euka's marketplace-wide product index by name,
-// score each result against our product (name words + size), keep the best N, and save the
-// result to disk. The dashboard reads it from /api/competitors.
+// For every SKU in the products API we search two Euka indexes by name:
+//   - Social Intelligence products: current listed price, strike-through price, shipping, lifetime units.
+//   - Market Intelligence product/rank: also finds listings with no sales this month (need_all), plus
+//     seller name, affiliate commission and GMV growth. product/detail then adds the min/max SKU price,
+//     creator/video counts and review count for each kept match.
+// Results are merged by TikTok product id, scored against our product (name words + size), the best N
+// kept and saved to disk. The dashboard reads it from /api/competitors.
 const fs = require("fs");
 const path = require("path");
 
@@ -10,6 +14,11 @@ const CFG = {
   key: env("EUKA_API_KEY", ""),
   base: env("EUKA_API_BASE", "https://server.euka.ai/api/v1").replace(/\/+$/, ""),
   searchPath: env("EUKA_PRODUCT_SEARCH_PATH", "/social-intelligence/products"),
+  // "social", "market" or both (comma separated). Market Intelligence is skipped for the rest of a run
+  // if Euka refuses it (for example when the key's plan doesn't include it).
+  sources: env("EUKA_SOURCES", "social,market").split(",").map(s => s.trim().toLowerCase()).filter(Boolean),
+  miDetail: env("EUKA_MI_DETAIL", "1") !== "0",
+  miCategoryIds: env("EUKA_MI_CATEGORY_IDS", "").split(",").map(s => s.trim()).filter(Boolean),
   region: env("EUKA_REGION", "US"),
   perSku: +env("COMPETITORS_PER_SKU", "5"),
   refreshHours: +env("COMPETITOR_REFRESH_HOURS", "12"),
@@ -25,7 +34,8 @@ const OVERRIDES = path.join(CFG.dataDir, "competitor-overrides.json");
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---------- Euka client ----------
-async function euka(p, params = {}, attempt = 1) {
+// GET with query params, or POST with a JSON body when `body` is given.
+async function euka(p, params = {}, attempt = 1, body = null) {
   const u = new URL(CFG.base + p);
   for (const [k, v] of Object.entries(params)) {
     if (v == null || v === "") continue;
@@ -33,16 +43,18 @@ async function euka(p, params = {}, attempt = 1) {
   }
   let res;
   try {
-    res = await fetch(u, { headers: { authorization: `Bearer ${CFG.key}`, accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+    const headers = { authorization: `Bearer ${CFG.key}`, accept: "application/json" };
+    if (body) headers["content-type"] = "application/json";
+    res = await fetch(u, { method: body ? "POST" : "GET", headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
   } catch (e) {
-    if (attempt < 4) { await sleep(attempt * 2000); return euka(p, params, attempt + 1); }
+    if (attempt < 4) { await sleep(attempt * 2000); return euka(p, params, attempt + 1, body); }
     throw new Error(`Euka unreachable: ${e.message}`);
   }
   if (res.status === 429 || res.status >= 500) {
     if (attempt < 5) {
       const wait = (+res.headers.get("retry-after") || attempt * 3) * 1000;
       await sleep(Math.min(wait, 60000));
-      return euka(p, params, attempt + 1);
+      return euka(p, params, attempt + 1, body);
     }
   }
   const text = await res.text();
@@ -52,6 +64,17 @@ async function euka(p, params = {}, attempt = 1) {
     throw err;
   }
   return JSON.parse(text);
+}
+
+// Market Intelligence wraps results as { success, data, message, code }.
+const MI_BASE = { region: "US", language: "en-US", currency: "USD", date_range: "last30Day" };
+async function mi(p, body) {
+  const r = await euka(`/market-intelligence/tiktok/${p}`, {}, 1, { ...MI_BASE, region: CFG.region === "UK" ? "GB" : CFG.region, ...body });
+  if (r && r.success === false) {
+    const err = new Error(`Euka market intelligence: ${r.message || r.code || "request failed"}`);
+    err.status = 400; throw err;
+  }
+  return r?.data;
 }
 
 // ---------- matching ----------
@@ -103,8 +126,10 @@ function score(pr, item) {
 }
 
 const productUrl = id => `https://www.tiktok.com/view/product/${encodeURIComponent(id)}`;
+const num = v => v == null || v === "" || isNaN(+v) ? null : +v;
 function slim(item, s) {
   return {
+    sources: ["social"],
     id: String(item.id), title: item.title, shop: item.brand?.name || null, shopId: item.brandId || item.brand?.id || null,
     price: item.price?.current ?? null, original: item.price?.original ?? null, shipping: item.price?.shipping ?? null,
     currency: item.currencyCode || "USD", sold: item.soldCount ?? null, sold30: item.last30dSoldCount ?? null,
@@ -113,12 +138,68 @@ function slim(item, s) {
   };
 }
 
+// A Market Intelligence rank row in the same shape. Its unit_price is the average selling price over
+// the period, not the listed price, so it is only used as the price when the listing has no other.
+function slimMi(row) {
+  const avg = num(row.unit_price);
+  return {
+    sources: ["market"], id: String(row.product_id), title: row.product_name || null, shop: row.seller_name || null,
+    shopId: row.seller_id || null, price: avg, priceIsAvg: avg != null, original: null, shipping: null, currency: "USD",
+    sold: null, sold30: num(row.sales_volumn), gmv30: num(row.revenue), gmv: null, active: null,
+    image: row.master_image_url || null, updatedAt: null, url: productUrl(row.product_id),
+    avgPrice: avg, commission: num(row.commission_rate), growth: num(row.revenue_growth_rate),
+    launchedAt: row.launch_date || null, skuCount: num(row.sku_count),
+    videoGmv30: num(row.video_revenue), liveGmv30: num(row.live_revenue), shopGmv30: num(row.showcase_revenue),
+  };
+}
+
+// Combine what both indexes know about one listing: Social Intelligence wins on price, MI fills gaps.
+function merge(a, b) {
+  const out = { ...a };
+  for (const [k, v] of Object.entries(b)) if (out[k] == null && v != null) out[k] = v;
+  out.sources = [...new Set([...(a.sources || []), ...(b.sources || [])])];
+  if (a.price != null && !a.priceIsAvg) out.priceIsAvg = false;
+  if (a.price == null && b.price != null) { out.price = b.price; out.priceIsAvg = b.priceIsAvg; }
+  return out;
+}
+
+// product/detail: min/max SKU price, creators, videos, reviews. When every SKU of the listing has one
+// price, that is its listed price, which beats an average.
+async function enrich(m) {
+  const d = await mi("product/detail", { product_id: m.id, need_image: 1, need_extra: true });
+  if (!d) return m;
+  const min = num(d.min_price), max = num(d.max_price);
+  Object.assign(m, {
+    minPrice: min, maxPrice: max, creators: num(d.creator_number), videos: num(d.video_number), lives: num(d.live_number),
+    reviews: num(d.product_review_count), delivery: d.delivery_type || null,
+    commission: m.commission ?? num(d.commission_rate), avgPrice: m.avgPrice ?? num(d.unit_price),
+    sold30: m.sold30 ?? num(d.sales_volumn), gmv30: m.gmv30 ?? num(d.revenue), image: m.image || d.master_image_url || null,
+    title: m.title || d.product_name || null, detailAt: new Date().toISOString(),
+  });
+  if (m.priceIsAvg && min != null && min === max) { m.price = min; m.priceIsAvg = false; }
+  return m;
+}
+
 // ---------- state ----------
 let state = load(FILE, { runAt: null, finishedAt: null, skus: {}, errors: 0 });
 let overrides = load(OVERRIDES, {}); // { sku: { ignore: [productId], pin: [productId] } }
 let job = null;
 let progress = { done: 0, total: 0, startedAt: null, lastError: null };
 let me = { at: 0, ok: null, info: null, error: null };
+// Whether Market Intelligence answered during the current/last run. Reset at the start of each run.
+let miState = { ok: null, error: null, at: null };
+const useMi = () => CFG.sources.includes("market") && miState.ok !== false;
+const useSocial = () => CFG.sources.includes("social");
+function miFailed(e) {
+  // 401 means the key itself is bad, which the social search reports too. Anything else in the 4xx
+  // range means MI isn't available to this key, so stop asking for this run.
+  if (e.status && e.status >= 400 && e.status < 500 && e.status !== 429) {
+    if (miState.ok !== false) console.warn(`Market intelligence off for this run: ${e.message}`);
+    miState = { ok: false, error: e.message, at: new Date().toISOString() };
+    return true;
+  }
+  return false;
+}
 
 function load(file, d) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return d; } }
 function save(file, obj) {
@@ -130,28 +211,65 @@ async function searchSku(pr, ownIds) {
   const seen = new Map(), ov = overrides[pr.sku] || {};
   const ignore = new Set(ov.ignore || []), pin = new Set(ov.pin || []);
   let calls = 0;
+  const add = x => {
+    if (ownIds.has(x.id) || ignore.has(x.id) || x.active === false) return;
+    if (CFG.ourShops.length && CFG.ourShops.includes(String(x.shop || "").toLowerCase())) return;
+    const m = seen.has(x.id) ? merge(seen.get(x.id), x) : x;
+    m.score = Math.round(score(pr, m) * 100) / 100;
+    seen.set(x.id, m);
+  };
   for (const q of queries(pr)) {
-    const data = await euka(CFG.searchPath, { query: q, region: CFG.region, limit: 50, sortBy: "last30dSales" });
-    calls++;
-    for (const it of data.items || []) {
-      const id = String(it.id);
-      if (seen.has(id) || ownIds.has(id) || ignore.has(id) || it.active === false) continue;
-      if (CFG.ourShops.length && CFG.ourShops.includes(String(it.brand?.name || "").toLowerCase())) continue;
-      seen.set(id, slim(it, score(pr, it)));
+    let socialErr = null;
+    if (useSocial()) {
+      try {
+        const data = await euka(CFG.searchPath, { query: q, region: CFG.region, limit: 50, sortBy: "last30dSales" });
+        calls++;
+        for (const it of data.items || []) add(slim(it, 0));
+      } catch (e) { if (!useMi() || e.status === 401 || e.status === 403) throw e; socialErr = e; }
     }
+    if (useMi()) {
+      try {
+        const rows = await mi("product/rank", {
+          keyword: q, need_all: true, need_extra: true, need_image: 1, page_size: 50, page_number: 1,
+          sort_field: { field: "revenue", type: "DESC" }, ...(CFG.miCategoryIds.length ? { category_ids: CFG.miCategoryIds } : {}),
+        });
+        calls++;
+        if (miState.ok !== true) miState = { ok: true, error: null, at: new Date().toISOString() };
+        for (const row of rows || []) if (row?.product_id) add(slimMi(row));
+      } catch (e) { if (!miFailed(e) && !useSocial()) throw e; }
+    }
+    if (socialErr && !useMi()) throw socialErr;
     const good = [...seen.values()].filter(x => x.score >= CFG.minScore).length;
     if (good >= CFG.perSku) break;
     if (CFG.delayMs) await sleep(CFG.delayMs);
   }
   for (const id of pin) {
     if (seen.has(id)) { seen.get(id).score = 1; seen.get(id).pinned = true; continue; }
-    try { const it = await euka(`${CFG.searchPath}/${encodeURIComponent(id)}`, { region: CFG.region }); calls++; seen.set(id, { ...slim(it, 1), pinned: true }); }
-    catch (e) { console.warn(`Pinned ${id} for ${pr.sku}: ${e.message}`); }
+    let got = null;
+    if (useSocial()) {
+      try { got = slim(await euka(`${CFG.searchPath}/${encodeURIComponent(id)}`, { region: CFG.region }), 1); calls++; }
+      catch (e) { console.warn(`Pinned ${id} for ${pr.sku}: ${e.message}`); }
+    }
+    if (!got && useMi()) {
+      try { got = await enrich(slimMi({ product_id: id })); calls++; }
+      catch (e) { miFailed(e); console.warn(`Pinned ${id} for ${pr.sku}: ${e.message}`); }
+    }
+    if (got) seen.set(id, { ...got, score: 1, pinned: true });
   }
   const ranked = [...seen.values()].sort((a, b) => b.score - a.score || (b.sold30 || 0) - (a.sold30 || 0));
+  const matches = ranked.filter(x => x.score >= CFG.minScore).slice(0, CFG.perSku);
+  if (CFG.miDetail) {
+    for (const m of matches) {
+      if (!useMi() || m.detailAt) continue;
+      try { await enrich(m); calls++; } catch (e) { if (!miFailed(e)) console.warn(`MI detail ${m.id}: ${e.message}`); }
+      if (CFG.delayMs) await sleep(CFG.delayMs);
+    }
+  }
   return {
     checkedAt: new Date().toISOString(), queries: queries(pr), calls,
-    matches: ranked.filter(x => x.score >= CFG.minScore).slice(0, CFG.perSku),
+    // A listing found only by Market Intelligence with several SKU prices has no listed price we can
+    // trust, so it is kept for context but left out of the lowest/median/highest maths on the page.
+    matches,
     // A few near misses so a person can pin the right listing when matching gets it wrong.
     candidates: ranked.filter(x => x.score < CFG.minScore).slice(0, 5),
   };
@@ -172,6 +290,7 @@ async function run(list, onlySkus) {
   const ownIds = ownIdsFrom(list);
   const todo = list.filter(p => p.sku && p.name && (!onlySkus || onlySkus.includes(p.sku)));
   progress = { done: 0, total: todo.length, startedAt: new Date().toISOString(), lastError: null };
+  miState = { ok: null, error: null, at: null };
   const full = !onlySkus;
   if (full) state.runAt = progress.startedAt;
   let errors = 0, i = 0, authFailed = false;
@@ -192,6 +311,7 @@ async function run(list, onlySkus) {
     };
     await Promise.all(Array.from({ length: CFG.concurrency }, worker));
     if (full) { state.finishedAt = new Date().toISOString(); state.errors = errors; }
+    state.marketIntel = miState;
     save(FILE, state);
     console.log(`Competitor run done: ${progress.done}/${progress.total} SKUs, ${errors} errors${authFailed ? " (stopped: Euka rejected the API key)" : ""}`);
   })().finally(() => { job = null; });
@@ -237,7 +357,8 @@ async function handle(req, res, url, getList) {
         configured: !!CFG.key, running: !!job, progress, runAt: state.runAt, finishedAt: state.finishedAt, errors: state.errors,
         refreshHours: CFG.refreshHours, perSku: CFG.perSku, minScore: CFG.minScore, region: CFG.region,
         nextRunAt: state.runAt ? new Date(Date.parse(state.runAt) + CFG.refreshHours * 3600 * 1000).toISOString() : null,
-        needsToken: !!CFG.adminToken, skus: state.skus, overrides,
+        needsToken: !!CFG.adminToken, sources: CFG.sources, marketIntel: job ? miState : state.marketIntel || miState,
+        skus: state.skus, overrides,
       }), true;
     }
     if (sub === "/status") {
@@ -279,4 +400,4 @@ async function handle(req, res, url, getList) {
   }
 }
 
-module.exports = { handle, schedule, CFG, _test: { profile, queries, score, sizes } };
+module.exports = { handle, schedule, CFG, _test: { profile, queries, score, sizes, slimMi, merge } };
