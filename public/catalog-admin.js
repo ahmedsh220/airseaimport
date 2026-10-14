@@ -1,7 +1,8 @@
-// "Customer catalog" tab: the owner turns the customer catalog (/catalog) on or off, chooses whether
-// piece and case prices show, and picks which SKUs are in it, with optional per-SKU prices. Settings
-// are saved through /api/catalog/settings (catalog.js); the catalog and its PDF/Excel downloads follow
-// them within a minute. Uses $, esc, fmtUsd, ST and render from index.html.
+// "Customer catalog" tab: for each customer catalog (Catalog 1 at /catalog, Catalog 2 at /catalog2) the
+// owner turns it on or off, chooses whether piece and case prices show, sets its password, and picks
+// which SKUs are in it, with optional per-SKU prices. Settings are saved through /api/catalog/settings
+// (catalog.js); each catalog and its PDF/Excel downloads follow them within a minute.
+// Uses $, esc, fmtUsd, ST and render from index.html.
 (() => {
   const css = document.createElement("style");
   css.textContent = `
@@ -20,10 +21,20 @@
     #caTable tr.off td:nth-child(3) { text-decoration: line-through; }
     .ca-save { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 0 2px; background: var(--panel); }
     .ca-save button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
-    .ca-save button:disabled { opacity: .5; cursor: default; }`;
+    .ca-save button:disabled { opacity: .5; cursor: default; }
+    .ca-tabs { display: inline-flex; margin-bottom: 12px; } .ca-tabs button { border-radius: 0; margin-left: -1px; padding: 7px 14px; font-weight: 600; }
+    .ca-tabs button:first-child { border-radius: 8px 0 0 8px; margin: 0; } .ca-tabs button:last-child { border-radius: 0 8px 8px 0; }
+    .ca-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .ca-tabs small { font-weight: 400; opacity: .8; margin-left: 4px; }
+    .ca-pw { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+    .ca-pw input { flex: 0 1 260px; }`;
   document.head.appendChild(css);
 
-  const CA = { data: null, draft: null, loading: false, error: "", q: "", filter: "all", msg: "", dirty: false, saving: false, limit: 300 };
+  const CA = { data: null, cur: "1", per: {}, loading: false, error: "", q: "", filter: "all", saving: false, limit: 300 };
+  // draft, dirty, msg and newPassword belong to the catalog being edited.
+  for (const k of ["draft", "dirty", "msg", "newPassword"]) Object.defineProperty(CA, k, { get: () => (CA.per[CA.cur] ||= {})[k], set: v => { (CA.per[CA.cur] ||= {})[k] = v; } });
+  const cur = () => CA.data.catalogs[CA.cur];
+  const origin = location.origin;
   const copy = s => JSON.parse(JSON.stringify(s));
   const bySku = () => CA.index || (CA.index = new Map(CA.data.items.map(i => [i.sku, i])));
   const isIn = (i, s = CA.draft) => !s.hidden.includes(i.sku) && (s.added.includes(i.sku) || (s.mode === "all" && i.auto));
@@ -38,7 +49,7 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
       CA.data = d; CA.index = null;
-      if (!CA.dirty) CA.draft = copy(d.settings);
+      for (const id of Object.keys(d.catalogs)) { const p = (CA.per[id] ||= {}); if (!p.dirty) p.draft = copy(d.catalogs[id]); }
     } catch (e) { CA.error = e.message; }
     CA.loading = false;
     if (ST.tab === "catalog") render();
@@ -53,14 +64,20 @@
   const paintTable = () => { const t = $("caTable"); if (t) t.outerHTML = tableHtml(); const c = $("caCounts"); if (c) c.innerHTML = countsHtml(); };
 
   function settingsHtml() {
-    const d = CA.draft, x = CA.data, s = x.settings;
-    const warn = [!x.passwordSet && `<p class="bad">CATALOG_PASSWORD isn't set on Render, so customers can't open the catalog yet.</p>`,
+    const d = CA.draft, x = CA.data, s = cur(), link = origin + s.url;
+    const tabs = `<div class="ca-tabs">${Object.entries(x.catalogs).map(([id, c]) => `<button type="button" data-ca-cat="${id}" class="${id === CA.cur ? "active" : ""}">${esc(c.name)}<small>${c.enabled ? (c.showPrices || c.showCasePrices ? "with prices" : "no prices") : "off"}${CA.per[id]?.dirty ? " · unsaved" : ""}</small></button>`).join("")}</div>`;
+    const pw = s.password === "dashboard" ? "Set here in the dashboard." : s.password === "render" ? `Set on Render (${esc(s.passwordEnv)}).` : "Not set yet: customers can't open this catalog until you set one.";
+    const other = Object.entries(x.catalogs).find(([id]) => id !== CA.cur);
+    const warn = [
       !x.persistent && `<p class="warn">These settings are saved on the server's own disk and reset when it restarts. Set COMPETITOR_DATA_DIR to the Render disk (/var/data) to keep them.</p>`].filter(Boolean).join("");
-    return `<section class="card">
-      <div class="head"><div><h3>Customer catalog <span class="pill ${s.enabled ? "good" : "bad"}">${s.enabled ? "On" : "Off"}</span></h3>
-        <p class="hint" style="margin:0">What customers see at <a href="/catalog" target="_blank" rel="noopener">/catalog</a> and in its PDF and Excel downloads. Customers sign in with the catalog password, not the admin token.</p></div>
-        <a href="/catalog" target="_blank" rel="noopener"><button type="button">Open catalog ↗</button></a></div>
+    return `<section class="card">${tabs}
+      <div class="head"><div><h3>${esc(s.name)} <span class="pill ${s.enabled ? "good" : "bad"}">${s.enabled ? "On" : "Off"}</span></h3>
+        <p class="hint" style="margin:0">Customers with this link see it: <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>. They sign in with this catalog's own password, never the admin token. The PDF and Excel downloads follow the same settings.</p></div>
+        <div class="row"><button type="button" data-ca-do="copyLink">Copy link</button><a href="${esc(s.url)}" target="_blank" rel="noopener"><button type="button">Open ↗</button></a></div></div>
       ${warn}
+      <div class="ca-pw"><b>Password</b><span class="${s.password ? "muted" : "bad"}">${pw}</span>
+        <input type="password" id="caPw" autocomplete="new-password" placeholder="New password (6+ characters)" value="${esc(CA.newPassword || "")}">
+        <span class="muted">Saved with the changes below. Changing it signs out everyone using this catalog.</span></div>
       <div class="ca-opts">
         <label><input type="checkbox" data-ca="enabled" ${d.enabled ? "checked" : ""}><span><b>Catalog is on</b><small>Turned off, customers see "The catalog is unavailable right now".</small></span></label>
         <label><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost from the API, or the price you set for a SKU below.</small></span></label>
@@ -70,11 +87,12 @@
           <label><input type="radio" name="caMode" data-ca="mode" value="selected" ${d.mode === "selected" ? "checked" : ""}><span>Only the SKUs you add<small>New API products stay out until you add them.</small></span></label>
         </fieldset>
       </div>
-      <div class="ca-add"><input id="caAddSkus" placeholder="Add SKUs, separated by commas or spaces (e.g. PER423, PER770)"><button type="button" data-ca-do="add">Add to catalog</button><button type="button" data-ca-do="remove">Remove from catalog</button></div>
+      <div class="ca-add"><input id="caAddSkus" placeholder="Add SKUs, separated by commas or spaces (e.g. PER423, PER770)"><button type="button" data-ca-do="add">Add to catalog</button><button type="button" data-ca-do="remove">Remove from catalog</button>
+        ${other ? `<button type="button" data-ca-do="copyFrom" data-from="${other[0]}">Use ${esc(other[1].name)}'s product list</button>` : ""}</div>
       <div class="ca-save">
         <button class="primary" data-ca-do="save" ${CA.dirty && !CA.saving ? "" : "disabled"}>${CA.saving ? "Saving…" : "Save changes"}</button>
         <button data-ca-do="discard" ${CA.dirty && !CA.saving ? "" : "disabled"}>Discard</button>
-        <span class="${/^Couldn't|isn't/.test(CA.msg) ? "bad" : "muted"}" id="caMsg">${esc(CA.msg || (CA.dirty ? "Unsaved changes. Customers see them after you save." : s.updatedAt ? `Last saved ${when(s.updatedAt)}.` : "Using the default settings: every product, with both prices."))}</span>
+        <span class="${/^Couldn't|isn't/.test(CA.msg) ? "bad" : "muted"}" id="caMsg">${esc(CA.msg || (CA.dirty ? `Unsaved changes to ${s.name}. Customers see them after you save.` : s.updatedAt ? `Last saved ${when(s.updatedAt)}.` : `Using the default settings: every product, ${s.showPrices || s.showCasePrices ? "with prices" : "no prices"}.`))}</span>
       </div></section>`;
   }
 
@@ -138,13 +156,23 @@
     if (t.id === "caF") { CA.filter = t.value; CA.limit = 300; paintTable(); }
   });
   let qt;
-  document.addEventListener("input", e => { if (e.target.id !== "caQ") return; CA.q = e.target.value; CA.limit = 300; clearTimeout(qt); qt = setTimeout(paintTable, 150); });
+  document.addEventListener("input", e => {
+    if (e.target.id === "caPw") { CA.newPassword = e.target.value; if (e.target.value.trim() && !CA.dirty) { CA.dirty = true; CA.msg = ""; const b = document.querySelector('[data-ca-do="save"]'); if (b) b.disabled = false; } return; }
+    if (e.target.id !== "caQ") return; CA.q = e.target.value; CA.limit = 300; clearTimeout(qt); qt = setTimeout(paintTable, 150); });
   const paintSave = () => { const root = $("caRoot"); if (!root) return; const tmp = document.createElement("div"); tmp.innerHTML = settingsHtml(); root.querySelector("section").replaceWith(tmp.firstElementChild); };
 
   document.addEventListener("click", async e => {
+    const tab = e.target.closest("[data-ca-cat]");
+    if (tab && $("caRoot")?.contains(tab)) { CA.cur = tab.dataset.caCat; paint(); return; }
     const b = e.target.closest("[data-ca-do]"); if (!b || !$("caRoot")?.contains(b)) return;
     e.preventDefault();
     const act = b.dataset.caDo;
+    if (act === "copyLink") { navigator.clipboard?.writeText(origin + cur().url).then(() => { CA.msg = "Link copied."; paintSave(); }, () => {}); return; }
+    if (act === "copyFrom") {
+      const src = CA.per[b.dataset.from].draft, d = CA.draft;
+      Object.assign(d, { mode: src.mode, hidden: [...src.hidden], added: [...src.added] });
+      changed(`Copied ${CA.data.catalogs[b.dataset.from].name}'s product list. Save to publish.`); paint(); return;
+    }
     if (act === "more") { CA.limit = Infinity; paintTable(); return; }
     if (act === "inAll" || act === "outAll") { for (const i of shown()) setIn(i, act === "inAll"); changed(); paintTable(); paintSave(); return; }
     if (act === "add" || act === "remove") {
@@ -159,15 +187,15 @@
       if (found.length) changed(msg + " Save to publish."); else CA.msg = msg;
       paint(); return;
     }
-    if (act === "discard") { CA.draft = copy(CA.data.settings); CA.dirty = false; CA.msg = ""; paint(); return; }
+    if (act === "discard") { CA.draft = copy(cur()); CA.dirty = false; CA.msg = ""; CA.newPassword = ""; paint(); return; }
     if (act === "save") {
       CA.saving = true; paintSave();
       try {
-        const r = await fetch("/api/catalog/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...CA.draft, editor: "dashboard" }) });
+        const r = await fetch("/api/catalog/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...CA.draft, catalog: CA.cur, newPassword: CA.newPassword || "", editor: "dashboard" }) });
         const out = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
-        CA.data.settings = out.settings; CA.draft = copy(out.settings); CA.dirty = false;
-        CA.msg = `Saved ${when(out.settings.updatedAt)}. Open catalogs update within a minute.`;
+        CA.data.catalogs[CA.cur] = out.settings; CA.draft = copy(out.settings); CA.dirty = false; CA.newPassword = "";
+        CA.msg = `Saved ${when(out.settings.updatedAt)}. Customers with ${out.settings.name} open see the changes within a minute.`;
       } catch (err) { CA.msg = `Couldn't save: ${err.message}`; }
       CA.saving = false; paint();
     }

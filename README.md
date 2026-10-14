@@ -37,7 +37,9 @@ Setup: in the Microsoft Entra admin center, create an app registration, add the 
 
 API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=` (the SKU's row, with which cells are editable), `POST /api/excel/edit` (`{ sku, editor, changes: [{ col, header, expected, value }] }`, needs `x-admin-token`).
 
-## Customer catalog
+## Customer catalogs
+
+There are two customer catalogs, each at its own link with its own password: **Catalog 1** at `/catalog` (with prices by default) and **Catalog 2** at `/catalog2` (no prices by default). Give a customer whichever link fits. Both share the page below; everything in this section applies to each, with its own settings.
 
 `/catalog` is the wholesale catalog for customers (`catalog.js`, `catalog/index.html`), laid out like `american_seair_imports_wholesale_2025.xlsx`: brand logos, address and phone, then SKU, UPC, name, category, piece price and case price with a picture of each product, grouped under red category headings (Perfumes, Air Freshner, Deodorant, Car Perfume, Incense, Sunglasses, then Diffusers, Cosmetics, Health & Beauty, Electronics). Customers can search, filter by category, and download what they see as a PDF or an Excel file with the pictures in it.
 
@@ -46,7 +48,8 @@ API: `GET /api/excel` (connection status and columns), `GET /api/excel/row?sku=`
 - The API has no picture field, so pictures come from the Jomashop listing data in the API (`igloo_jomashop`), then NocNoc (`igloo_nocnoc`), then any other product with the same UPC. Products with none show "No photo". Pictures are served through `/catalog/img/<sku>`, which only fetches the URL found for that SKU.
 - Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
 - Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
-- The dashboard's **Customer catalog** tab (`public/catalog-admin.js`) controls it: turn the catalog on or off, show or hide piece and case prices, include every API product except the ones you remove or only the SKUs you add (opened-box and other internal SKUs can be added by hand), and set your own piece price for any SKU. Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
+- Clicking a product's picture opens a bigger view, with arrows to step through the products shown.
+- The dashboard's **Customer catalog** tab (`public/catalog-admin.js`) controls it: turn the catalog on or off, show or hide piece and case prices, include every API product except the ones you remove or only the SKUs you add (opened-box and other internal SKUs can be added by hand), and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set in the tab (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG2_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
 
 ## Sign-in
 
