@@ -1,7 +1,7 @@
 # airseaimport
 
 Reports dashboard for Air Sea Import / Fragrance Wholesaler USA. It reads the live product feed at
-`https://hub.fragrancewholesalerusa.com/api/open/products` and turns it into reorder, profit, vendor and stock reports. It also shows TikTok competitor prices from Euka, writes edits back into the pricing workbook in OneDrive, and serves two password-protected customer wholesale catalogs. One Node web service, deployed on Render.
+`https://hub.fragrancewholesalerusa.com/api/open/products` and turns it into reorder, profit, vendor and stock reports. It also shows TikTok competitor prices from Euka, writes edits back into the pricing workbook in OneDrive, serves password-protected customer wholesale catalogs, and keeps an activity log of who came by and what changed. One Node web service, deployed on Render from `main`.
 
 Contents
 
@@ -14,11 +14,12 @@ Contents
 7. [TikTok competitors (Euka)](#tiktok-competitors-euka)
 8. [Editing the Excel sheet](#editing-the-excel-sheet)
 9. [Customer catalogs](#customer-catalogs)
-10. [API reference](#api-reference)
-11. [Saved files](#saved-files)
-12. [Settings (environment variables)](#settings-environment-variables)
-13. [What the browser stores](#what-the-browser-stores)
-14. [Troubleshooting](#troubleshooting)
+10. [Activity log](#activity-log)
+11. [API reference](#api-reference)
+12. [Saved files](#saved-files)
+13. [Settings (environment variables)](#settings-environment-variables)
+14. [What the browser stores](#what-the-browser-stores)
+15. [Troubleshooting](#troubleshooting)
 
 ## Run it
 
@@ -32,7 +33,14 @@ npm start                # or: node server.js
 
 `server.js` reads `.env` itself on local runs (no dotenv package). Variables already set in the shell win over `.env`.
 
-**Render:** a Node web service with build command `npm install` (nothing to install, but harmless) and start command `npm start`. Settings go under the service's **Environment** tab. Add a persistent disk (for example at `/var/data`) and set `COMPETITOR_DATA_DIR=/var/data`, or competitor results, catalog settings and the Excel edit log are lost on every deploy. Render sets `PORT`; locally it defaults to 3000. `/healthz` answers `ok` for health checks.
+**Render:** a Node web service with build command `npm install` (nothing to install, but harmless) and start command `npm start`. Every push to `main` deploys. Settings go under the service's **Environment** tab. Render sets `PORT`; locally it defaults to 3000. `/healthz` answers `ok` for health checks.
+
+**Going live checklist (Render):**
+
+1. Set `ADMIN_TOKEN` to a long random value (20+ characters). Nothing but the catalogs opens without it.
+2. Add a **persistent disk** (service → Disks, mount path `/var/data`, 1 GB is plenty) and set `COMPETITOR_DATA_DIR=/var/data`. Without it, catalog settings and passwords, competitor results and the activity log are wiped on every deploy and restart. The Activity log and Catalog management pages show a warning while this is missing.
+3. Set each catalog's password (Catalog management, or `CATALOG_PASSWORD`, `CATALOG2_PASSWORD`, …). A catalog without one stays locked.
+4. Optional: `EUKA_API_KEY` for TikTok competitors, and the three `MS_*` variables for Excel write-back.
 
 ## How it's built
 
@@ -42,6 +50,7 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 .
 ├── server.js                 entry point: .env loader, products API proxy and cache, routing, static files
 ├── lib/
+│   ├── activity.js           the activity log file: writing, 90-day clean-up, /api/activity
 │   ├── auth.js               admin sign-in gate for everything except /catalog*, /healthz, /media/, /css/
 │   ├── catalog.js            customer catalogs (/catalog, /catalog2, …), adding and removing them, their settings API
 │   ├── competitors.js        Euka competitor search, matching, scheduling, overrides
@@ -49,6 +58,7 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 ├── public/
 │   ├── index.html            the reports page: page header, detail dialog and report-only styles
 │   ├── catalog-admin.html    Catalog management page
+│   ├── activity.html         Activity log page (view, search, download)
 │   ├── css/ads.css           the design system: tokens (light and dark), components, app shell, sign-in card
 │   └── js/
 │       ├── reports.js        all report logic and formulas (runs in the browser)
@@ -64,16 +74,18 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 
 ### Request flow
 
-Every request goes through `auth.gate` first. Then each module is asked in turn whether the path is theirs, and the first one that answers wins.
+Every request first gets the security headers, and a `POST` from another site is refused (403). Then it goes through `auth.gate`, and each module is asked in turn whether the path is theirs; the first one that answers wins. An error anywhere answers 500 and is logged; it never stops the server.
 
 ```
 request
+  ├─ security headers, cross-site POST check (server.js)
   └─ auth.gate (lib/auth.js)          sign-in page, redirect or 401 unless signed in (catalogs, /healthz, /media/, /css/ pass through)
       ├─ /api/products                 server.js: cached products API
       ├─ /catalog, /catalogN           catalog.handle: its own password, page, data, pictures
       ├─ /api/catalog/*                catalog.handleAdmin: list, add, remove, settings
       ├─ /api/competitors*             competitors.handle
       ├─ /api/excel*                   excel.handle
+      ├─ /api/activity*                activity.handle
       ├─ /healthz
       └─ static files                  public/ (no-cache) and media/ (cached 1 day); "/" serves index.html
 ```
@@ -81,7 +93,7 @@ request
 ### What happens on boot
 
 1. `.env` is loaded (local runs only).
-2. The server starts listening and immediately fetches the products API to warm the cache.
+2. The server starts listening, trims the activity log to the last 90 days (again every 6 hours) and writes a `SERVER START` line, then fetches the products API to warm the cache.
 3. Competitor scheduling starts: 15 seconds after boot and then every 15 minutes, any SKU whose result is older than the refresh window is searched again.
 4. Every 2 minutes, the products cache is refreshed in the background if it's more than 5 minutes old.
 
@@ -98,12 +110,16 @@ How it works (`lib/auth.js`):
 
 - The session cookie is `base64url(JSON {exp, dev, id}) . HMAC-SHA256 signature`. The signing key is derived from `ADMIN_TOKEN`, so changing the token on Render signs every admin out.
 - `dev` is a hash of the browser's user agent, so a copied cookie doesn't work in another browser.
-- Token checks use constant-time comparison. Wrong tokens are limited to 10 tries per 15 minutes per IP (counted in memory, reset on restart).
+- Token and password checks use constant-time comparison. Wrong tries are limited to 10 per 15 minutes per IP, separately for the dashboard and for the catalogs (counted in memory, reset on restart). Every sign-in, failed sign-in and block is written to the [activity log](#activity-log).
 - `next=` redirects only go to same-site paths.
 - Without `ADMIN_TOKEN` set, everything but the catalogs and `/healthz` answers 503.
 - Once signed in, the gate adds the `x-admin-token` header to the request inside the server. So admin-only endpoints (competitor refresh, Excel edit) work without asking for the token again.
 - The dashboard checks `/api/session` and sends you back to `/login` when the session ends or any `/api/*` call returns 401 with `login` in the body.
-- Sign-in and catalog pages send `x-frame-options: DENY`.
+- Every response carries `x-content-type-options: nosniff`, `x-frame-options: DENY` with `frame-ancestors 'none'` (no page can be framed by another site), `referrer-policy: same-origin`, and on https `strict-transport-security`.
+- A `POST` whose `Origin` is another site is refused before it reaches any handler. Together with `SameSite=Lax` cookies this blocks cross-site form and script submissions.
+- The admin token is only accepted from the sign-in form or the `x-admin-token` header, never from a URL, so it can't end up in browser history or server logs.
+- Request bodies are capped (4 KB for sign-in forms, 100 KB for API calls, 2 MB for catalog settings), so an oversized upload is cut off.
+- Any error inside a request answers 500 and is printed to the server log; one bad request can't take the server down.
 - Catalog sessions use the same design with a separate cookie per catalog (scoped to its path) and a key tied to that catalog's password. A catalog session never opens the dashboard, and a dashboard session never opens a catalog.
 
 What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set ones are stored as scrypt hashes), `EUKA_API_KEY`, `MS_CLIENT_SECRET`. Customers only ever receive catalog fields, never cost, vendor, stock counts or sales.
@@ -166,6 +182,7 @@ On a phone the menu button opens the side navigation, and the filters and search
 
 - **Reports:** Overview, Items sold, Reorder, Profit & Loss, Product master, Vendors, TikTok competitors, Insights. Each is a view of the same page at `/#<view>` (`#overview`, `#sold`, `#reorder`, `#pl`, `#master`, `#vendors`, `#competitors`, `#insights`), so a view can be bookmarked. Old links (`#sheet`, `#actions`) still open the renamed views.
 - **Catalog:** Catalog management (`/catalog-admin.html`), and a link to each customer catalog (`/catalog`, `/catalog2`, …), which opens it in a new tab.
+- **Admin:** Activity log (`/activity.html`), see [Activity log](#activity-log).
 - At the bottom: our brand logos, how many products are loaded and when the products API last updated.
 
 **Page header:** the view's title and **Export CSV** (the main table of the current view, with the filters applied). On a phone the intro text under it shows two lines until tapped, and the tiles sit two to a row.
@@ -367,13 +384,13 @@ Each product's detail view has an **Excel sheet** section showing that SKU's row
    - the value actually changed
 
    Then it PATCHes that one cell. Graph throttling (429, 503, 504) is retried up to 3 times.
-5. **Log:** every change is appended to `excel-edits.jsonl` (time, editor name, SKU, row, column, from, to) and printed to the server log.
+5. **Log:** every cell written goes to the [activity log](#activity-log) as an `EXCEL EDIT` line: SKU, column, cell, old value → new value, and the name the editor typed the first time they saved (kept in their browser).
 
 **Setup:**
 
 1. In the Microsoft Entra admin center, create an app registration.
 2. Add the Microsoft Graph **application** permission `Files.ReadWrite.All`, grant admin consent, and create a client secret.
-3. Set `MS_TENANT_ID`, `MS_CLIENT_ID` and `MS_CLIENT_SECRET` (and `ADMIN_TOKEN`) in Render → Environment.
+3. Set `MS_TENANT_ID`, `MS_CLIENT_ID` and `MS_CLIENT_SECRET` in Render → Environment.
 
 ## Customer catalogs
 
@@ -386,10 +403,39 @@ There are three customer catalogs to start with, each at its own link with its o
 - Customers can switch between a list and a tile view, filter by category, type, price, new, photo or cart, and build an order in a cart. The cart lives only in their browser for 6 hours; "Copy order" puts it on the clipboard to text or email to sales.
 - Stock: each product shows **In stock** (`live_qoh` > 0, on the shelf now), **Available to order** (`qoh` > 0 but not live) or **Ask us** (neither). Customers pick "In stock now" or "All products we carry" at the top; the choice also applies to downloads. Only the status leaves the server, never the counts.
 - The API has no picture field, so pictures come from the Jomashop listing data in the API (`igloo_jomashop`), then NocNoc (`igloo_nocnoc`), then any other product with the same UPC, and last the picture on the hub storefront's product list (`/api/ecom/search`, matched by the QuickBooks item id, then SKU, then barcode; reloaded every 6 hours, URL in `HUB_IMAGES_API`). Products with none show "No photo". Pictures are served through `/catalog/img/<sku>`, which only fetches the URL found for that SKU.
-- Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
+- Customers sign in with the catalog's password (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
 - Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
 - Clicking a product's picture opens a bigger view, with arrows to step through the products shown.
 - The **Catalog management** page (`public/catalog-admin.html` + `public/js/catalog-admin.js`, admin sign-in) controls it: turn the catalog on or off, show or hide piece and case prices, set the pricing rules (piece and case markup, and what prices round up to), include every API product except the ones you untick or only the ones you tick, and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set on that page (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG<N>_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
+
+## Activity log
+
+One plain-text file, `activity.log` in the data directory, with one line per event (`lib/activity.js`):
+
+```
+2026-10-15 04:03:29Z | CATALOG VISIT | Catalog 1 (/catalog) | 203.0.113.7 | Safari on iPhone
+2026-10-15 04:05:12Z | CATALOG CHANGE | Catalog 2 (/catalog2): piece prices hidden → shown; unticked PER 101, PER 102 | 198.51.100.4 | Chrome on Windows
+```
+
+Fields: time (UTC) | event | details | IP address | browser and device. Passwords and tokens are never written; a password change shows only as "password changed".
+
+| Event | When |
+|---|---|
+| `SIGN IN`, `SIGN IN FAILED`, `SIGN IN BLOCKED`, `SIGN OUT` | Dashboard sign-in with the admin token (blocked = 10 wrong tries in 15 minutes) |
+| `REPORTS VISIT`, `CATALOG MANAGEMENT VISIT` | Someone signed in opens the reports page or Catalog management |
+| `CATALOG SIGN IN`, `CATALOG SIGN IN FAILED`, `CATALOG SIGN IN BLOCKED`, `CATALOG SIGN OUT` | A customer signs in to a catalog |
+| `CATALOG VISIT` | A signed-in customer opens a catalog |
+| `CATALOG CHANGE` | A save on Catalog management, with every change from → to: name, on/off, prices shown or hidden, markups, rounding, which products, SKUs ticked or unticked, own prices per SKU, password changed |
+| `CATALOG ADDED`, `CATALOG REMOVED` | A catalog is added or removed |
+| `EXCEL EDIT` | One cell written to the workbook: SKU, column, cell, old → new, editor |
+| `COMPETITOR OVERRIDE`, `COMPETITOR REFRESH` | A TikTok listing pinned, hidden or cleared; a manual competitor refresh |
+| `SERVER START` | Each boot or deploy, with where files are saved |
+
+- **Visits are grouped:** the same person (IP and browser) opening the same page again within 15 minutes is one line, not one per refresh.
+- **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. If it ever passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first.
+- **Reading it:** **Activity log** in the side navigation (`/activity.html`) shows the latest 500 entries (up to 2,000 with **Show more**), newest first, with search and an event filter. **Download log** saves the whole file.
+- **IP address** is the first address in `X-Forwarded-For` as Render passes it. Someone on a VPN or mobile network shows that network's address.
+- The file lives in `COMPETITOR_DATA_DIR`, so it survives deploys only on a Render persistent disk (see [Run it](#run-it)).
 
 ## API reference
 
@@ -407,38 +453,37 @@ All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON
 | `GET /api/excel` (`?refresh`) | Connection status, workbook name and link, header row, row count, columns. |
 | `GET /api/excel/row?sku=` | `{ sku, row, sheet, cells: [{ col, header, label, value, text, editable, reason, formula? }] }`. 404 if not on the sheet, 409 if on two rows. |
 | `POST /api/excel/edit` | `{ sku, editor, changes: [{ col, header, expected, value }] }` (up to 200). Returns `results` per cell with `ok` or `error`. |
-| `GET /api/excel/log` (`?limit=`, max 500) | Latest edits, newest first. |
 | `GET /api/catalog/list` | `{ catalogs: [{ id, name, url, enabled }] }`, for the side navigation. |
 | `POST /api/catalog/add` | Adds a catalog at the next free number; returns its `settings`. |
 | `POST /api/catalog/remove` | `{ catalog }`. Deletes it and its settings (at least one stays). |
-| `GET /api/catalog/settings` | Both catalogs' settings (no password hashes), whether settings persist, and every product with its catalog fields. |
-| `POST /api/catalog/settings` | `{ catalog: "<id>", name, enabled, showPrices, showCasePrices, pieceMarkupPct, caseMarkupPct, roundTo, mode: "all" \| "selected", hidden[], added[], prices{sku: price}, newPassword?, clearPassword?, editor }`. |
-
-Admin `POST`s to competitors and Excel also accept `?token=<ADMIN_TOKEN>`.
+| `GET /api/activity` (`?q=`, `?limit=`, max 2000) | `{ entries: [{ at, event, details, ip, device }], days, persistent, file }`, newest first, optionally only entries containing `q`. |
+| `GET /api/activity/download` | The whole `activity.log` as a file. |
+| `GET /api/catalog/settings` | Every catalog's settings (no password hashes), whether settings persist, and every product with its catalog fields. |
+| `POST /api/catalog/settings` | `{ catalog: "<id>", name, enabled, showPrices, showCasePrices, pieceMarkupPct, caseMarkupPct, roundTo, mode: "all" \| "selected", hidden[], added[], prices{sku: price}, newPassword?, clearPassword? }`. |
 
 Other routes:
 
 | Path | Who | What |
 |---|---|---|
 | `GET /login`, `POST /login` (`token`, `next`), `GET /logout` | anyone | Admin sign-in |
-| `/`, `/index.html`, `/catalog-admin.html`, `/js/*` | admin | Dashboard pages |
+| `/`, `/index.html`, `/catalog-admin.html`, `/activity.html`, `/js/*` | admin | Dashboard pages |
 | `/css/*` | anyone | The shared stylesheet (the sign-in pages and catalog use it too) |
-| `/catalog`, `/catalog2` | password | Catalog page or its sign-in |
-| `POST /catalog/login` (`password`), `GET /catalog/logout` | anyone | Catalog sign-in (same under `/catalog2`) |
+| `/catalog`, `/catalog2`, `/catalog3`, … | password | Catalog page or its sign-in |
+| `POST /catalog/login` (`password`), `GET /catalog/logout` | anyone | Catalog sign-in (same under `/catalogN`) |
 | `GET /catalog/data` | catalog session | Listed products with only catalog fields and stock status |
 | `GET /catalog/img/<sku>` | catalog session | That SKU's picture, fetched through the server (images only, up to 8 MB, cached 1 day) |
 | `/media/*`, `/healthz` | anyone | Logos and icon; health check |
 
 ## Saved files
 
-Everything is written to the data directory: `COMPETITOR_DATA_DIR`, which defaults to `./data` and is git-ignored. Catalog settings can go elsewhere with `CATALOG_DATA_DIR`, and the Excel log with `EXCEL_DATA_DIR`. Writes go to a `.tmp` file first and are then renamed, so a crash can't leave half a file.
+Everything is written to the data directory: `COMPETITOR_DATA_DIR`, which defaults to `./data` and is git-ignored. Catalog settings can go elsewhere with `CATALOG_DATA_DIR`. Whole-file writes go to a `.tmp` file first and are then renamed, so a crash can't leave half a file; the activity log is appended to one line at a time.
 
 | File | Written by | Holds |
 |---|---|---|
 | `competitors.json` | Competitor runs | Per-SKU matches and candidates, run times, quota pause, Market Intelligence state |
 | `competitor-overrides.json` | Pin and Not a match | `{ sku: { ignore: [ids], pin: [ids] } }` |
 | `catalog-settings.json` | Catalog management | Which catalogs exist (`_ids`) and each one's settings, including hashed passwords |
-| `excel-edits.jsonl` | Excel saves | One line per cell changed |
+| `activity.log` | Sign-ins, visits, Catalog management changes, Excel edits, competitor pins | One line per event, last 90 days (see [Activity log](#activity-log)) |
 
 The products list is never written to disk on the server.
 
@@ -482,7 +527,8 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `EXCEL_SKU_HEADER` | `SKU #` | Header of the SKU column. |
 | `EXCEL_HEADER_ROW` | 0 (find it) | Header row number, if it shouldn't be detected. |
 | `EXCEL_LOCKED_COLUMNS` | (none) | Columns (letters or headers) that stay read only. |
-| `EXCEL_DATA_DIR` | `COMPETITOR_DATA_DIR` | Where the edit log is saved. |
+| `ACTIVITY_LOG_DAYS` | 90 | How many days of activity log are kept. |
+| `ACTIVITY_LOG_MAX_MB` | 20 | Size cap for the activity log; the oldest entries go first. |
 | `MS_GRAPH_BASE`, `MS_LOGIN_BASE` | Microsoft defaults | Override Graph and sign-in hosts. |
 
 ## What the browser stores
@@ -495,7 +541,6 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `asi-v4-hidden` | localStorage | Hidden columns in Product master and Items sold |
 | `asi-theme` | localStorage | Light, dark or match device |
 | `asi-editor` | localStorage | Your name for the Excel edit history |
-| `asi-admin-token` | localStorage | Only if you're ever asked for the token on a 401 (header-auth fallback) |
 | catalog cart | localStorage on the catalog page | A customer's cart, for 6 hours |
 
 ## Troubleshooting
@@ -512,3 +557,6 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | Excel section says not connected | Set the three `MS_*` variables. "Couldn't open the workbook" means the file path or permission is wrong. |
 | Excel save says "changed in Excel since you opened it" | Someone edited that cell. Reopen the product to load the new value. |
 | Catalog says it's locked | Set its password in Catalog management or on Render. |
+| Catalog settings, passwords or the activity log reset after a deploy | No persistent disk: add one and set `COMPETITOR_DATA_DIR` (see [Run it](#run-it)). |
+| "Cross-site request refused." (403) | A form or script on another site posted here. Use the dashboard's own pages. |
+| Lots of `SIGN IN FAILED` from one IP in the activity log | Someone is guessing. After 10 tries they're blocked for 15 minutes. Change `ADMIN_TOKEN` or the catalog password if you're worried. |

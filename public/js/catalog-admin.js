@@ -239,7 +239,7 @@
     if (act === "save") {
       CA.saving = true; paintSave();
       try {
-        const send = () => fetch("/api/catalog/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...CA.draft, catalog: CA.cur, newPassword: CA.newPassword || "", editor: "dashboard" }) });
+        const send = () => fetch("/api/catalog/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...CA.draft, catalog: CA.cur, newPassword: CA.newPassword || "" }) });
         // 502/503 come from Render while the server restarts (a deploy); wait a moment and try once more.
         let r = await send();
         if (r.status === 502 || r.status === 503) { CA.msg = "The server is restarting, trying again…"; paintSave(); await new Promise(ok => setTimeout(ok, 8000)); r = await send(); }

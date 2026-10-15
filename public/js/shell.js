@@ -5,6 +5,7 @@
 //   "reports"        the reports page (public/index.html). It gets the filter slot (#topFilters) and the
 //                    search slot (#topSearch) in the top bar, and switches views itself on /#view links.
 //   "catalog-admin"  Catalog management. No filters; its side nav item is highlighted.
+//   "activity"       Activity log (public/activity.html). Same as catalog-admin.
 (() => {
   // ---- Theme: "light", "dark" or "system" (follow the device). Saved in this browser. ----
   const THEME_KEY = "asi-theme";
@@ -28,6 +29,7 @@
     insights: i('<path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>'),
     catalogAdmin: i('<path d="M4 5.5h6a2 2 0 0 1 2 2V20a2 2 0 0 0-2-2H4z"/><path d="M20 5.5h-6a2 2 0 0 0-2 2V20a2 2 0 0 1 2-2h6z"/>'),
     catalog: i('<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 9h16M9 9v11"/>'),
+    activity: i('<path d="M7 4h10a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M9 9h6M9 13h6M9 17h3"/>'),
     ext: i('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
     menu: i('<path d="M4 7h16M4 12h16M4 17h16"/>'),
     refresh: i('<path d="M20 12a8 8 0 1 1-2.3-5.6L20 8.7"/><path d="M20 4v4.7h-4.7"/>'),
@@ -65,6 +67,8 @@
       <h2>Catalog</h2>
       <a href="/catalog-admin.html" data-view="catalog-admin">${ICON.catalogAdmin}<span>Catalog management</span></a>
       <div id="navCatalogs"></div>
+      <h2>Admin</h2>
+      <a href="/activity.html" data-view="activity">${ICON.activity}<span>Activity log</span></a>
       <div class="brands" aria-label="Our brands">${BRANDS.map(([k, n, ext]) => `<span class="plate" title="${n}"><img src="/media/brand-${k}.${ext || "jpg"}" alt="${n}" loading="lazy"></span>`).join("")}</div>
       <div class="foot" id="navFoot"></div>`;
     const scrim = document.createElement("div"); scrim.className = "navscrim";

@@ -51,10 +51,10 @@
         <label><input type=checkbox id=xlRo ${s.showRo ? "checked" : ""}> Show formula columns</label>
         <button id=xlSave disabled>Save to Excel</button>
         ${info.webUrl ? `<a href="${esc(info.webUrl)}" target=_blank rel=noopener>Open in Excel</a>` : ""}</div>
-      <p class="hint muted" id=xlMsg>${info.canEdit ? `${edits} columns you can edit. Formula columns stay as they are in Excel.` : "Read only: set ADMIN_TOKEN on the server to turn on editing."}</p>
+      <p class="hint muted" id=xlMsg>${edits} columns you can edit. Formula columns stay as they are in Excel.</p>
       <div class="xl-grid">${shown.map(c => {
         const tag = `<span>${esc(c.label)}<b>${c.col}</b></span>`;
-        if (!c.editable || !info.canEdit) return `<label class=ro title="${esc(c.formula || c.reason)}">${tag}<div>${esc(c.text) || "<span class=muted>—</span>"}</div></label>`;
+        if (!c.editable) return `<label class=ro title="${esc(c.formula || c.reason)}">${tag}<div>${esc(c.text) || "<span class=muted>—</span>"}</div></label>`;
         const cls = s.errors[c.col] ? "err" : s.saved[c.col] ? "saved" : "";
         return `<label class="${cls}">${tag}<input data-xl="${c.col}" value="${esc(c.text)}">${s.errors[c.col] ? `<em>${esc(s.errors[c.col])}</em>` : ""}</label>`;
       }).join("") || `<p class=muted>No columns match.</p>`}</div>`;
