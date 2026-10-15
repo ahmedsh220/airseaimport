@@ -920,7 +920,7 @@ function vendorsHtml() {
 }
 
 // ---------- TikTok competitors (Euka) ----------
-// The server searches Euka's TikTok Shop index for each SKU every few hours (competitors.js);
+// The server searches Euka's TikTok Shop index 100 SKUs per click on "Search next 100" (competitors.js);
 // this tab compares those listings with our TikTok price and cost.
 let COMP = null, compStatus = null, compPoll = null;
 async function loadCompetitors(withStatus) {
@@ -970,13 +970,12 @@ function competitorsHtml() {
   const s = compStatus, C = COMP;
   if (!C || !C.configured) {
     return `<p class="lead">TikTok competitor prices come from <b>Euka</b>. Add the API key on the server to turn this on.</p>
-      <section class="card"><h3>Set up</h3><p class="hint">In Render, open this service → <b>Environment</b>, add the variables below and save. The first refresh starts on its own within a minute of the restart.</p>
+      <section class="card"><h3>Set up</h3><p class="hint">In Render, open this service → <b>Environment</b>, add the variables below and save. Once the service restarts, press <b>Search next 100</b> on this tab.</p>
       <div class="tablewrap"><table><thead><tr><th class=l>Variable</th><th class=l>Value</th><th class=l>What it does</th></tr></thead><tbody>
       <tr><td class=l><b>EUKA_API_KEY</b></td><td class=l>euka_openapi_…</td><td class=l>Required. Euka app → Settings → Integrations → OpenAPI keys</td></tr>
-      <tr><td class=l>ADMIN_TOKEN</td><td class=l>any password</td><td class=l>Optional. Needed to start refreshes or pin/ignore listings from this page</td></tr>
       <tr><td class=l>OUR_TIKTOK_SHOP_NAMES</td><td class=l>Shop name, Other shop</td><td class=l>Optional. Our own shops, left out of competitors (our listing IDs are already excluded)</td></tr>
       <tr><td class=l>COMPETITORS_PER_SKU</td><td class=l>5</td><td class=l>Competitor listings kept per SKU</td></tr>
-      <tr><td class=l>COMPETITOR_REFRESH_HOURS</td><td class=l>12</td><td class=l>How often every SKU is re-checked</td></tr>
+      <tr><td class=l>COMPETITOR_BATCH_SIZE</td><td class=l>100</td><td class=l>SKUs searched per click</td></tr>
       </tbody></table></div><p class="hint" style="margin-top:10px">All settings are listed in <code>.env.example</code> in the repo.</p></section>`;
   }
   const list = rows.map(r => ({ r, x: compRow(r) }));
@@ -984,10 +983,11 @@ function competitorsHtml() {
   const under = priced.filter(o => o.x.gap > 0.005), cheapest = priced.filter(o => o.x.gap <= 0.005), below = matched.filter(o => o.x.floor != null && o.x.low < o.x.floor);
   const f = ST.compFilter || "all";
   const shown = { all: list, undercut: under, cheapest, below, nomatch: list.filter(o => !o.x.n), noprice: matched.filter(o => o.x.our == null) }[f] || list;
-  // Each SKU is re-searched only when its result is older than the refresh window; results are overwritten one by one.
-  const fresh = Object.values(C.skus || {}).filter(x => x.checkedAt && Date.now() - Date.parse(x.checkedAt) < C.refreshHours * 36e5).length;
-  const run = (C.running ? `<b>Searching:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} due SKUs… `
-    : "") + `${fmtInt(fresh)} SKUs searched in the last ${C.refreshHours} hours${C.errors ? ` · <span class=warn>${C.errors} failed last pass</span>` : ""}${!C.running && C.nextRunAt ? ` · next due ${new Date(C.nextRunAt).toLocaleString()}` : ""}.`
+  // Searching only happens on a click, one batch at a time; each SKU keeps its last result until searched again.
+  const searched = Object.values(C.skus || {}).filter(x => x.checkedAt).length, nb = C.next || {};
+  const run = (C.running ? `<b>Searching:</b> ${fmtInt(C.progress.done)} of ${fmtInt(C.progress.total)} SKUs… `
+    : nb.of ? `Next batch: SKUs ${fmtInt(nb.from)}–${fmtInt(nb.to)} of ${fmtInt(nb.of)}${nb.from === 1 && searched ? " (starting over from the top)" : ""}. ` : "")
+    + `${fmtInt(searched)} SKUs have results${C.finishedAt ? `, last batch finished ${new Date(C.finishedAt).toLocaleString()}` : ""}${C.errors ? ` · <span class=warn>${C.errors} failed last batch</span>` : ""}.`
     + (C.quotaUntil ? ` <span class="pill bad">Euka's weekly limit is used up. Searching resumes ${new Date(C.quotaUntil).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>` : "")
     + (C.saved && !C.saved.persistent ? ` <span class="pill bad" title="Results are kept on the server's temporary disk">Results reset when the server restarts</span>` : "");
   const key = s && s.keyOk === false ? `<span class="pill bad">Euka key problem: ${esc(s.error)}</span>` : "";
@@ -1022,14 +1022,15 @@ function competitorsHtml() {
       : `<b>${fmtUsd(o.x.suggest)}</b>${o.x.floor != null && o.x.suggest === o.x.floor && o.x.low < o.x.floor ? `<span class=calc>floor</span>` : ""}`, tip: "A cent under the cheapest competitor, never below the floor" },
     { h: "Checked", v: o => o.x.checkedAt, f: o => o.x.error ? `<span class=bad title="${esc(o.x.error)}">error</span>` : o.x.checkedAt ? new Date(o.x.checkedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "<span class=muted>not yet</span>" },
   ].map(c => c.prod || c === TIER ? { ...c, v: o => c.v(o.r), f: o => c.f(o.r), csv: c.prod ? o => `${o.r.sku} ${o.r.name}` : null } : c);
-  return `<p class="lead">Up to ${C.perSku} same-item TikTok Shop listings per SKU from <b>Euka</b>, re-checked every ${C.refreshHours} hours. ${run} ${key}
+  const size = nb.size || 100;
+  return `<p class="lead">Up to ${C.perSku} same-item TikTok Shop listings per SKU from <b>Euka</b>, searched ${fmtInt(size)} SKUs per click, continuing where the last batch stopped. ${run} ${key}
       ${mi}
-      <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""} title="Searches SKUs not searched in the last ${C.minGapHours || 2} hours">Refresh all now</button></p>${kpis}
+      <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""} title="${nb.firstSku ? `Searches ${fmtInt(size)} SKUs starting at ${esc(nb.firstSku)}` : `Searches the next ${fmtInt(size)} SKUs`}">Search next ${fmtInt(size)}</button></p>${kpis}
     <section class="card"><div class="head"><h3>Price comparison</h3>
       <div class="row"><label class="t">Compare to</label><div class="seg">${[["sale", "Sale price"], ["regular", "Regular price"]].map(([k, v]) => `<button data-cbasis="${k}" class="${(ST.compBasis || "sale") === k ? "active" : ""}" title="${k === "regular" ? "Ignore competitors' promotions: use their strike-through price when they show one" : "What competitors charge right now, promotions included"}">${v}</button>`).join("")}</div>
       <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div></div>
       <p class="hint">Click a product to see each competitor listing, pin the right one or hide a wrong match.</p>
-      ${table("comp", cols, shown, { sort: 8, onRow: o => showCompetitors(o.r), main: "tiktok-competitors", empty: f === "all" ? "No competitor data yet. The first refresh is running or hasn't started." : "Nothing in this group." })}</section>`;
+      ${table("comp", cols, shown, { sort: 8, onRow: o => showCompetitors(o.r), main: "tiktok-competitors", empty: f === "all" ? `No competitor data yet. Press Search next ${fmtInt(size)} to start.` : "Nothing in this group." })}</section>`;
 }
 function showCompetitors(r) {
   const x = compRow(r), ov = COMP?.overrides?.[r.sku] || {};
@@ -1063,7 +1064,7 @@ async function compPost(pathname, body) {
   const res = await fetch(pathname, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
   if (res.status === 401) return null;
   const out = await res.json().catch(() => ({}));
-  if (res.status === 409) return { message: "A refresh is already running. New results appear as each product is searched." };
+  if (res.status === 409) return { message: "A search is already running. New results appear as each product is searched." };
   if (!res.ok && res.status !== 202) { alert(out.error || `Request failed (HTTP ${res.status})`); return null; }
   return out;
 }

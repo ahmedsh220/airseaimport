@@ -53,8 +53,9 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 │   ├── activity.js           the activity log file: writing, 90-day clean-up, /api/activity
 │   ├── auth.js               admin sign-in gate for everything except /catalog*, /healthz, /media/, /css/
 │   ├── catalog.js            customer catalogs (/catalog, /catalog2, …), adding and removing them, their settings API
-│   ├── competitors.js        Euka competitor search, matching, scheduling, overrides
-│   └── excel.js              read and write the pricing workbook through Microsoft Graph
+│   ├── competitors.js        Euka competitor search in batches of 100, matching, overrides
+│   ├── excel.js              read and write the pricing workbook through Microsoft Graph
+│   └── http.js               request body caps, JSON answers, per-IP rate limits
 ├── public/
 │   ├── index.html            the reports page: page header, detail dialog and report-only styles
 │   ├── catalog-admin.html    Catalog management page
@@ -78,7 +79,7 @@ Every request first gets the security headers, and a `POST` from another site is
 
 ```
 request
-  ├─ security headers, cross-site POST check (server.js)
+  ├─ security headers, per-IP rate limits, cross-site POST check (server.js)
   └─ auth.gate (lib/auth.js)          sign-in page, redirect or 401 unless signed in (catalogs, /healthz, /media/, /css/ pass through)
       ├─ /api/products                 server.js: cached products API
       ├─ /catalog, /catalogN           catalog.handle: its own password, page, data, pictures
@@ -94,8 +95,7 @@ request
 
 1. `.env` is loaded (local runs only).
 2. The server starts listening, trims the activity log to the last 90 days (again every 6 hours) and writes a `SERVER START` line, then fetches the products API to warm the cache.
-3. Competitor scheduling starts: 15 seconds after boot and then every 15 minutes, any SKU whose result is older than the refresh window is searched again.
-4. Every 2 minutes, the products cache is refreshed in the background if it's more than 5 minutes old.
+3. Every 2 minutes, the products cache is refreshed in the background if it's more than 5 minutes old.
 
 ## Sign-in and security
 
@@ -110,15 +110,17 @@ How it works (`lib/auth.js`):
 
 - The session cookie is `base64url(JSON {exp, dev, id}) . HMAC-SHA256 signature`. The signing key is derived from `ADMIN_TOKEN`, so changing the token on Render signs every admin out.
 - `dev` is a hash of the browser's user agent, so a copied cookie doesn't work in another browser.
-- Token and password checks use constant-time comparison. Wrong tries are limited to 10 per 15 minutes per IP, separately for the dashboard and for the catalogs (counted in memory, reset on restart). Every sign-in, failed sign-in and block is written to the [activity log](#activity-log).
-- `next=` redirects only go to same-site paths.
+- Token and password checks use constant-time comparison. Wrong tries are limited to 10 per 15 minutes per IP, and to 200 per 15 minutes from everyone together (past that, new sign-ins pause until the window ends; anyone signed in stays in). The dashboard and the catalogs are counted separately, in memory, reset on restart. A wrong `x-admin-token` header counts the same as a wrong sign-in. Every sign-in, failed sign-in and block is written to the [activity log](#activity-log).
+- The IP used for those limits is `CF-Connecting-IP`, which Cloudflare (in front of Render) sets itself. `X-Forwarded-For` is only a fallback, because Render keeps whatever a client puts at its start.
+- Rate limits per IP: 600 requests a minute overall, and 60 a minute for anything that changes something (`POST`). Past that the server answers 429 for the rest of the minute. "Refresh data" re-fetches the products API at most every 30 seconds.
+- `next=` redirects only go to same-site paths (not `//host` or `/\host`).
 - Without `ADMIN_TOKEN` set, everything but the catalogs and `/healthz` answers 503.
 - Once signed in, the gate adds the `x-admin-token` header to the request inside the server. So admin-only endpoints (competitor refresh, Excel edit) work without asking for the token again.
 - The dashboard checks `/api/session` and sends you back to `/login` when the session ends or any `/api/*` call returns 401 with `login` in the body.
-- Every response carries `x-content-type-options: nosniff`, `x-frame-options: DENY` with `frame-ancestors 'none'` (no page can be framed by another site), `referrer-policy: same-origin`, and on https `strict-transport-security`.
+- Every response carries `x-content-type-options: nosniff`, `x-frame-options: DENY`, `referrer-policy: same-origin`, on https `strict-transport-security`, and a `content-security-policy`: scripts only from this server and the pinned libraries on cdnjs and jsDelivr, network calls only to this server, no plugins, forms only post here, and no page can be framed by another site.
 - A `POST` whose `Origin` is another site is refused before it reaches any handler. Together with `SameSite=Lax` cookies this blocks cross-site form and script submissions.
 - The admin token is only accepted from the sign-in form or the `x-admin-token` header, never from a URL, so it can't end up in browser history or server logs.
-- Request bodies are capped (4 KB for sign-in forms, 100 KB for API calls, 2 MB for catalog settings), so an oversized upload is cut off.
+- Request bodies are capped (4 KB for sign-in forms, 100 KB for API calls, 2 MB for catalog settings), so an oversized upload is refused before it's read into memory (`lib/http.js`).
 - Any error inside a request answers 500 and is printed to the server log; one bad request can't take the server down.
 - Catalog sessions use the same design with a separate cookie per catalog (scoped to its path) and a key tied to that catalog's password. A catalog session never opens the dashboard, and a dashboard session never opens a catalog.
 
@@ -129,7 +131,7 @@ What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set on
 | Source | Code | Cache | Used for |
 |---|---|---|---|
 | Products API (`PRODUCTS_API`) | `server.js` | In memory on the server, refreshed in the background when older than 5 minutes. The browser keeps no copy | Everything |
-| Euka Social and Market Intelligence | `lib/competitors.js` | `competitors.json` on disk, each SKU re-searched weekly by default | TikTok competitors tab |
+| Euka Social and Market Intelligence | `lib/competitors.js` | `competitors.json` on disk, searched 100 SKUs per click | TikTok competitors tab |
 | Pricing workbook in OneDrive (Microsoft Graph) | `lib/excel.js` | Sheet layout 5 minutes; rows read live | Excel section of a product's detail view, write-back |
 | Hub storefront product list (`HUB_IMAGES_API`) | `lib/catalog.js` | In memory, 6 hours | Catalog pictures (last fallback) |
 
@@ -348,15 +350,14 @@ The **TikTok competitors** tab compares each SKU's TikTok price with up to 5 sam
 
 **Scheduling and limits:**
 
-- **When SKUs are searched:** every 15 minutes the server searches the SKUs whose result is older than `COMPETITOR_REFRESH_HOURS` (168 hours by default, since Euka's quota is weekly).
-- **Errors:** a failed SKU is retried after `COMPETITOR_MIN_GAP_HOURS` (2).
-- **Refresh all now:** only takes SKUs not searched in the last 2 hours.
+- **When SKUs are searched:** only when you click. Nothing runs on a timer. **Search next 100** searches the next 100 SKUs (`COMPETITOR_BATCH_SIZE`) in SKU order, starting after the last SKU the previous batch got through. After the last SKU it starts over from the top. The tab shows which SKUs the next batch covers ("SKUs 101–200 of 1,234").
+- **Where a batch stops:** the position is saved with the results, so a batch cut short by a restart, the weekly quota or a rejected key carries on from the first SKU it missed. A SKU that failed for any other reason shows its error and counts as done; **Re-check now** on that product tries it again.
 - **Pacing:** 2 workers, with at least 1.5 seconds between any two calls. A rate limit (429) pauses every worker, honouring `retry-after`, doubling up to 10 minutes.
 - **Weekly quota:** when Euka says the quota is used up, nothing is called until Monday 00:00 UTC. The pause is saved to disk, so it survives restarts.
 - **Market Intelligence fallbacks:**
   - Rate limited: it's paused for 30 minutes and Social Intelligence carries on alone.
   - Not available to the key (other 4xx): it's switched off for that run.
-- **Saving:** results are written every 10 SKUs, so an interrupted run resumes where it stopped.
+- **Saving:** results are written every 10 SKUs. Results for SKUs no longer in the products API are dropped when a batch starts.
 
 **On the page:** hide a wrong match ("Not a match") or pin the right listing. Either one re-checks that SKU right away. Overrides are saved in `competitor-overrides.json`.
 
@@ -427,14 +428,14 @@ Fields: time (UTC) | event | details | IP address | browser and device. Password
 | `CATALOG CHANGE` | A save on Catalog management, with every change from → to: name, on/off, prices shown or hidden, markups, rounding, which products, SKUs ticked or unticked, own prices per SKU, password changed |
 | `CATALOG ADDED`, `CATALOG REMOVED` | A catalog is added or removed |
 | `EXCEL EDIT` | One cell written to the workbook: SKU, column, cell, old → new, editor |
-| `COMPETITOR OVERRIDE`, `COMPETITOR REFRESH` | A TikTok listing pinned, hidden or cleared; a manual competitor refresh |
+| `COMPETITOR OVERRIDE`, `COMPETITOR SEARCH` | A TikTok listing pinned, hidden or cleared; a batch of 100 searched, or a product re-checked |
 | `SERVER START` | Each boot or deploy, with where files are saved |
 | `LOG TRIMMED` | Old entries were deleted: past 90 days, or to stay under the size cap |
 
 - **Visits are grouped:** the same person (IP and browser) opening the same page again within 15 minutes is one line, not one per refresh.
 - **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. The moment it passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first, so a flood of bad sign-ins can't fill the disk. Blocked sign-ins are logged once per IP and browser every 15 minutes. Each clean-up that drops anything writes a `LOG TRIMMED` line saying what went and why.
 - **Reading it:** **Activity log** in the side navigation (`/activity.html`) shows the log's size against its cap ("0.9 MB of 20 MB"), and when the size cap last forced old entries out (or that it never has). Below that it shows the latest 500 entries (up to 2,000 with **Show more**), newest first, with search and an event filter. **Download log** saves the whole file.
-- **IP address** is the first address in `X-Forwarded-For` as Render passes it. Someone on a VPN or mobile network shows that network's address.
+- **IP address** is `CF-Connecting-IP` (set by Cloudflare in front of Render), else the first address in `X-Forwarded-For`. Someone on a VPN or mobile network shows that network's address.
 - The file lives in `COMPETITOR_DATA_DIR`, so it survives deploys only on a Render persistent disk (see [Run it](#run-it)).
 
 ## API reference
@@ -445,11 +446,10 @@ All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON
 |---|---|
 | `GET /api/products` (`?refresh`) | The products API body as-is. Headers `x-fetched-at` (when the server fetched it) and `x-source` (`live` or `stale`). 502 when there's no copy at all. |
 | `GET /api/session` | `{ expiresAt }` for the current browser session (null for header auth). |
-| `GET /api/competitors` | Everything the tab needs: `configured, running, progress, runAt, finishedAt, errors, refreshHours, perSku, minScore, region, nextRunAt, quotaUntil, minGapHours, saved, sources, marketIntel, skus{sku: {checkedAt, queries, calls, matches[], candidates[], error}}, overrides`. |
+| `GET /api/competitors` | Everything the tab needs: `configured, running, progress, runAt, finishedAt, errors, perSku, minScore, region, next{size, from, to, of, firstSku}, quotaUntil, saved, sources, marketIntel, skus{sku: {checkedAt, queries, calls, matches[], candidates[], error}}, overrides`. |
 | `GET /api/competitors/status` | Checks the Euka key (`/me`, cached 10 minutes): `configured, keyOk, key, error, running, progress, lastCall`. |
-| `GET /api/competitors/product/<id>` | One TikTok listing straight from Euka. |
-| `POST /api/competitors/refresh` | Body `{ "skus": [...] }` optional. 3 SKUs or fewer: waits and returns their results. Otherwise 202 and runs in the background. 409 if a run is going. |
-| `POST /api/competitors/override` | `{ sku, productId, action: "ignore" \| "pin" \| "clear" }`. Saves it and re-checks that SKU. |
+| `POST /api/competitors/refresh` | No body: searches the next batch of 100 in the background (202). `{ "skus": [...] }` (up to 100): re-checks those; 3 or fewer waits and returns their results. 409 if a search is going. |
+| `POST /api/competitors/override` | `{ sku, productId, action: "ignore" \| "pin" \| "clear" }`. Saves it and re-checks that SKU. The SKU must be in the products API; up to 50 pinned and 50 hidden listings per SKU. |
 | `GET /api/excel` (`?refresh`) | Connection status, workbook name and link, header row, row count, columns. |
 | `GET /api/excel/row?sku=` | `{ sku, row, sheet, cells: [{ col, header, label, value, text, editable, reason, formula? }] }`. 404 if not on the sheet, 409 if on two rows. |
 | `POST /api/excel/edit` | `{ sku, editor, changes: [{ col, header, expected, value }] }` (up to 200). Returns `results` per cell with `ok` or `error`. |
@@ -480,10 +480,21 @@ Everything is written to the data directory: `COMPETITOR_DATA_DIR`, which defaul
 
 | File | Written by | Holds |
 |---|---|---|
-| `competitors.json` | Competitor runs | Per-SKU matches and candidates, run times, quota pause, Market Intelligence state |
+| `competitors.json` | Competitor searches | Where the next batch starts, per-SKU matches and candidates, run times, quota pause, Market Intelligence state |
 | `competitor-overrides.json` | Pin and Not a match | `{ sku: { ignore: [ids], pin: [ids] } }` |
 | `catalog-settings.json` | Catalog management | Which catalogs exist (`_ids`) and each one's settings, including hashed passwords |
 | `activity.log` | Sign-ins, visits, Catalog management changes, Excel edits, competitor pins | One line per event, last 90 days (see [Activity log](#activity-log)) |
+
+None of them can grow without limit:
+
+| File | Bound |
+|---|---|
+| `competitors.json` | One entry per SKU in the products API (others are dropped when a batch starts), each with at most 5 matches and 5 near misses. |
+| `competitor-overrides.json` | Only SKUs in the products API, at most 50 pinned and 50 hidden listings each; a SKU with none left is removed. |
+| `catalog-settings.json` | At most 20 catalogs, each with at most 10,000 SKUs per list and 10,000 own prices, SKUs up to 64 characters. |
+| `activity.log` | 90 days and 20 MB, whichever comes first. Excel edit history lives here too, so it has the same bound. |
+
+In memory, the sign-in limits, the rate limits and the "already logged this visit" list are all swept or capped, and the products, catalog and hub picture caches are replaced, not added to.
 
 The products list is never written to disk on the server.
 
@@ -514,8 +525,7 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `EUKA_MIN_INTERVAL_MS` | 1500 | Minimum gap between any two Euka calls. |
 | `EUKA_DELAY_MS` | 250 | Extra pause between SKUs and fallback queries. |
 | `COMPETITORS_PER_SKU` | 5 | Matches kept per SKU. |
-| `COMPETITOR_REFRESH_HOURS` | 168 | How old a SKU's result gets before it is searched again. |
-| `COMPETITOR_MIN_GAP_HOURS` | 2 | Never re-search a SKU sooner than this, even from "Refresh all now"; retry failures after this. |
+| `COMPETITOR_BATCH_SIZE` | 100 | SKUs searched per click on **Search next 100**. |
 | `COMPETITOR_MIN_SCORE` | 0.6 | Match threshold. |
 | `OUR_TIKTOK_SHOP_NAMES` | (none) | Our shop names, left out of competitors. |
 | `COMPETITOR_DATA_DIR` | `./data` | Data directory. Point it at the Render disk. |
@@ -553,7 +563,7 @@ Only view preferences, plus the sign-in cookie (HttpOnly). No product data, cost
 | "Couldn't load the products API" | The upstream API is down or cutting responses off. The server falls back to its last good copy. Try **Refresh data** in a minute. Server logs show each attempt (`Products fetch attempt …`). |
 | Data says "last good copy from …" | The server is serving its stale copy while the upstream fails. |
 | Competitor results vanish after a deploy | `COMPETITOR_DATA_DIR` isn't on a persistent disk (the tab shows "Results reset when the server restarts"). |
-| "Euka's weekly limit is used up" | Searching resumes Monday 00:00 UTC on its own. |
+| "Euka's weekly limit is used up" | Euka's quota resets Monday 00:00 UTC; click **Search next 100** after that. |
 | "Market intelligence unavailable" | The key's plan lacks it, or it's rate limited. Product search carries on alone. |
 | Excel section says not connected | Set the three `MS_*` variables. "Couldn't open the workbook" means the file path or permission is wrong. |
 | Excel save says "changed in Excel since you opened it" | Someone edited that cell. Reopen the product to load the new value. |
