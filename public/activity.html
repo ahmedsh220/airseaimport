@@ -27,9 +27,10 @@
 const $ = id => document.getElementById(id);
 const esc = ui.esc;
 // Lozenge color per kind of event.
-const tone = e => /FAILED|BLOCKED|REMOVED/.test(e) ? "bad" : /CHANGE|EDIT|ADDED|OVERRIDE/.test(e) ? "warn" : /SIGN IN|SIGN OUT/.test(e) ? "info" : "";
+const tone = e => /FAILED|BLOCKED|REMOVED|TRIMMED/.test(e) ? "bad" : /CHANGE|EDIT|ADDED|OVERRIDE/.test(e) ? "warn" : /SIGN IN|SIGN OUT/.test(e) ? "info" : "";
 const AL = { q: "", event: "", limit: 500, data: null, error: "" };
 let timer;
+const mb = n => `${(n / 1048576).toFixed(n < 1048576 ? 2 : 1)} MB`;
 
 async function load() {
   try {
@@ -51,7 +52,10 @@ function render() {
     ${d.persistent ? "" : `<div class="msg warn">This log is saved on the server's own disk, which is wiped on every deploy. Attach a Render persistent disk and set COMPETITOR_DATA_DIR to keep it.</div>`}
     <section class="card">
       <div class="head"><div><h3>Latest activity</h3>
-        <p class="hint">Entries older than ${d.days} days are deleted automatically. Times are your device's local time.</p></div>
+        <p class="hint">Entries older than ${d.days} days are deleted automatically. Times are your device's local time.</p>
+        <p class="hint">Log size: <b>${mb(d.sizeBytes)} of ${mb(d.maxBytes)}</b> (${Math.min(100, Math.round(d.sizeBytes / d.maxBytes * 100))}% used). ${d.capHitAt
+          ? `<span class="warn">The size cap was last hit ${esc(new Date(d.capHitAt.replace(" ", "T")).toLocaleString())}, so the oldest entries were dropped early.</span>`
+          : "The size cap has never been hit."}</p></div>
         <a class="btn" href="/api/activity/download" download="activity.log">Download log</a></div>
       <div class="al-bar">
         <input type="search" class="search" id="alQ" placeholder="Search: SKU, catalog, IP, device…" value="${esc(AL.q)}">
