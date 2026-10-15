@@ -9,6 +9,7 @@
   // One panel is shared by every dropdown on the page. open(trigger, { html, onPick }):
   //   html()   returns the panel's contents; clickable rows carry data-pick="value"
   //   onPick   runs with (value, element); return true to keep the panel open (it redraws), otherwise it closes.
+  //   keepFocus  leave focus on the trigger (a search box that keeps typing) instead of moving it into the panel.
   // The trigger is found again by id after the page redraws, so it must have an id.
   const panel = document.createElement("div");
   panel.className = "dd-menu"; panel.hidden = true; panel.setAttribute("role", "menu");
@@ -16,7 +17,9 @@
   const trigger = () => cur && document.getElementById(cur.id);
   function place() {
     const t = trigger(); if (!t) return close();
-    const r = t.getBoundingClientRect(), w = panel.offsetWidth, h = panel.offsetHeight;
+    const r = t.getBoundingClientRect();
+    panel.style.minWidth = Math.max(220, r.width) + "px";   // at least as wide as its trigger (the search box)
+    const w = panel.offsetWidth, h = panel.offsetHeight;
     const left = Math.max(8, Math.min(r.left, innerWidth - w - 8));
     const below = r.bottom + 4, top = below + h > innerHeight - 8 && r.top - h - 4 > 8 ? r.top - h - 4 : below;
     panel.style.left = left + "px"; panel.style.top = top + "px";
@@ -30,7 +33,7 @@
     if (!panel.isConnected) document.body.append(panel);
     panel.hidden = false; t.setAttribute("aria-expanded", "true");
     draw();
-    panel.querySelector(".sel, [data-pick]")?.focus({ preventScroll: true });
+    if (!opts.keepFocus) panel.querySelector(".sel, [data-pick]")?.focus({ preventScroll: true });
   }
   function close() {
     if (!cur) return;
@@ -80,5 +83,6 @@
       <label>Rows <select data-tbl="${id}" data-size>${sizes.map(n => `<option ${n === size ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>`;
   }
 
-  window.ui = { esc, menu: { open, close, refresh }, selectTrigger, selectMenu, pager };
+  const isOpen = id => !!cur && cur.id === id && !panel.hidden;
+  window.ui = { esc, menu: { open, close, refresh, isOpen }, selectTrigger, selectMenu, pager };
 })();

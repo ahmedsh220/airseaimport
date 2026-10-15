@@ -309,10 +309,44 @@ function openFilter(id) {
     ui.selectMenu(t, opts, ST.tier, v => { ST.tier = v; apply(); });
   }
 }
-function mountSearch() {
-  $("topSearch").innerHTML = `<input type="search" class="search" id="q" placeholder="Search SKU, name or UPC" aria-label="Search products" style="width:100%">`;
-  let timer; $("q").addEventListener("input", e => { clearTimeout(timer); timer = setTimeout(() => { query = e.target.value; apply(); }, 150); });
+// Search box: typing filters the current view (after a short pause) and opens a dropdown of the best-matching
+// products. Picking one puts its SKU in the box and opens that product's detail. ↓ moves into the list, Esc closes it.
+const matches = q => {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const score = r => { const k = String(r.sku ?? "").toLowerCase(), n = String(r.name ?? "").toLowerCase();
+    return k === q || String(r.upc ?? "") === q ? 0 : k.startsWith(q) ? 1 : n.startsWith(q) || n.includes(" " + q) ? 2 : 3; };
+  return all.filter(r => [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q)))
+    .map(r => [score(r), r]).sort((a, b) => a[0] - b[0] || (b[1]._sold || 0) - (a[1]._sold || 0)).map(x => x[1]);
+};
+function suggestHtml() {
+  const q = $("q")?.value || "", list = matches(q);
+  if (!list.length) return `<div class="dd-empty">No products match “${esc(q.trim())}”.</div>`;
+  return list.slice(0, 8).map(r => `<button type="button" class="dd-item sug" data-pick="${esc(r.sku)}" role="menuitem">
+      ${r._tier && r._tier !== "none" ? `<span class="dot" style="--c:var(${tierVar(r._tier)})" title="${esc(r._tier)}"></span>` : `<span class="dot" style="--c:transparent"></span>`}
+      <span class="nm"><b>${esc(r.sku)}</b> ${esc(r.name)}</span><span class="mt">${fmtInt(r._qoh)} on hand</span></button>`).join("")
+    + `<div class="dd-foot"><span class="muted">${fmtInt(list.length)} match${list.length === 1 ? "" : "es"} · the view below shows them all</span></div>`;
 }
+function openSuggest() {
+  const q = $("q"); if (!q) return;
+  if (!q.value.trim()) return ui.menu.isOpen("q") && ui.menu.close();
+  if (ui.menu.isOpen("q")) return ui.menu.refresh();
+  ui.menu.open(q, { keepFocus: true, html: suggestHtml, onPick: sku => {
+    const r = all.find(x => String(x.sku) === sku); if (!r) return;
+    q.value = sku; query = sku; apply(); showDetail(r);
+  } });
+}
+function mountSearch() {
+  $("topSearch").innerHTML = `<input type="search" class="search" id="q" placeholder="Search SKU, name or UPC" aria-label="Search products" autocomplete="off" aria-haspopup="menu" style="width:100%">`;
+  const q = $("q");
+  let timer; q.addEventListener("input", e => { openSuggest(); clearTimeout(timer); timer = setTimeout(() => { query = e.target.value; apply(); }, 150); });
+  q.addEventListener("focus", () => { if (q.value.trim()) openSuggest(); });
+  q.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" && ui.menu.isOpen("q")) { e.preventDefault(); document.querySelector(".dd-menu [data-pick]")?.focus(); }
+    if (e.key === "Enter") { clearTimeout(timer); query = q.value; apply(); ui.menu.close(); }
+  });
+}
+// Banner at the top of a view while the search is on: what was searched and how many products it found.
+const searchBanner = () => !query.trim() ? "" : `<div class="searchnote" role="status">${shell.ICON.master}<span>Showing results for <b>“${esc(query.trim())}”</b> · ${fmtInt(rows.length)} product${rows.length === 1 ? "" : "s"}</span><button type="button" class="subtle" id="clearSearch">Clear search</button></div>`;
 
 // Reset: back to every product on every platform, with the search box emptied.
 function resetFilters() {
@@ -446,7 +480,7 @@ function render() {
   renderFilters(); renderFoot();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = VIEW_HTML()[ST.tab]();
+  $("main").innerHTML = searchBanner() + VIEW_HTML()[ST.tab]();
   if (ST.tab === "overview" || ST.tab === "sold") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
   $("csv").hidden = !lastTable;
@@ -1089,14 +1123,15 @@ function exportCsv() {
 // ---------- events ----------
 // One click listener for the whole page; each control is recognised by its data-* attribute or id.
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,[data-expand]");
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-tbl][data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,#clearSearch,[data-expand]");
   if (!t) return;
   if (t.matches("#fPlat, #fCat, #fTier")) openFilter(t.id);                                  // top bar filters
   else if (t.id === "resetFilters") resetFilters();
+  else if (t.id === "clearSearch") { query = ""; $("q").value = ""; ui.menu.close(); apply(); }
   else if (t.dataset.expand) toggleExpand(t.dataset.expand);
   else if (t.id === "groupBy") ui.selectMenu(t, Object.entries(GROUPS).map(([k, v]) => ({ value: k, label: v[0] })), ST.group, v => { ST.group = v; ST.groupPick = null; render(); });
   else if (t.dataset.cols) openColumnPicker(t.dataset.cols);                                // "Columns" picker
-  else if (t.dataset.page) { PAGE[t.dataset.tbl].page = +t.dataset.page; render(); t.closest(".card")?.scrollIntoView({ block: "nearest" }); }
+  else if (t.dataset.tbl && t.dataset.page) { PAGE[t.dataset.tbl].page = +t.dataset.page; render(); t.closest(".card")?.scrollIntoView({ block: "nearest" }); }
   else if (t.classList.contains("lead")) t.classList.toggle("open");                         // phone: expand the clamped description
   else if (t.dataset.ss) { ST.soldShow = t.dataset.ss; render(); }
   else if (t.dataset.h) { ST.horizon = +t.dataset.h; render(); }

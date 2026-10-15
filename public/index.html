@@ -50,6 +50,13 @@
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--ds-link); display: inline; }
   details.settings .row { margin-top: 8px; } details.settings input[type=number] { width: 72px; }
   #status { padding: 64px 24px; text-align: center; color: var(--ds-text-subtlest); }
+  /* Search: the "Showing results for" banner and the product suggestions dropdown. */
+  .searchnote { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; padding: 8px 12px; border-radius: 6px;
+    background: var(--ds-bg-information, var(--ds-bg-selected)); color: var(--ds-text); }
+  .searchnote svg { width: 16px; height: 16px; color: var(--ds-icon-information, var(--ds-text-selected)); }
+  .searchnote span { flex: 1; min-width: 0; }
+  .dd-item.sug .nm b { font-weight: 600; margin-right: 4px; }
+  .dd-empty { padding: 12px 16px; color: var(--ds-text-subtlest); }
   .dd-trigger .val { display: inline-flex; align-items: center; gap: 6px; }
   .dd-item svg { width: 16px; height: 16px; }
   /* Phone: tiles two to a row and smaller; the intro text shows two lines until tapped. */
