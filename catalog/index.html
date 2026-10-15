@@ -500,7 +500,13 @@ $("zoom").addEventListener("keydown", e => { if (e.key === "ArrowLeft") zoom(zoo
 
 // ---- Exports ----
 const scripts = {};
-const loadScript = src => scripts[src] ||= new Promise((ok, fail) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = () => fail(new Error("Couldn't load the export library. Check your connection.")); document.head.append(s); });
+// Each library is pinned to the exact file we checked (Subresource Integrity), so a changed CDN copy won't run.
+const SRI = {
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js": "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk",
+  "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js": "sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3",
+  "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js": "sha384-Pqp51FUN2/qzfxZxBCtF0stpc9ONI6MYZpVqmo8m20SoaQCzf+arZvACkLkirlPz",
+};
+const loadScript = src => scripts[src] ||= new Promise((ok, fail) => { const s = document.createElement("script"); s.src = src; if (SRI[src]) { s.integrity = SRI[src]; s.crossOrigin = "anonymous"; } s.onload = ok; s.onerror = () => fail(new Error("Couldn't load the export library. Check your connection.")); document.head.append(s); });
 
 // Pictures are shrunk to small JPEGs so the files stay a manageable size.
 const thumbs = new Map();

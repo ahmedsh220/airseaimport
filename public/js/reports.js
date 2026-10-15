@@ -3,8 +3,8 @@
 // products API list, so each number on screen can be traced to a formula below.
 //
 // How it fits together
-//   load()       fetches the products (browser → API first, then our server's copy, then the copy saved in
-//                this browser) and hands them to ingest()
+//   load()       fetches the products through our server (/api/products, sign-in required), falling back to
+//                the copy saved in this browser, and hands them to ingest()
 //   enrich()     turns one API product into a row with the spreadsheet's metrics (_qoh, _day, _Q, _pl, …)
 //   apply()      applies the top bar filters (search, category, tier) to all products → rows
 //   render()     draws the current view (ST.tab) from rows; each view has a <name>Html() function
@@ -15,7 +15,8 @@
 // localStorage, so the page opens where it was left. See "What the browser stores" in the README.
 // =====================================================================================================
 
-const API = location.protocol.startsWith("http") ? "/api/products" : "https://hub.fragrancewholesalerusa.com/api/open/products";
+// Products only come through our server, which checks the sign-in. The browser never calls the hub itself.
+const API = "/api/products";
 
 const num = v => { if (v === null || v === undefined || v === "" || typeof v === "boolean") return null;
   const n = typeof v === "number" ? v : parseFloat(String(v).replace(/[$,]/g, "")); return isFinite(n) ? n : null; };
@@ -162,40 +163,18 @@ function computePL(r) {
     r._pl[x.k] = { price, live, src, fee, ship, base, profit, pct: pctBase + profit ? profit / (pctBase + profit) : null, units, profit60: profit * units };
   }
 }
-// Last good copy kept in the browser (IndexedDB) so a server or API hiccup still shows data.
-const idb = (mode, fn) => new Promise((resolve, reject) => {
-  const open = indexedDB.open("asi-dashboard", 1);
-  open.onupgradeneeded = () => open.result.createObjectStore("kv");
-  open.onerror = () => reject(open.error);
-  open.onsuccess = () => { const tx = open.result.transaction("kv", mode), req = fn(tx.objectStore("kv"));
-    tx.oncomplete = () => resolve(req.result); tx.onerror = () => reject(tx.error); };
-});
-const saveSnapshot = text => idb("readwrite", s => s.put({ at: Date.now(), text }, "products")).catch(() => {});
-const loadSnapshot = () => idb("readonly", s => s.get("products")).catch(() => null);
 
-const UPSTREAM = "https://hub.fragrancewholesalerusa.com/api/open/products";
-// The API loads fine in a browser but gets cut off when our server fetches it, so the browser
-// asks the API directly first and only uses our server's copy if the browser isn't allowed to.
-let directError = "";
 async function fetchProducts(force) {
-  directError = "";
-  if (API !== UPSTREAM) {
-    try {
-      setStatus("Fetching products from the API…");
-      const res = await fetch(UPSTREAM, { cache: "no-store", signal: AbortSignal.timeout(45000) });
-      if (res.ok) { const text = await res.text(); JSON.parse(text); viaSource = "live API"; return text; }
-    } catch (e) { console.warn("Direct API fetch failed, using the server copy", e); directError = e.name === "SyntaxError" ? "the API's response was cut off (incomplete JSON)" : e.message; }
-  }
-  try { return await fetchVia(API, force); }
-  catch (e) { throw new Error(`direct: ${directError || "n/a"}; server: ${e.message}`); }
+  if (!location.protocol.startsWith("http")) throw new Error("open the dashboard from its web address, or use Load JSON file");
+  return fetchVia(API, force);
 }
 let viaSource = "live API";
 async function fetchVia(API, force) {
   let last;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      setStatus(`Direct load failed, trying the server copy (attempt ${attempt} of 2)…`);
-      const res = await fetch(API + (force && API.startsWith("/") ? "?refresh=1" : ""), { cache: "no-store", signal: AbortSignal.timeout(60000) });
+      setStatus(attempt === 1 ? "Fetching products…" : "Fetching products (attempt 2 of 2)…");
+      const res = await fetch(API + (force ? "?refresh=1" : ""), { cache: "no-store", signal: AbortSignal.timeout(60000) });
       if (!res.ok) throw new Error("HTTP " + res.status);
       viaSource = res.headers.get("x-source") === "stale"
         ? `last good copy from ${new Date(res.headers.get("x-fetched-at")).toLocaleString()} (the live API isn't answering right now)`
@@ -214,14 +193,8 @@ async function load(force) {
     const text = await fetchProducts(force);
     const data = JSON.parse(text);
     ingest(data, viaSource);
-    saveSnapshot(text);
   } catch (e) {
     console.error(e);
-    const snap = await loadSnapshot();
-    if (snap?.text) {
-      ingest(JSON.parse(snap.text), `saved copy from ${new Date(snap.at).toLocaleString()} (live API unavailable: ${e.message}, try Refresh data)`);
-      return;
-    }
     setStatus(`<div class="err">Couldn't load the products API (${esc(e.message)}).</div>
       Try <b>Refresh data</b> in a minute.`);
   }

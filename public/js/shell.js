@@ -7,6 +7,10 @@
 //   "catalog-admin"  Catalog management. No filters; its side nav item is highlighted.
 //   "activity"       Activity log (public/activity.html). Same as catalog-admin.
 (() => {
+  // Older versions kept things in this browser that nothing uses any more, one of them the admin token
+  // itself and another a full copy of the product data. Remove them wherever they're still around.
+  try { for (const k of ["asi-admin-token", "asi-minmargin", "asi-platforms-v2"]) localStorage.removeItem(k); } catch {}
+  try { indexedDB.deleteDatabase("asi-dashboard"); } catch {}
   // ---- Theme: "light", "dark" or "system" (follow the device). Saved in this browser. ----
   const THEME_KEY = "asi-theme";
   const getTheme = () => { try { return localStorage.getItem(THEME_KEY) || "system"; } catch { return "system"; } };
@@ -61,7 +65,7 @@
       <div class="actions">
         ${reports ? `<button class="subtle" id="reload" title="Load the latest products from the API">${ICON.refresh}<span class="lbl">Refresh</span></button>` : ""}
         <button class="subtle" id="themeBtn" aria-haspopup="menu" title="Light or dark">${ICON[getTheme()]}</button>
-        <a class="btn subtle" href="/logout" title="Sign out">${ICON.signout}<span class="lbl">Sign out</span></a></div>`;
+        <a class="btn subtle" href="/logout" id="signOut" title="Sign out">${ICON.signout}<span class="lbl">Sign out</span></a></div>`;
     const nav = document.createElement("nav"); nav.className = "sidenav"; nav.setAttribute("aria-label", "Main");
     nav.innerHTML = `<h2>Reports</h2>${VIEWS.map(([k, label]) => `<a href="/#${k}" data-view="${k}">${ICON[k]}<span>${label}</span></a>`).join("")}
       <h2>Catalog</h2>

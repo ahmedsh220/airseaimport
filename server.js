@@ -165,6 +165,8 @@ async function route(req, res) {
   securityHeaders(req, res);
   if (crossSite(req)) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end("Cross-site request refused."); return; }
   if (await auth.gate(req, res, url)) return;
+  // Data answers are never kept by browsers or proxies, so nothing private outlives the session in a cache.
+  if (url.pathname.startsWith("/api/") || /^\/catalog\d*\/(data|img\/)/.test(url.pathname)) res.setHeader("cache-control", "private, no-store");
   if (url.pathname === "/api/products") {
     try {
       const body = await products(url.searchParams.has("refresh"));
