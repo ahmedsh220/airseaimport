@@ -430,10 +430,11 @@ Fields: time (UTC) | event | details | IP address | browser and device. Password
 | `EXCEL EDIT` | One cell written to the workbook: SKU, column, cell, old → new, editor |
 | `COMPETITOR OVERRIDE`, `COMPETITOR REFRESH` | A TikTok listing pinned, hidden or cleared; a manual competitor refresh |
 | `SERVER START` | Each boot or deploy, with where files are saved |
+| `LOG TRIMMED` | Old entries were deleted: past 90 days, or to stay under the size cap |
 
 - **Visits are grouped:** the same person (IP and browser) opening the same page again within 15 minutes is one line, not one per refresh.
-- **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. The moment it passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first, so a flood of bad sign-ins can't fill the disk. Blocked sign-ins are logged once per IP and browser every 15 minutes.
-- **Reading it:** **Activity log** in the side navigation (`/activity.html`) shows the latest 500 entries (up to 2,000 with **Show more**), newest first, with search and an event filter. **Download log** saves the whole file.
+- **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. The moment it passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first, so a flood of bad sign-ins can't fill the disk. Blocked sign-ins are logged once per IP and browser every 15 minutes. Each clean-up that drops anything writes a `LOG TRIMMED` line saying what went and why.
+- **Reading it:** **Activity log** in the side navigation (`/activity.html`) shows the log's size against its cap ("0.9 MB of 20 MB"), and when the size cap last forced old entries out (or that it never has). Below that it shows the latest 500 entries (up to 2,000 with **Show more**), newest first, with search and an event filter. **Download log** saves the whole file.
 - **IP address** is the first address in `X-Forwarded-For` as Render passes it. Someone on a VPN or mobile network shows that network's address.
 - The file lives in `COMPETITOR_DATA_DIR`, so it survives deploys only on a Render persistent disk (see [Run it](#run-it)).
 
@@ -456,7 +457,7 @@ All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON
 | `GET /api/catalog/list` | `{ catalogs: [{ id, name, url, enabled }] }`, for the side navigation. |
 | `POST /api/catalog/add` | Adds a catalog at the next free number; returns its `settings`. |
 | `POST /api/catalog/remove` | `{ catalog }`. Deletes it and its settings (at least one stays). |
-| `GET /api/activity` (`?q=`, `?limit=`, max 2000) | `{ entries: [{ at, event, details, ip, device }], days, persistent, file }`, newest first, optionally only entries containing `q`. |
+| `GET /api/activity` (`?q=`, `?limit=`, max 2000) | `{ entries: [{ at, event, details, ip, device }], days, persistent, file, sizeBytes, maxBytes, capHitAt }`, newest first, optionally only entries containing `q`. |
 | `GET /api/activity/download` | The whole `activity.log` as a file. |
 | `GET /api/catalog/settings` | Every catalog's settings (no password hashes), whether settings persist, and every product with its catalog fields. |
 | `POST /api/catalog/settings` | `{ catalog: "<id>", name, enabled, showPrices, showCasePrices, pieceMarkupPct, caseMarkupPct, roundTo, mode: "all" \| "selected", hidden[], added[], prices{sku: price}, newPassword?, clearPassword? }`. |
