@@ -715,9 +715,22 @@ function settingsHtml() {
 }
 
 // ---------- Profit & Loss ----------
+// Which selling price the P&L uses for every platform but TikTok: the sheet's price formula, or the price the
+// product is listed at right now on that platform (from the products API) when there is one.
+function priceModeHtml() {
+  const live = SET.livePrices;
+  const found = PL.filter(x => x.k !== "tiktok").map(x => [x.label, rows.filter(r => r._live[x.k] != null).length]).filter(([, n]) => n);
+  const opt = (v, label) => `<button type="button" role="radio" aria-checked="${live === v}" data-lp="${v ? 1 : 0}" class="${live === v ? "active" : ""}">${label}</button>`;
+  return `<section class="card pricemode"><div class="head"><div><h3>Selling price used for profit</h3>
+      <p class="hint">${live
+        ? "<b>Live listing price:</b> where a product is listed on a platform, its profit uses the price it is selling at there right now. Products with no live listing on that platform fall back to the sheet's formula."
+        : "<b>Sheet formula:</b> every platform's price is worked out from cost with the sheet's formula, the same as the Excel P&L. Use this to see what you <i>should</i> be charging."}
+        TikTok always uses its real TikTok price.</p></div>
+      <div class="seg" role="radiogroup" aria-label="Selling price used for profit">${opt(false, "Sheet formula")}${opt(true, "Live listing price")}</div></div>
+    <p class="hint" style="margin:8px 0 0">Live listing prices found: ${found.length ? found.map(([l, n]) => `${l} ${fmtInt(n)}`).join(" · ") : "none for these products"}. Prices marked <span class="calc">calc</span> in the tables come from the sheet's formula.</p></section>`;
+}
 function plHtml() {
-  const lead = `<p class="lead">Per-platform profit using the sheet's formulas: cost <b>Q = total cost to ship</b> (platform cost + box + $${SET.misc.toFixed(2)}), each platform's fee and shipping rule, and <b>PFT% = profit ÷ (cost + profit)</b>. TikTok uses its real price; other platforms use the sheet's price formula${SET.livePrices ? ", or the live listing price when the API has one" : ""}. Per-SKU price adjustments in the sheet are not in the API.
-    <label style="margin-left:8px"><input type="checkbox" id="livePrices" ${SET.livePrices ? "checked" : ""}> Use live listing prices where available</label></p>`;
+  const lead = `<p class="lead">Per-platform profit using the sheet's formulas: cost <b>Q = total cost to ship</b> (platform cost + box + $${SET.misc.toFixed(2)}), each platform's fee and shipping rule, and <b>PFT% = profit ÷ (cost + profit)</b>. Per-SKU price adjustments in the sheet are not in the API.</p>` + priceModeHtml();
   if (!ST.plat || !PL_BY_CH[ST.plat]) {
     const sum1 = PL.map(x => {
       const priced = rows.filter(r => r._pl[x.k].price != null), sold = priced.filter(r => r._pl[x.k].units > 0);
@@ -1125,7 +1138,7 @@ function exportCsv() {
 // ---------- events ----------
 // One click listener for the whole page; each control is recognised by its data-* attribute or id.
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-plat],[data-cover],[data-vf],[data-h],[data-tbl][data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,#clearSearch,[data-expand]");
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-lp],[data-plat],[data-cover],[data-vf],[data-h],[data-tbl][data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,#clearSearch,[data-expand]");
   if (!t) return;
   if (t.matches("#fPlat, #fCat, #fTier")) openFilter(t.id);                                  // top bar filters
   else if (t.id === "resetFilters") resetFilters();
@@ -1149,6 +1162,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.show) { ST.show = t.dataset.show; render(); }
   else if (t.dataset.plat) { ST.plat = ST.plat === t.dataset.plat ? "" : t.dataset.plat; ST.groupPick = null; render(); }
   else if (t.dataset.pf) { ST.plFilter = t.dataset.pf; render(); }
+  else if (t.dataset.lp) { SET.livePrices = t.dataset.lp === "1"; saveSettings(); reEnrich(); }
   else if (t.dataset.cover) { ST.cover = +t.dataset.cover; render(); }
   else if (t.dataset.vf) { ST.vf = t.dataset.vf; render(); }
   else if (t.id === "clearMasterFilter") { ST.masterFilter = ""; render(); }
@@ -1161,7 +1175,6 @@ document.addEventListener("click", e => {
 document.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.size !== undefined) { PAGE[t.dataset.tbl] = { page: 1, size: +t.value }; render(); }   // rows per page
-  else if (t.id === "livePrices") { SET.livePrices = t.checked; saveSettings(); reEnrich(); }
   else if (t.dataset.set) { const v = +t.value; if (v > 0 || (t.dataset.set === "minMargin" && v >= 0)) { SET[t.dataset.set] = v; saveSettings(); reEnrich(); } }
 });
 document.addEventListener("toggle", e => { if (e.target.matches?.("details.settings")) settingsOpen = e.target.open; }, true);
