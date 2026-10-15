@@ -157,6 +157,7 @@ Every signed-in page uses the shell in `public/js/shell.js`, styled by `public/c
 - The Fragrance Wholesaler USA logo and name (links to Overview).
 - **Filters** (reports page only): **Platform** (each of the 14 channels with its logo and 60-day units), **Category** and **Tier** (`pricing_category`, each with its color dot: super, hero, green, new, dead, …). Choosing a platform focuses every view on it; clicking a bar in a platform chart does the same.
 - **Search** (SKU, name or UPC).
+- **Reset** (shows while a filter or search is on) clears the filters and the search.
 - **Refresh**, the light/dark switch (Light, Dark or Match device, saved per browser) and **Sign out**.
 
 On a phone the menu button opens the side navigation, and the filters and search move to a second row that scrolls sideways.

@@ -283,7 +283,10 @@ function renderFilters() {
   const plat = ST.plat ? `${platformLogo(ST.plat)} ${esc(CHANNELS[ST.plat])}` : "All";
   const tier = ST.tier ? `<span class="dot" style="--c:var(${tierVar(ST.tier)})"></span> ${esc(ST.tier)}` : "All";
   el.innerHTML = ui.selectTrigger("fPlat", "Platform", plat, !!ST.plat) + ui.selectTrigger("fCat", "Category", ST.cat ? esc(ST.cat) : "All", !!ST.cat)
-    + ui.selectTrigger("fTier", "Tier", tier, !!ST.tier);
+    + ui.selectTrigger("fTier", "Tier", tier, !!ST.tier)
+    // Reset shows only while something narrows the view: a filter, the search, or an Overview tile's filter.
+    + (ST.plat || ST.cat || ST.tier || query.trim() || ST.masterFilter
+      ? `<button type="button" class="subtle" id="resetFilters" title="Clear the filters and the search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg><span>Reset</span></button>` : "");
   for (const b of el.querySelectorAll(".dd-trigger .val")) b.style.display = "inline-flex", b.style.alignItems = "center", b.style.gap = "6px";
 }
 // Menu options, each with its count among the products the other filters leave.
@@ -309,6 +312,13 @@ function openFilter(id) {
 function mountSearch() {
   $("topSearch").innerHTML = `<input type="search" class="search" id="q" placeholder="Search SKU, name or UPC" aria-label="Search products" style="width:100%">`;
   let timer; $("q").addEventListener("input", e => { clearTimeout(timer); timer = setTimeout(() => { query = e.target.value; apply(); }, 150); });
+}
+
+// Reset: back to every product on every platform, with the search box emptied.
+function resetFilters() {
+  ST.plat = ST.cat = ST.tier = ST.masterFilter = ""; ST.groupPick = null;
+  query = ""; if ($("q")) $("q").value = "";
+  apply();
 }
 
 // ---------- formatting ----------
@@ -1046,9 +1056,10 @@ function exportCsv() {
 // ---------- events ----------
 // One click listener for the whole page; each control is recognised by its data-* attribute or id.
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter");
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters");
   if (!t) return;
   if (t.matches("#fPlat, #fCat, #fTier")) openFilter(t.id);                                  // top bar filters
+  else if (t.id === "resetFilters") resetFilters();
   else if (t.id === "groupBy") ui.selectMenu(t, Object.entries(GROUPS).map(([k, v]) => ({ value: k, label: v[0] })), ST.group, v => { ST.group = v; ST.groupPick = null; render(); });
   else if (t.dataset.cols) openColumnPicker(t.dataset.cols);                                // "Columns" picker
   else if (t.dataset.page) { PAGE[t.dataset.tbl].page = +t.dataset.page; render(); t.closest(".card")?.scrollIntoView({ block: "nearest" }); }
