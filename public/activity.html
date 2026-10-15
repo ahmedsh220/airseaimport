@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activity log · Fragrance Wholesaler USA</title>
+<link rel="icon" href="/media/favicon.svg" type="image/svg+xml">
+<!-- Same design system and shell as the other dashboard pages. The log itself is lib/activity.js. -->
+<link rel="stylesheet" href="/css/ads.css">
+<script src="/js/ui.js"></script>
+<script src="/js/shell.js"></script>
+<style>
+  .al-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .al-bar input[type=search] { flex: 1 1 220px; max-width: 360px; }
+  #alTable td.d { white-space: normal; min-width: 280px; max-width: 640px; overflow-wrap: anywhere; }
+  #alTable td.t { color: var(--ds-text-subtle); }
+</style>
+</head>
+<body data-page="activity">
+<div class="shell-main">
+  <div class="pagehead"><div><h1>Activity log</h1>
+    <p class="desc">Who came by and what changed: sign-ins, catalog visits, reports page visits, Catalog management changes and Excel edits. Newest first.</p></div></div>
+  <main id="main" class="page"><section class="card"><p class="muted">Loading…</p></section></main>
+</div>
+<script>shell.mount();</script>
+<script>
+const $ = id => document.getElementById(id);
+const esc = ui.esc;
+// Lozenge color per kind of event.
+const tone = e => /FAILED|BLOCKED|REMOVED/.test(e) ? "bad" : /CHANGE|EDIT|ADDED|OVERRIDE/.test(e) ? "warn" : /SIGN IN|SIGN OUT/.test(e) ? "info" : "";
+const AL = { q: "", event: "", limit: 500, data: null, error: "" };
+let timer;
+
+async function load() {
+  try {
+    const r = await fetch(`/api/activity?limit=${AL.limit}&q=${encodeURIComponent(AL.q)}`, { cache: "no-store" });
+    if (r.status === 401) return location.assign("/login?next=/activity.html");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    AL.data = await r.json(); AL.error = "";
+  } catch (e) { AL.error = `Couldn't load the log: ${e.message}`; }
+  render();
+}
+
+function render() {
+  const d = AL.data;
+  if (!d) { $("main").innerHTML = `<section class="card"><p class="${AL.error ? "bad" : "muted"}">${esc(AL.error || "Loading…")}</p></section>`; return; }
+  const events = [...new Set(d.entries.map(x => x.event))].sort();
+  const rows = d.entries.filter(x => !AL.event || x.event === AL.event);
+  const focused = document.activeElement?.id === "alQ";
+  $("main").innerHTML = `
+    ${d.persistent ? "" : `<div class="msg warn">This log is saved on the server's own disk, which is wiped on every deploy. Attach a Render persistent disk and set COMPETITOR_DATA_DIR to keep it.</div>`}
+    <section class="card">
+      <div class="head"><div><h3>Latest activity</h3>
+        <p class="hint">Entries older than ${d.days} days are deleted automatically. Times are your device's local time.</p></div>
+        <a class="btn" href="/api/activity/download" download="activity.log">Download log</a></div>
+      <div class="al-bar">
+        <input type="search" class="search" id="alQ" placeholder="Search: SKU, catalog, IP, device…" value="${esc(AL.q)}">
+        <select id="alEvent"><option value="">Every event</option>${events.map(e => `<option ${e === AL.event ? "selected" : ""}>${esc(e)}</option>`).join("")}</select>
+        <span class="muted">${rows.length.toLocaleString()} shown</span>
+      </div>
+      ${AL.error ? `<p class="bad">${esc(AL.error)}</p>` : ""}
+      <div class="tablewrap"><table id="alTable"><thead><tr><th class="l">When</th><th class="l">Event</th><th class="l">Details</th><th class="l">IP address</th><th class="l">Device</th></tr></thead>
+      <tbody>${rows.map(x => `<tr><td class="l t" title="${esc(x.at)}">${esc(new Date((x.at || "").replace(" ", "T")).toLocaleString())}</td>
+        <td class="l"><span class="pill ${tone(x.event)}">${esc(x.event)}</span></td><td class="l d">${esc(x.details)}</td>
+        <td class="l">${esc(x.ip)}</td><td class="l">${esc(x.device)}</td></tr>`).join("") || `<tr><td class="l muted" colspan="5">Nothing logged${AL.q ? " matches that search" : " yet"}.</td></tr>`}</tbody></table></div>
+      ${d.entries.length >= AL.limit && AL.limit < 2000 ? `<p style="margin-top:12px"><button id="alMore">Show more</button></p>` : ""}
+    </section>`;
+  $("alQ").oninput = e => { AL.q = e.target.value; clearTimeout(timer); timer = setTimeout(load, 300); };
+  $("alEvent").onchange = e => { AL.event = e.target.value; render(); };
+  if ($("alMore")) $("alMore").onclick = () => { AL.limit = 2000; load(); };
+  if (focused) { const q = $("alQ"); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+}
+load();
+</script>
+</body>
+</html>

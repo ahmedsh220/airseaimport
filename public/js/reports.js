@@ -1084,16 +1084,11 @@ function showCompetitors(r) {
       <button data-cact="pinlink" data-sku="${esc(r.sku)}">Pin</button></p>`;
   if (!$("detail").open) $("detail").showModal();
 }
+// POST to an admin endpoint. The sign-in cookie carries the authority; a 401 (session ended) is sent
+// back to the sign-in page by the fetch wrapper at the bottom of this file.
 async function compPost(pathname, body) {
-  const go = token => fetch(pathname, { method: "POST", headers: { "content-type": "application/json", ...(token ? { "x-admin-token": token } : {}) }, body: JSON.stringify(body || {}) });
-  let token = ""; try { token = localStorage.getItem("asi-admin-token") || ""; } catch {}
-  let res = await go(token);
-  if (res.status === 401) {
-    token = prompt("Admin token (the ADMIN_TOKEN set on the server):") || "";
-    if (!token) return null;
-    try { localStorage.setItem("asi-admin-token", token); } catch {}
-    res = await go(token);
-  }
+  const res = await fetch(pathname, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+  if (res.status === 401) return null;
   const out = await res.json().catch(() => ({}));
   if (res.status === 409) return { message: "A refresh is already running. New results appear as each product is searched." };
   if (!res.ok && res.status !== 202) { alert(out.error || `Request failed (HTTP ${res.status})`); return null; }
@@ -1123,7 +1118,6 @@ function showDetail(r) {
   $("dTitle").textContent = `${r.sku} · ${r.name}`;
   $("dSub").innerHTML = `${tierTag(r)} ${esc(r.category || "")} · UPC ${esc(r.upc || "—")} · supplier ${esc(r._vendor)}`;
   const f = (l, v) => `<div><span>${l}</span>${v}</div>`;
-  const chs = Object.keys(CHANNELS).filter(k => r._ch[k] > 0).sort((a, b) => r._ch[b] - r._ch[a]);
   $("dBody").innerHTML = `<div class="facts">
       ${f("Live inv", fmtInt(r._qoh))}${f("On order", fmtInt(r._inProg))}${f("Days of stock", daysPill(r._days))}
       ${f(`Sold (${SET.window}-day window)`, fmtInt(r._sold))}${f("Day ave", fmt1(r._day))}${f("Monthly", fmtInt(r._monthly))}

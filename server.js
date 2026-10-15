@@ -13,6 +13,7 @@ try {
     if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(["'])(.*)\1$/, "$2");
   }
 } catch {}
+const activity = require("./lib/activity");
 const auth = require("./lib/auth");
 const catalog = require("./lib/catalog");
 const competitors = require("./lib/competitors");
@@ -141,8 +142,28 @@ async function productList() {
   return Array.isArray(d) ? d : (d.data || d.products || d.items || []);
 }
 
-http.createServer(async (req, res) => {
+// Sent with every response: no MIME sniffing, no framing by other sites, no full URLs leaked to other
+// sites, and browsers keep to https once they've seen it.
+function securityHeaders(req, res) {
+  res.setHeader("x-content-type-options", "nosniff");
+  res.setHeader("x-frame-options", "DENY");
+  res.setHeader("content-security-policy", "frame-ancestors 'none'");
+  res.setHeader("referrer-policy", "same-origin");
+  if (req.headers["x-forwarded-proto"] === "https") res.setHeader("strict-transport-security", "max-age=15552000");
+}
+// Anything that changes something (sign-ins, saves, edits) must come from one of our own pages. Browsers
+// send Origin on POST; a page on another site posting here is refused (a second guard next to SameSite cookies).
+function crossSite(req) {
+  if (req.method === "GET" || req.method === "HEAD" || !req.headers.origin) return false;
+  try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; }
+}
+// Dashboard pages whose visits go to the activity log.
+const VISITS = { "/index.html": ["REPORTS VISIT", "reports page"], "/catalog-admin.html": ["CATALOG MANAGEMENT VISIT", "Catalog management"] };
+
+async function route(req, res) {
   const url = new URL(req.url, "http://x");
+  securityHeaders(req, res);
+  if (crossSite(req)) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end("Cross-site request refused."); return; }
   if (await auth.gate(req, res, url)) return;
   if (url.pathname === "/api/products") {
     try {
@@ -162,6 +183,7 @@ http.createServer(async (req, res) => {
   if (await catalog.handleAdmin(req, res, url, productList, catalogMeta)) return;
   if (await competitors.handle(req, res, url, productList)) return;
   if (await excel.handle(req, res, url)) return;
+  if (activity.handle(req, res, url)) return;
   if (url.pathname === "/healthz") { res.writeHead(200); res.end("ok"); return; }
   const route = { "/": "/index.html", "/favicon.ico": "/media/favicon.svg" }[url.pathname] || url.pathname;
   const media = route.startsWith("/media/"), root = media ? MEDIA : PUBLIC;
@@ -169,12 +191,23 @@ http.createServer(async (req, res) => {
   if (!file.startsWith(root + path.sep)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); res.end("Not found"); return; }
+    if (VISITS[route] && req.method === "GET") activity.visit(...VISITS[route], req);
     // no-cache: browsers check for a new version on every load, so a deploy shows up on the next refresh.
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] || "application/octet-stream", "cache-control": media ? "public, max-age=86400" : "no-cache" });
     res.end(data);
   });
+}
+
+// One bad request (a malformed address, a thrown error) answers 500 instead of taking the server down.
+http.createServer((req, res) => {
+  route(req, res).catch(e => {
+    console.error(`${req.method} ${req.url} failed: ${e.stack || e.message}`);
+    if (!res.headersSent) res.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+    res.end("Something went wrong.");
+  });
 }).listen(PORT, () => {
   console.log(`Dashboard on :${PORT}`);
+  activity.start();
   // Warm the cache at boot so the first visitor after a restart doesn't wait on the upstream API.
   products(true).then(() => console.log("Products cache warmed"), e => console.warn(`Warm-up failed: ${e.message}`));
   competitors.schedule(productList);
@@ -183,3 +216,4 @@ http.createServer(async (req, res) => {
     if (Date.now() - cache.at > CACHE_MS) refresh().catch(() => {});
   }, 2 * 60 * 1000).unref();
 });
+process.on("unhandledRejection", e => console.error(`Unhandled error: ${e?.stack || e}`));
