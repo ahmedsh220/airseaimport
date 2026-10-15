@@ -340,7 +340,6 @@ function ingest(data, source) {
   fillSelect("cat", all.map(r => r.category)); fillSelect("tier", all.map(r => r.pricing_category));
   SOURCE = source; LOADED = new Date();
   $("status").hidden = true; $("app").hidden = false;
-  indexTiktokSales();
   apply();
 }
 function reEnrich() { all = all.map(r => enrich(r)); apply(); }
@@ -360,36 +359,15 @@ function apply() {
 
 // ---------- sales data ----------
 // The products API has fixed counts only: an all-platform 90-day total (sales_90_days, used by the sheet's
-// reorder math) and per-platform 60-day columns. Exact TikTok units for 7/14/30/60 days come from Euka
-// (/api/tiktok-sales) once TikTok Shop is connected there. Nothing on the page estimates past sales.
+// reorder math) and per-platform 60-day columns. Nothing on the page estimates past sales.
 const PERIODS = [7, 14, 30, 60];
-let TTS = null, TT_UNITS = {};
-async function loadTiktokSales() {
-  try { const res = await fetch("/api/tiktok-sales", { cache: "no-store" }); TTS = await res.json(); }
-  catch (e) { TTS = { error: e.message }; }
-  indexTiktokSales();
-}
-const ttIds = r => { const ids = []; if (r.tiktok_product_id) ids.push(String(r.tiktok_product_id)); const t = json(r.igloo_tiktok); if (t?.id) ids.push(String(t.id)); return ids; };
-function indexTiktokSales() {
-  TT_UNITS = {};
-  if (!TTS?.windows || !all.length) return;
-  const bySku = new Map(all.map(r => [r.sku, r])), byId = new Map();
-  for (const r of all) for (const id of ttIds(r)) byId.set(id, r.sku);
-  for (const [n, w] of Object.entries(TTS.windows)) {
-    const m = TT_UNITS[n] = {};
-    for (const p of w.products) {
-      const sku = byId.get(p.id) || (p.skus.length === 1 && bySku.has(p.skus[0]) ? p.skus[0] : null);
-      if (sku) m[sku] = (m[sku] || 0) + p.units;
-    }
-  }
-}
 const apiSyncedAt = () => { let m = 0; for (const r of all) { const d = parseDate(r.updated_at); if (d && +d > m) m = +d; } return m ? new Date(m) : null; };
 // Where the numbers come from, under the side navigation.
 function renderFoot() {
   const el = $("navFoot"); if (!el) return;
   const synced = apiSyncedAt(), short = d => d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   el.innerHTML = [`<b>${fmtInt(all.length)}</b> products`, `Products API updated ${synced ? short(synced) : "unknown"}`,
-    TTS?.windows ? `TikTok Shop data through ${esc(TTS.end)}` : null, LOADED ? `Loaded ${short(LOADED)}` : null,
+    LOADED ? `Loaded ${short(LOADED)}` : null,
     SOURCE && !/^live API/.test(SOURCE) ? `<span class=warn>${esc(SOURCE)}</span>` : null].filter(Boolean).map(x => `<div>${x}</div>`).join("");
 }
 // Platform filter: every channel with its 60-day units for the rows the other filters leave.
@@ -577,38 +555,33 @@ function drawPlatformChart(id, mode) {
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
 // ---------- Items sold ----------
-// Exact units from the products API: each platform's last 60 days. TikTok also gets exact 7/14/30-day
-// counts from TikTok Shop analytics (Euka) when that's connected. No estimates on this view.
+// Exact units from the products API: each platform's last 60 days. No estimates on this view.
 function soldHtml() {
   const p = ST.plat, units = r => p ? r._ch[p] || 0 : r._ch60;
-  const base = rows.filter(r => !p || r._ch[p] > 0);
   const list = ST.soldShow === "all" ? rows : rows.filter(r => units(r) > 0);
   const sold = rows.filter(r => units(r) > 0), total = sum(rows, units);
   const chList = Object.keys(CHANNELS).map(k => ({ k, u: sum(rows, r => r._ch[k]) })).sort((a, b) => b.u - a.u);
   const best = [...sold].sort((a, b) => units(b) - units(a))[0];
-  const tt = [7, 14, 30].filter(n => TT_UNITS[n]);
   const cats = new Map();
   for (const r of sold) { const c = r.category || "No category"; const x = cats.get(c) || { name: c, skus: 0, units: 0 }; x.skus++; x.units += units(r); cats.set(c, x); }
   const kpi = (label, value, sub) => `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
   const cols = [
     { ...PROD, grp: "" }, { ...TIER, grp: "" }, { h: "Category", v: r => r.category, t: "text", l: true, grp: "" },
     { h: "Live inv", v: r => r._qoh, grp: "" },
-    ...tt.map(n => ({ h: `${n} days`, key: `TikTok ${n}d`, v: r => TT_UNITS[n][r.sku] || 0, f: r => TT_UNITS[n][r.sku] ? fmtInt(TT_UNITS[n][r.sku]) : "<span class=muted>0</span>", grp: "TikTok Shop (exact)", total: true })),
     ...Object.keys(CHANNELS).map(k => ({ h: CHANNELS[k], v: r => r._ch[k], f: r => r._ch[k] ? (k === p ? `<b>${fmtInt(r._ch[k])}</b>` : fmtInt(r._ch[k])) : "<span class=muted>0</span>", grp: "Last 60 days by platform", total: true })),
     { h: "Total 60 days", v: r => r._ch60, f: r => `<b>${fmtInt(r._ch60)}</b>`, grp: "Last 60 days by platform", total: true },
     { h: "Per day", v: r => units(r) / 60, t: "1", grp: "", tip: "Units in the last 60 days ÷ 60" + (p ? `, on ${platName(p)}` : "") },
   ];
   const sortKey = p ? CHANNELS[p] : "Total 60 days", hide = hiddenSet("sold");
   // Columns stay in a fixed order so a sort survives filter changes; picking a platform sorts by it.
-  if (!SORT.sold || SORT.sold.plat !== p || SORT.sold.tt !== tt.length) SORT.sold = { i: cols.findIndex(c => colKey(c) === sortKey), asc: false, plat: p, tt: tt.length };
-  return `<p class="lead">How many of each product sold in the <b>last 60 days</b>${p ? ` on <b>${platName(p)}</b>` : ", per platform"}. These are the exact counts from the products API, which has no shorter period per platform.${tt.length ? " TikTok also shows exact 7, 14 and 30 day counts from TikTok Shop." : ""}</p>
+  if (!SORT.sold || SORT.sold.plat !== p) SORT.sold = { i: cols.findIndex(c => colKey(c) === sortKey), asc: false, plat: p };
+  return `<p class="lead">How many of each product sold in the <b>last 60 days</b>${p ? ` on <b>${platName(p)}</b>` : ", per platform"}. These are the exact counts from the products API, which has no shorter period per platform.</p>
   <section class="kpis">
     ${kpi(`Units sold, 60 days${p ? ` · ${platName(p)}` : ""}`, fmtInt(total), `${fmt1(total / 60)} a day on average`)}
     ${kpi("Products sold", fmtInt(sold.length), `of ${fmtInt(rows.length)} in the filters`)}
     ${p ? kpi("Share of all sales", sum(rows, r => r._ch60) ? fmtPct(total / sum(rows, r => r._ch60)) : "—", `${platName(p)} vs every platform`)
         : kpi("Top platform", chList[0]?.u ? CHANNELS[chList[0].k] : "—", chList[0]?.u ? `${fmtInt(chList[0].u)} units · ${fmtPct(chList[0].u / (total || 1))}` : "no sales")}
     ${kpi("Best seller", best ? esc(best.sku) : "—", best ? `${fmtInt(units(best))} units · ${esc(String(best.name || "").slice(0, 40))}` : "no sales")}
-    ${tt.length ? kpi("TikTok Shop, last 7 days", fmtInt(sum(base, r => TT_UNITS[7]?.[r.sku] || 0)), `exact, through ${esc(TTS.end)}`) : ""}
   </section>
   <div class="grid">
     <section class="card"><h3>Units by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
@@ -1180,7 +1153,6 @@ if (location.protocol.startsWith("http")) {
   }).catch(() => {});
 }
 load();
-if (location.protocol.startsWith("http")) loadTiktokSales().then(() => { if (all.length) render(); });
 if (location.protocol.startsWith("http")) loadCompetitors(true).then(() => { if (all.length && ST.tab === "competitors") render(); });
 </script>
 <script src="/js/excel-edit.js"></script>
