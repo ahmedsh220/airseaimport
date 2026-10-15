@@ -1054,11 +1054,15 @@ function showCompetitors(r) {
       <div><span>Lowest</span>${fmtUsd(x.low)}</div><div><span>Median</span>${fmtUsd(x.med)}</div><div><span>Highest</span>${fmtUsd(x.high)}</div>
       <div><span>Suggested price</span><b>${fmtUsd(x.suggest)}</b></div><div><span>Competitor units 30d</span>${fmtInt(x.sold30)}</div><div><span>Our units 30d</span>${fmtInt(x.our30)}</div></div>
     ${x.error ? `<p class=bad>Last check failed: ${esc(x.error)}</p>` : ""}
+    ${x.c?.own ? `<p class="hint">Our TikTok listing: <a href="${esc(x.c.own.url)}" target="_blank" rel="noopener">${esc((x.c.own.title || x.c.own.id).slice(0, 80))}</a>${x.c.own.minPrice != null ? ` · ${fmtUsd(x.c.own.minPrice)}${x.c.own.maxPrice > x.c.own.minPrice ? `–${fmtUsd(x.c.own.maxPrice)}` : ""}` : ""}${x.c.own.cat ? ` · competitors searched in the same TikTok category` : ""}</p>` : ""}
     <h4>Matched listings</h4>${x.m.length ? `<div class="tablewrap"><table>${head}<tbody>${x.m.map(m => card(m)).join("")}</tbody></table></div>` : `<p class=muted>No listing matched well enough.</p>`}
     ${x.c?.candidates?.length ? `<h4>Close but not matched</h4><div class="tablewrap"><table>${head}<tbody>${x.c.candidates.map(m => card(m, true)).join("")}</tbody></table></div>` : ""}
     ${(ov.ignore || []).length ? `<h4>Hidden</h4><p>${ov.ignore.map(id => `<span class="chip">${esc(id)}<button data-cact="clear" data-id="${esc(id)}" data-sku="${esc(r.sku)}" title="Show again">×</button></span>`).join(" ")}</p>` : ""}
     <p class="hint" style="margin-top:12px">Searched Euka for: ${(x.c?.queries || []).map(q => `“${esc(q)}”`).join(", ") || "—"}.
-      <button data-cact="recheck" data-sku="${esc(r.sku)}">Re-check now</button></p>`;
+      <button data-cact="recheck" data-sku="${esc(r.sku)}">Re-check now</button></p>
+    <p class="hint">Know the exact competitor listing? Paste its TikTok link or product ID to pin it:
+      <input id="compPinId" placeholder="tiktok.com/shop/pdp/… or product ID" style="width:280px">
+      <button data-cact="pinlink" data-sku="${esc(r.sku)}">Pin</button></p>`;
   if (!$("detail").open) $("detail").showModal();
 }
 async function compPost(pathname, body) {
@@ -1084,8 +1088,10 @@ document.addEventListener("click", async e => {
   if (t.dataset.cbasis) { ST.compBasis = t.dataset.cbasis; render(); return; }
   t.disabled = true;
   if (t.id === "compRefresh") { const out = await compPost("/api/competitors/refresh"); if (out?.message) alert(out.message); if (out) { await loadCompetitors(); render(); } return; }
-  const sku = t.dataset.sku, act = t.dataset.cact;
-  const out = act === "recheck" ? await compPost("/api/competitors/refresh", { skus: [sku] }) : await compPost("/api/competitors/override", { sku, productId: t.dataset.id, action: act });
+  const sku = t.dataset.sku;
+  let act = t.dataset.cact, pid = t.dataset.id;
+  if (act === "pinlink") { pid = ($("compPinId")?.value || "").trim(); act = "pin"; if (!pid) { t.disabled = false; return; } }
+  const out = act === "recheck" ? await compPost("/api/competitors/refresh", { skus: [sku] }) : await compPost("/api/competitors/override", { sku, productId: pid, action: act });
   t.disabled = false;
   if (!out) return;
   await loadCompetitors();
