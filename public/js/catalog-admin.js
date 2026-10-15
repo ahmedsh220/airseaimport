@@ -2,33 +2,49 @@
 // owner turns it on or off, chooses whether piece and case prices show, sets its password, and picks
 // which SKUs are in it, with optional per-SKU prices. Settings are saved through /api/catalog/settings
 // (catalog.js); each catalog and its PDF/Excel downloads follow them within a minute.
-// Uses $, esc, fmtUsd, ST and render from catalog-admin.html.
+// Uses $, esc, fmtUsd, ST and render from catalog-admin.html, and ui.js for the filter menu.
 (() => {
+  // Page styles on top of ads.css: catalog tabs, setting toggles, the pricing rule fields and the sticky save bar.
   const css = document.createElement("style");
   css.textContent = `
-    .ca-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 24px; margin: 6px 0 12px; }
-    .ca-opts label { display: flex; gap: 8px; align-items: flex-start; }
-    .ca-opts label small { display: block; color: var(--muted); font-size: 12px; }
-    .ca-opts fieldset { border: 0; padding: 0; margin: 0; } .ca-opts legend { font-weight: 600; margin-bottom: 4px; padding: 0; }
-    .ca-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
-    .ca-bar input[type=search] { flex: 1 1 220px; max-width: 360px; }
-    .ca-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .ca-add input { flex: 1 1 260px; max-width: 520px; }
-    #caTable td:nth-child(2) { max-width: 190px; white-space: normal; overflow-wrap: break-word; }
-    #caTable td:nth-child(3) { min-width: 320px; white-space: normal; }
-    #caTable td input[type=number] { width: 92px; text-align: right; }
-    #caTable tr.off td { color: var(--muted); }
-    #caTable tr.off td:nth-child(3) { text-decoration: line-through; }
-    .ca-save { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 0 2px; background: var(--panel); }
-    .ca-save button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
-    .ca-save button:disabled { opacity: .5; cursor: default; }
-    .ca-tabs { display: inline-flex; margin-bottom: 12px; } .ca-tabs button { border-radius: 0; margin-left: -1px; padding: 7px 14px; font-weight: 600; }
-    .ca-tabs button:first-child { border-radius: 8px 0 0 8px; margin: 0; } .ca-tabs button:last-child { border-radius: 0 8px 8px 0; }
-    .ca-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .ca-tabs small { font-weight: 400; opacity: .8; margin-left: 4px; }
-    .ca-pw { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+    .ca-tabs { display: flex; gap: 0; margin: -4px 0 16px; border-bottom: 2px solid var(--ds-border); overflow-x: auto; }
+    .ca-tabs button { background: none; border-radius: 0; margin-bottom: -2px; padding: 8px 12px; color: var(--ds-text-subtle); border-bottom: 2px solid transparent; }
+    .ca-tabs button:hover { background: none; color: var(--ds-text); }
+    .ca-tabs button.active { background: none; color: var(--ds-text-selected); border-bottom-color: var(--ds-border-selected); }
+    .ca-tabs small { font-weight: 400; color: var(--ds-text-subtlest); margin-left: 6px; }
+    .ca-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+    .ca-box { background: var(--ds-surface-sunken); border-radius: 6px; padding: 12px 14px; }
+    .ca-box h4 { margin: 0 0 8px; font: 600 12px/16px var(--ds-font); color: var(--ds-text-subtle); }
+    /* ADS Toggle: a switch with its label and help text. */
+    .ca-toggle { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; padding: 4px 0; }
+    .ca-toggle + .ca-toggle { margin-top: 6px; }
+    .ca-toggle input { appearance: none; -webkit-appearance: none; flex: none; width: 32px; height: 16px; border-radius: 8px; margin: 2px 0 0; position: relative;
+      background: var(--ds-text-subtlest); cursor: pointer; transition: background .15s; }
+    .ca-toggle input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .15s; }
+    .ca-toggle input:checked { background: var(--ds-text-success); } .ca-toggle input:checked::after { transform: translateX(16px); }
+    .ca-toggle b { display: block; font-weight: 600; } .ca-toggle small { display: block; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+    .ca-choice { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; cursor: pointer; } .ca-choice input { margin-top: 2px; }
+    .ca-choice small { display: block; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+    /* Text field with a unit after it, e.g. [ 12 | % ]. */
+    .ca-rule { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .ca-field { flex: none; display: inline-flex; align-items: stretch; border: 1px solid var(--ds-border-input); border-radius: 3px; background: var(--ds-bg-input); overflow: hidden; }
+    .ca-field:focus-within { border-color: var(--ds-border-focused); box-shadow: inset 0 0 0 1px var(--ds-border-focused); }
+    .ca-field input { border: 0; width: 72px; text-align: right; box-shadow: none; background: none; }
+    .ca-rule.stack { flex-direction: column; align-items: stretch; }
+    .ca-rule.stack .seg { display: grid; grid-template-columns: repeat(auto-fit, minmax(38px, 1fr)); }
+    .ca-rule.stack .seg button { padding: 0 4px; }
+    .ca-field span { display: grid; place-items: center; padding: 0 8px; color: var(--ds-text-subtle); background: var(--ds-bg-neutral); font-weight: 600; }
+    .ca-pw { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
     .ca-pw input { flex: 0 1 260px; }
-    .ca-opts label.rule { display: block; margin-bottom: 6px; }`;
+    .ca-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+    .ca-bar input[type=search] { flex: 1 1 220px; max-width: 360px; }
+    #caTable td:nth-child(2) { max-width: 190px; white-space: normal; overflow-wrap: break-word; }
+    #caTable td:nth-child(3) { min-width: 300px; white-space: normal; }
+    #caTable td input[type=number] { width: 92px; text-align: right; }
+    #caTable tr.off td { color: var(--ds-text-subtlest); }
+    #caTable tr.off td:nth-child(3) { text-decoration: line-through; }
+    .ca-save { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 0 -16px -16px; padding: 12px 16px;
+      background: var(--ds-surface-raised); border-top: 1px solid var(--ds-border); border-radius: 0 0 8px 8px; }`;
   document.head.appendChild(css);
 
   const CA = { data: null, cur: "1", per: {}, loading: false, error: "", q: "", filter: "all", saving: false, limit: 300 };
@@ -46,6 +62,7 @@
   const price = i => CA.draft.prices[i.sku] ?? rulePiece(i);
   const caseUnit = i => i.cost != null ? rnd(i.cost * (1 + (+CA.draft.caseMarkupPct || 0) / 100)) : null;
   const usd = v => v == null ? "<span class=muted>Contact Sales</span>" : fmtUsd(v);
+  const ROUNDING = [[0, "None"], [0.05, "5¢"], [0.1, "10¢"], [0.25, "25¢"], [0.5, "50¢"], [1, "$1"]];
   const when = t => t ? new Date(t).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }) : "";
 
   async function load() {
@@ -67,39 +84,41 @@
     return `<div id="caRoot">${settingsHtml()}${productsHtml()}</div>`;
   };
   const paint = () => { const root = $("caRoot"); if (root) root.innerHTML = settingsHtml() + productsHtml(); };
+  const paintProducts = () => { const root = $("caRoot"); if (root) root.querySelectorAll("section")[1].outerHTML = productsHtml(); };
   const paintTable = () => { const t = $("caTable"); if (t) t.outerHTML = tableHtml(); const c = $("caCounts"); if (c) c.innerHTML = countsHtml(); };
 
   function settingsHtml() {
     const d = CA.draft, x = CA.data, s = cur(), link = origin + s.url;
     const tabs = `<div class="ca-tabs">${Object.entries(x.catalogs).map(([id, c]) => `<button type="button" data-ca-cat="${id}" class="${id === CA.cur ? "active" : ""}">${esc(c.name)}<small>${c.enabled ? (c.showPrices || c.showCasePrices ? "with prices" : "no prices") : "off"}${CA.per[id]?.dirty ? " · unsaved" : ""}</small></button>`).join("")}</div>`;
     const pw = s.password === "dashboard" ? "Set here in the dashboard." : s.password === "render" ? `Set on Render (${esc(s.passwordEnv)}).` : "Not set yet: customers can't open this catalog until you set one.";
-    const other = Object.entries(x.catalogs).find(([id]) => id !== CA.cur);
     const warn = [
       !x.persistent && `<p class="warn">These settings are saved on the server's own disk and reset when it restarts. Set COMPETITOR_DATA_DIR to the Render disk (/var/data) to keep them.</p>`].filter(Boolean).join("");
     return `<section class="card">${tabs}
       <div class="head"><div><h3>${esc(s.name)} <span class="pill ${s.enabled ? "good" : "bad"}">${s.enabled ? "On" : "Off"}</span></h3>
-        <p class="hint" style="margin:0">Customers with this link see it: <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>. They sign in with this catalog's own password, never the admin token. The PDF and Excel downloads follow the same settings.</p></div>
-        <div class="row"><button type="button" data-ca-do="copyLink">Copy link</button><a href="${esc(s.url)}" target="_blank" rel="noopener"><button type="button">Open ↗</button></a></div></div>
+        <p class="hint">Customers with this link see it: <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>. They sign in with this catalog's own password, never the admin token. The PDF and Excel downloads follow the same settings.</p></div>
+        <div class="row"><button type="button" data-ca-do="copyLink">Copy link</button><a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener">Open catalog ↗</a></div></div>
       ${warn}
-      <div class="ca-pw"><b>Password</b><span class="${s.password ? "muted" : "bad"}">${pw}</span>
-        <input type="password" id="caPw" autocomplete="new-password" placeholder="New password (6+ characters)" value="${esc(CA.newPassword || "")}">
-        <span class="muted">Saved with the changes below. Changing it signs out everyone using this catalog.</span></div>
-      <div class="ca-opts">
-        <label><input type="checkbox" data-ca="enabled" ${d.enabled ? "checked" : ""}><span><b>Catalog is on</b><small>Turned off, customers see "The catalog is unavailable right now".</small></span></label>
-        <label><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost + the piece markup, or the price you set for a SKU below.</small></span></label>
-        <label><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>Per-piece price when buying by the case: wholesale cost + the case markup.</small></span></label>
-        <fieldset><legend>Wholesale pricing rules</legend>
-          <label class="rule">Piece price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="pieceMarkupPct" value="${d.pieceMarkupPct}" style="width:72px">%</label>
-          <label class="rule">Case price: wholesale cost + <input type="number" step="0.1" min="-100" max="1000" data-ca-pct="caseMarkupPct" value="${d.caseMarkupPct}" style="width:72px">% per piece</label>
-          <label class="rule">Round both up to the next <select data-ca-round>${[[0, "no rounding"], [0.05, "$0.05"], [0.1, "$0.10"], [0.25, "$0.25"], [0.5, "$0.50"], [1, "$1.00"]].map(([v, l]) => `<option value="${v}" ${+d.roundTo === v ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-        </fieldset>
-        <fieldset><legend>Which products</legend>
-          <label><input type="radio" name="caMode" data-ca="mode" value="all" ${d.mode === "all" ? "checked" : ""}><span>Every product in the API, except the ones you remove<small>New API products appear on their own.</small></span></label>
-          <label><input type="radio" name="caMode" data-ca="mode" value="selected" ${d.mode === "selected" ? "checked" : ""}><span>Only the SKUs you add<small>New API products stay out until you add them.</small></span></label>
-        </fieldset>
+      <div class="ca-grid">
+        <div class="ca-box"><h4>Visibility</h4>
+          <label class="ca-toggle"><input type="checkbox" data-ca="enabled" ${d.enabled ? "checked" : ""}><span><b>Catalog is on</b><small>Turned off, customers see "The catalog is unavailable right now".</small></span></label>
+          <label class="ca-toggle"><input type="checkbox" data-ca="showPrices" ${d.showPrices ? "checked" : ""}><span><b>Show piece prices</b><small>Wholesale cost + the piece markup, or the price you set for a SKU below.</small></span></label>
+          <label class="ca-toggle"><input type="checkbox" data-ca="showCasePrices" ${d.showCasePrices ? "checked" : ""}><span><b>Show case prices</b><small>Per-piece price when buying by the case: wholesale cost + the case markup.</small></span></label>
+        </div>
+        <div class="ca-box"><h4>Wholesale pricing rules</h4>
+          <label class="ca-rule">Piece price: wholesale cost +<span class="ca-field"><input type="number" step="0.1" min="-100" max="1000" data-ca-pct="pieceMarkupPct" value="${d.pieceMarkupPct}"><span>%</span></span></label>
+          <label class="ca-rule">Case price, per piece: cost +<span class="ca-field"><input type="number" step="0.1" min="-100" max="1000" data-ca-pct="caseMarkupPct" value="${d.caseMarkupPct}"><span>%</span></span></label>
+          <div class="ca-rule stack"><span>Round prices up to</span><div class="seg">${ROUNDING.map(([v, l]) => `<button type="button" data-ca-round="${v}" class="${+d.roundTo === v ? "active" : ""}">${l}</button>`).join("")}</div></div>
+        </div>
+        <div class="ca-box"><h4>Which products</h4>
+          <label class="ca-choice"><input type="radio" name="caMode" data-ca="mode" value="all" ${d.mode === "all" ? "checked" : ""}><span>Every product in the API, except the ones you remove<small>New API products appear on their own.</small></span></label>
+          <label class="ca-choice"><input type="radio" name="caMode" data-ca="mode" value="selected" ${d.mode === "selected" ? "checked" : ""}><span>Only the products you tick below<small>New API products stay out until you add them.</small></span></label>
+        </div>
+        <div class="ca-box"><h4>Password</h4>
+          <div class="ca-pw"><span class="${s.password ? "muted" : "bad"}">${pw}</span>
+            <input type="password" id="caPw" autocomplete="new-password" placeholder="New password (6+ characters)" value="${esc(CA.newPassword || "")}"></div>
+          <p class="hint" style="margin:8px 0 0">Saved with the other changes. Changing it signs out everyone using this catalog.</p>
+        </div>
       </div>
-      <div class="ca-add"><input id="caAddSkus" placeholder="Add SKUs, separated by commas or spaces (e.g. PER423, PER770)"><button type="button" data-ca-do="add">Add to catalog</button><button type="button" data-ca-do="remove">Remove from catalog</button>
-        ${other ? `<button type="button" data-ca-do="copyFrom" data-from="${other[0]}">Use ${esc(other[1].name)}'s product list</button>` : ""}</div>
       <div class="ca-save">
         <button class="primary" data-ca-do="save" ${CA.dirty && !CA.saving ? "" : "disabled"}>${CA.saving ? "Saving…" : "Save changes"}</button>
         <button data-ca-do="discard" ${CA.dirty && !CA.saving ? "" : "disabled"}>Discard</button>
@@ -118,9 +137,9 @@
     return CA.data.items.filter(i => test(i) && (!q || `${i.sku} ${i.name} ${i.upc} ${i.category}`.toLowerCase().includes(q)));
   }
   function productsHtml() {
-    return `<section class="card"><div class="head"><div><h3>Products</h3><p class="hint" style="margin:0" id="caCounts">${countsHtml()}</p></div></div>
-      <div class="ca-bar"><input type="search" id="caQ" placeholder="Search SKU, name or UPC" value="${esc(CA.q)}">
-        <select id="caF">${Object.entries(FILTERS).map(([k, v]) => `<option value="${k}" ${CA.filter === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+    return `<section class="card"><div class="head"><div><h3>Products</h3><p class="hint" id="caCounts">${countsHtml()}</p></div></div>
+      <div class="ca-bar"><input type="search" class="search" id="caQ" placeholder="Search SKU, name or UPC" value="${esc(CA.q)}">
+        ${ui.selectTrigger("caF", "Show", esc(FILTERS[CA.filter]), CA.filter !== "all")}
         <button type="button" data-ca-do="inAll">Add all shown</button><button type="button" data-ca-do="outAll">Remove all shown</button></div>
       ${tableHtml()}</section>`;
   }
@@ -158,7 +177,6 @@
       changed(); paint(); return;
     }
     if (t.dataset.ca) { d[t.dataset.ca] = t.checked; changed(); paint(); return; }
-    if (t.dataset.caRound != null) { d.roundTo = Number(t.value); changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caPct) { const n = Number(t.value); if (t.value.trim() === "" || !Number.isFinite(n)) return; d[t.dataset.caPct] = n; changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caSku) { setIn(bySku().get(t.dataset.caSku), t.checked); changed(); paintTable(); paintSave(); return; }
     if (t.dataset.caPrice != null) {
@@ -166,7 +184,6 @@
       if (v === "") delete d.prices[sku]; else if (Number.isFinite(n) && n >= 0) d.prices[sku] = Math.round(n * 100) / 100; else return;
       changed(); paintTable(); paintSave(); return;
     }
-    if (t.id === "caF") { CA.filter = t.value; CA.limit = 300; paintTable(); }
   });
   let qt;
   document.addEventListener("input", e => {
@@ -175,31 +192,18 @@
   const paintSave = () => { const root = $("caRoot"); if (!root) return; const tmp = document.createElement("div"); tmp.innerHTML = settingsHtml(); root.querySelector("section").replaceWith(tmp.firstElementChild); };
 
   document.addEventListener("click", async e => {
+    const rb = e.target.closest("[data-ca-round]");
+    if (rb && $("caRoot")?.contains(rb)) { CA.draft.roundTo = Number(rb.dataset.caRound); changed(); paintTable(); paintSave(); return; }
+    const fb = e.target.closest("#caF");
+    if (fb) { ui.selectMenu(fb, Object.entries(FILTERS).map(([k, v]) => ({ value: k, label: v })), CA.filter, v => { CA.filter = v; CA.limit = 300; paintProducts(); }); return; }
     const tab = e.target.closest("[data-ca-cat]");
     if (tab && $("caRoot")?.contains(tab)) { CA.cur = tab.dataset.caCat; paint(); return; }
     const b = e.target.closest("[data-ca-do]"); if (!b || !$("caRoot")?.contains(b)) return;
     e.preventDefault();
     const act = b.dataset.caDo;
     if (act === "copyLink") { navigator.clipboard?.writeText(origin + cur().url).then(() => { CA.msg = "Link copied."; paintSave(); }, () => {}); return; }
-    if (act === "copyFrom") {
-      const src = CA.per[b.dataset.from].draft, d = CA.draft;
-      Object.assign(d, { mode: src.mode, hidden: [...src.hidden], added: [...src.added] });
-      changed(`Copied ${CA.data.catalogs[b.dataset.from].name}'s product list. Save to publish.`); paint(); return;
-    }
     if (act === "more") { CA.limit = Infinity; paintTable(); return; }
     if (act === "inAll" || act === "outAll") { for (const i of shown()) setIn(i, act === "inAll"); changed(); paintTable(); paintSave(); return; }
-    if (act === "add" || act === "remove") {
-      const want = $("caAddSkus").value.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean), map = bySku();
-      // Match SKUs the way the sheet does: ignore case and spaces.
-      const norm = s => s.replace(/\s+/g, "").toUpperCase(), byNorm = new Map(CA.data.items.map(i => [norm(i.sku), i]));
-      const found = [], missing = [];
-      for (const w of want) { const i = map.get(w) || byNorm.get(norm(w)); i ? found.push(i) : missing.push(w); }
-      found.forEach(i => setIn(i, act === "add"));
-      if (found.length) $("caAddSkus").value = missing.join(", ");
-      const msg = `${found.length} SKU${found.length === 1 ? "" : "s"} ${act === "add" ? "added" : "removed"}${missing.length ? `; not in the API: ${missing.join(", ")}` : ""}.`;
-      if (found.length) changed(msg + " Save to publish."); else CA.msg = msg;
-      paint(); return;
-    }
     if (act === "discard") { CA.draft = copy(cur()); CA.dirty = false; CA.msg = ""; CA.newPassword = ""; paint(); return; }
     if (act === "save") {
       CA.saving = true; paintSave();

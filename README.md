@@ -12,15 +12,13 @@ Contents
 5. [The dashboard](#the-dashboard)
 6. [Formulas](#formulas)
 7. [TikTok competitors (Euka)](#tiktok-competitors-euka)
-8. [TikTok sales (Euka analytics)](#tiktok-sales-euka-analytics)
-9. [Editing the Excel sheet](#editing-the-excel-sheet)
-10. [Customer catalogs](#customer-catalogs)
-11. [API reference](#api-reference)
-12. [Saved files](#saved-files)
-13. [Settings (environment variables)](#settings-environment-variables)
-14. [What the browser stores](#what-the-browser-stores)
-15. [Planned: dashboard assistant (MCP server and chat)](#planned-dashboard-assistant-mcp-server-and-chat)
-16. [Troubleshooting](#troubleshooting)
+8. [Editing the Excel sheet](#editing-the-excel-sheet)
+9. [Customer catalogs](#customer-catalogs)
+10. [API reference](#api-reference)
+11. [Saved files](#saved-files)
+12. [Settings (environment variables)](#settings-environment-variables)
+13. [What the browser stores](#what-the-browser-stores)
+14. [Troubleshooting](#troubleshooting)
 
 ## Run it
 
@@ -38,23 +36,25 @@ npm start                # or: node server.js
 
 ## How it's built
 
-Plain Node `http` server, no framework, no build step. Pages are static HTML with inline scripts; charts use Chart.js 4.4.1 from cdnjs. The dashboard pages follow the [Atlassian Design System](https://atlassian.design/get-started) look (its color, type and spacing tokens, side navigation, top bar, lozenges and tables), written as plain CSS in `public/css/ads.css` (reports page only), so there is still nothing to build. The catalog page loads jsPDF and ExcelJS from a CDN only when a customer downloads.
+Plain Node `http` server, no framework, no build step. Pages are static HTML plus plain scripts in `public/js/`; charts use Chart.js 4.4.1 from cdnjs. Every page follows the [Atlassian Design System](https://atlassian.design/get-started) look (its color, type and spacing tokens, side navigation, top bar, dropdown menus, lozenges and tables), written as plain CSS in `public/css/ads.css` and shared by the reports page, Catalog management, both sign-in pages and the customer catalog, so there is still nothing to build. The catalog keeps its own layout and only borrows the tokens and components, always in the light theme. The catalog page loads jsPDF and ExcelJS from a CDN only when a customer downloads.
 
 ```
 .
 ├── server.js                 entry point: .env loader, products API proxy and cache, routing, static files
 ├── lib/
-│   ├── auth.js               admin sign-in gate for everything except /catalog*, /healthz, /media/
+│   ├── auth.js               admin sign-in gate for everything except /catalog*, /healthz, /media/, /css/
 │   ├── catalog.js            customer catalogs (/catalog, /catalog2) and their settings API
 │   ├── competitors.js        Euka competitor search, matching, scheduling, overrides
-│   ├── tiktok-sales.js       our TikTok Shop sales by window from Euka analytics
 │   └── excel.js              read and write the pricing workbook through Microsoft Graph
 ├── public/
-│   ├── index.html            the dashboard (all report logic and formulas run here, in the browser)
+│   ├── index.html            the reports page: page header, detail dialog and report-only styles
 │   ├── catalog-admin.html    Catalog management page
-│   ├── css/ads.css           reports look: Atlassian design tokens (light and dark), buttons, tables, top bar, side nav
+│   ├── css/ads.css           the design system: tokens (light and dark), components, app shell, sign-in card
 │   └── js/
-│       ├── shell.js          top bar and side navigation of the reports page
+│       ├── reports.js        all report logic and formulas (runs in the browser)
+│       ├── shell.js          top bar, side navigation and the light/dark switch, for every signed-in page
+│       ├── ui.js             shared components: dropdown menu, select, pagination
+│       ├── platforms.js      sales platform names, colors and logos
 │       ├── excel-edit.js     "Excel sheet" section of a product's detail view
 │       └── catalog-admin.js  Catalog management logic
 ├── catalog/index.html        customer catalog page (served only after the catalog password)
@@ -68,13 +68,12 @@ Every request goes through `auth.gate` first. Then each module is asked in turn 
 
 ```
 request
-  └─ auth.gate (lib/auth.js)          sign-in page, redirect or 401 unless signed in (catalogs, /healthz, /media/ pass through)
+  └─ auth.gate (lib/auth.js)          sign-in page, redirect or 401 unless signed in (catalogs, /healthz, /media/, /css/ pass through)
       ├─ /api/products                 server.js: cached products API
       ├─ /catalog*, /catalog2*         catalog.handle: its own password, page, data, pictures
       ├─ /api/catalog/settings         catalog.handleAdmin
       ├─ /api/competitors*             competitors.handle
       ├─ /api/excel*                   excel.handle
-      ├─ /api/tiktok-sales             tiktokSales.handle
       ├─ /healthz
       └─ static files                  public/ (no-cache) and media/ (cached 1 day); "/" serves index.html
 ```
@@ -93,7 +92,7 @@ request
 | Admin in a browser | `ADMIN_TOKEN` on `/login` starts a signed cookie session (`asi_session`, HttpOnly, SameSite=Lax, Secure on https) for `SESSION_HOURS` (6) | Dashboard pages and all of `/api/*` |
 | Scripts | `x-admin-token: <ADMIN_TOKEN>` header | `/api/*` |
 | Catalog customers | The catalog's password (`CATALOG_PASSWORD` / `CATALOG2_PASSWORD`, or one set in Catalog management) | Only their catalog's `/catalog*` or `/catalog2*` paths |
-| Anyone | Nothing | `/healthz`, `/media/`, `/favicon.ico`, the sign-in pages |
+| Anyone | Nothing | `/healthz`, `/media/`, `/css/`, `/favicon.ico`, the sign-in pages |
 
 How it works (`lib/auth.js`):
 
@@ -115,7 +114,6 @@ What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set on
 |---|---|---|---|
 | Products API (`PRODUCTS_API`) | `server.js`, browser | Server: in memory, refreshed in the background when older than 5 minutes. Browser: last good copy in IndexedDB | Everything |
 | Euka Social and Market Intelligence | `lib/competitors.js` | `competitors.json` on disk, each SKU re-searched weekly by default | TikTok competitors tab |
-| Euka TikTok Shop analytics | `lib/tiktok-sales.js` | In memory, 60 minutes | `/api/tiktok-sales` only (not shown on the reports page) |
 | Pricing workbook in OneDrive (Microsoft Graph) | `lib/excel.js` | Sheet layout 5 minutes; rows read live | Excel section of a product's detail view, write-back |
 | Hub storefront product list (`HUB_IMAGES_API`) | `lib/catalog.js` | In memory, 6 hours | Catalog pictures (last fallback) |
 
@@ -123,7 +121,7 @@ What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set on
 
 The upstream API is slow and sometimes cuts responses off, so loading is defensive at both ends.
 
-**In the browser** (`load()` in `public/index.html`):
+**In the browser** (`load()` in `public/js/reports.js`):
 
 1. Ask the upstream API directly with a 45 second timeout. Browsers reach it over HTTP/2 and that usually works.
 2. If that fails, call our `/api/products` (up to 2 tries, 60 seconds each). The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched.
@@ -150,36 +148,43 @@ Field notes on the API (one JSON array, about 134 fields per product):
 
 ## The dashboard
 
-`public/index.html` is a single page. All metrics are computed in the browser from the products list, so every number on screen can be traced to the [Formulas](#formulas) below.
+The reports page is `public/index.html` with its logic in `public/js/reports.js`. All metrics are computed in the browser from the products list, so every number on screen can be traced to the [Formulas](#formulas) below.
 
-The reports page uses the shell in `public/js/shell.js`, styled by `public/css/ads.css`. Catalog management keeps its own page and is reached from the side navigation. It follows the system's light or dark mode.
+Every signed-in page uses the shell in `public/js/shell.js`, styled by `public/css/ads.css`. It works from phone to desktop.
 
-**Top bar:** the Fragrance Wholesaler USA logo and the brand logos (the same files as the catalog header, from `media/`), then Refresh data and Sign out. On narrow screens the brand strip hides and a menu button opens the side navigation.
+**Top bar**, left to right:
+
+- The Fragrance Wholesaler USA logo and name (links to Overview).
+- **Filters** (reports page only): **Platform** (each of the 14 channels with its logo and 60-day units), **Category** and **Tier** (`pricing_category`, each with its color dot: super, hero, green, new, dead, …). Choosing a platform focuses every view on it; clicking a bar in a platform chart does the same.
+- **Search** (SKU, name or UPC).
+- **Refresh**, the light/dark switch (Light, Dark or Match device, saved per browser) and **Sign out**.
+
+On a phone the menu button opens the side navigation, and the filters and search move to a second row that scrolls sideways.
 
 **Side navigation:** one place for every page.
 
-- **Reports:** Overview, Items sold, Actions, Reorder, Profit & Loss, Sheet view, Vendors, TikTok competitors. Each is a view of the same page at `/#<view>` (`#overview`, `#sold`, `#actions`, `#reorder`, `#pl`, `#sheet`, `#vendors`, `#competitors`), so a view can be bookmarked.
+- **Reports:** Overview, Items sold, Reorder, Profit & Loss, Product master, Vendors, TikTok competitors, Insights. Each is a view of the same page at `/#<view>` (`#overview`, `#sold`, `#reorder`, `#pl`, `#master`, `#vendors`, `#competitors`, `#insights`), so a view can be bookmarked. Old links (`#sheet`, `#actions`) still open the renamed views.
 - **Catalog:** Catalog management (`/catalog-admin.html`), and Catalog 1 (`/catalog`) and Catalog 2 (`/catalog2`), which open the customer pages in a new tab.
-- At the bottom: how many products are loaded and when the products API last updated.
+- At the bottom: our brand logos, how many products are loaded and when the products API last updated.
 
-**Page header:** breadcrumb, the view's title and **Export CSV** (the main table of the current view, with the filters applied).
+**Page header:** the view's title and **Export CSV** (the main table of the current view, with the filters applied). On a phone the intro text under it shows two lines until tapped, and the tiles sit two to a row.
 
-**Filters** (under the page header, on every report view): search (SKU, name or UPC), **Platform** (all platforms or one of the 14 channels, each listed with its 60-day units; choosing one focuses every view on it, and clicking a bar in a platform chart does the same), Category, and Tier (`pricing_category`: super, hero, green, new, dead, …).
+**Tables:** click a heading to sort. Long tables are paged (25, 50, 100 or 250 rows, 50 by default); totals always cover every row. Product master and Items sold have a **Columns** menu to hide columns, saved per browser.
 
-**Plan for the next 7, 14, 30 or 60 days** shows on the Reorder view only. It's a projection (day ave × days), so it only belongs where you plan an order. Every other view shows the API's fixed counts, and projections there (Overview, Sheet view) use 30 days. Nothing on the page estimates past sales: the API has 60-day units per platform and the 90-day all-platform total the reorder math uses, and nothing shorter.
+**Plan for the next 7, 14, 30 or 60 days** shows on the Reorder view only. It's a projection (day ave × days), so it only belongs where you plan an order. Every other view shows the API's fixed counts, and projections there (Overview, Product master) use 30 days. Nothing on the page estimates past sales: the API has 60-day units per platform and the 90-day all-platform total the reorder math uses, and nothing shorter.
 
 **Views:**
 
 | View | What it shows |
 |---|---|
-| Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Units by platform chart, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Sheet view filtered to those products. |
-| Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), units by platform chart, units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them; columns can be hidden. |
-| Actions | Overstock: cash tied up above a 60, 90 or 180-day cover target, with a suggested action and TikTok break-even price. Switch vendor: selling products a vendor quotes cheaper than we pay, with per-order and yearly savings. |
+| Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Units by platform chart, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Product master filtered to those products. |
+| Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), units by platform chart, units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them. |
 | Reorder | Products at or under the trigger, grouped by supplier, cheapest vendor, top platform or tier (or not grouped), with cases, order quantity and order cost. Show: needs order, all selling, everything. The planning period sets the "Next N days" projections. The sheet's numbers can be changed here (see Settings below). |
 | Profit & Loss | Per platform: price rule, average profit per unit, 60-day weighted PFT%, 60-day units, revenue and profit, how many SKUs are under the minimum margin and how many lose money. Click a platform for its per-product P&L. Option: use live listing prices instead of the sheet's price formulas. |
-| Sheet view | The workbook's main columns filled from the API. Columns can be hidden per group. |
+| Product master | The workbook's main columns filled from the API, for every product. |
 | Vendors | Each supplier's price list: products quoted, how many they're cheapest on, latest price date. Click one to compare their prices with ours. |
 | TikTok competitors | See [TikTok competitors](#tiktok-competitors-euka). |
+| Insights | Overstock: cash tied up above a 60, 90 or 180-day cover target, with a suggested action and TikTok break-even price. Switch vendor: selling products a vendor quotes cheaper than we pay, with per-order and yearly savings. |
 
 Clicking any product opens its **detail view**, which has:
 
@@ -202,7 +207,7 @@ Clicking any product opens its **detail view**, which has:
 
 ## Formulas
 
-Excel column letters in brackets refer to the workbook's master tab, which these mirror. The code is `enrich()`, `computePL()` and the `PL` table in `public/index.html`.
+Excel column letters in brackets refer to the workbook's master tab, which these mirror. The code is `enrich()`, `computePL()` and the `PL` table in `public/js/reports.js`.
 
 ### Per product
 
@@ -271,7 +276,7 @@ The platform summary's PFT% is weighted by 60-day units: total 60-day profit ÷ 
 - Items sold per day = 60-day units ÷ 60.
 - Short in N days = max(0, day ave × N − live inv − on order).
 
-### Actions tab
+### Insights
 
 - **Overstock:** excess units = live inv − day ave × cover days (all of live inv when nothing sells). Cash tied up = excess × platform cost. Action: Liquidate when nothing sells, Mark down when there's over 365 days of stock, else Bundle / promo.
 - **TikTok break-even:** Q ÷ 0.8 when that's under $30; otherwise max($30, (Q + ship charge) ÷ 0.8).
@@ -338,16 +343,6 @@ The **TikTok competitors** tab compares each SKU's TikTok price with up to 5 sam
 
 **On the page:** hide a wrong match ("Not a match") or pin the right listing. Either one re-checks that SKU right away. Overrides are saved in `competitor-overrides.json`.
 
-## TikTok sales (Euka analytics)
-
-`lib/tiktok-sales.js` loads our own TikTok Shop sales for the last 7, 14, 30, 60 and 90 days from Euka's `dashboard/products-performance`. The products API only has 60 and 90-day totals, so this is the only source for shorter TikTok windows. The reports page doesn't use it: Euka is used for competitor prices only, and `/api/tiktok-sales` stays available for other tools.
-
-- **End date:** a one-day request for yesterday first finds the latest finished reporting day (TikTok reports with a lag). Every window ends on that day.
-- **Brand:** it uses the first of the key's Euka brands that has a TikTok Shop connected, or `EUKA_BRAND_ID`.
-- **Pages:** up to 100 pages of 100 products per window.
-- **Cache:** results are kept for 60 minutes (`TIKTOK_SALES_TTL_MIN`). The last good copy is served while a refresh runs.
-- **SKU matching:** the browser matches TikTok products to SKUs by `tiktok_product_id` or the id in `igloo_tiktok`, or by the seller SKU when a listing has exactly one.
-
 ## Editing the Excel sheet
 
 Each product's detail view has an **Excel sheet** section showing that SKU's row from the master tab of the workbook in OneDrive (`TIKTOK PRICING 786110.xlsx`, sheet `0. MASTER` by default). Type in any column and press **Save to Excel**. The server writes the cells through Microsoft Graph, the same as someone editing the file in Excel Online, so anything syncing from the live file (the QuickBooks sync) picks the change up. Code: `lib/excel.js`, `public/js/excel-edit.js`.
@@ -383,7 +378,7 @@ Each product's detail view has an **Excel sheet** section showing that SKU's row
 
 There are two customer catalogs, each at its own link with its own password: **Catalog 1** at `/catalog` (with prices by default) and **Catalog 2** at `/catalog2` (no prices by default). Give a customer whichever link fits. Both share the page below; everything in this section applies to each, with its own settings.
 
-`/catalog` is the wholesale catalog for customers (`lib/catalog.js`, `catalog/index.html`), laid out like `american_seair_imports_wholesale_2025.xlsx`: brand logos, address and phone, then SKU, UPC, name, category, piece price and case price with a picture of each product, grouped under red category headings (Perfumes, Air Freshner, Deodorant, Car Perfume, Incense, Sunglasses, then Diffusers, Cosmetics, Health & Beauty, Electronics). Customers can search, filter by category, and download what they see as a PDF or an Excel file with the pictures in it.
+`/catalog` is the wholesale catalog for customers (`lib/catalog.js`, `catalog/index.html`), laid out like `american_seair_imports_wholesale_2025.xlsx`: brand logos, address and phone, then SKU, UPC, name, category, piece price and case price with a picture of each product, grouped under red category headings (Perfumes, Air Freshner, Deodorant, Car Perfume, Incense, Sunglasses, then Diffusers, Cosmetics, Health & Beauty, Electronics). Customers can search, filter by category, and download what they see as a PDF or an Excel file with the pictures in it. The page borrows the shared design system's tokens and components (buttons, inputs, lozenges) but keeps its own layout, always in the light theme.
 
 - It reads the same products API as the dashboard (5-minute cache), so prices follow the API. Opened-box, deleted and discontinued SKUs are left out.
 - The API has no selling price, only `cost` (the workbook's WHOLESALE COST) and `qty_in_case`. Each catalog applies its own wholesale rules, editable in Catalog management: piece price = cost + 12%, case price (per piece) = cost + 8% by default, both rounded up to the next $0.50 (also editable). A price set for a SKU replaces its piece price.
@@ -393,7 +388,7 @@ There are two customer catalogs, each at its own link with its own password: **C
 - Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
 - Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
 - Clicking a product's picture opens a bigger view, with arrows to step through the products shown.
-- The **Catalog management** page (`public/catalog-admin.html` + `public/js/catalog-admin.js`, admin sign-in) controls it: turn the catalog on or off, show or hide piece and case prices, include every API product except the ones you remove or only the SKUs you add (opened-box and other internal SKUs can be added by hand), and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set on that page (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG2_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
+- The **Catalog management** page (`public/catalog-admin.html` + `public/js/catalog-admin.js`, admin sign-in) controls it: turn the catalog on or off, show or hide piece and case prices, set the pricing rules (piece and case markup, and what prices round up to), include every API product except the ones you untick or only the ones you tick, and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set on that page (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG2_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
 
 ## API reference
 
@@ -408,7 +403,6 @@ All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON
 | `GET /api/competitors/product/<id>` | One TikTok listing straight from Euka. |
 | `POST /api/competitors/refresh` | Body `{ "skus": [...] }` optional. 3 SKUs or fewer: waits and returns their results. Otherwise 202 and runs in the background. 409 if a run is going. |
 | `POST /api/competitors/override` | `{ sku, productId, action: "ignore" \| "pin" \| "clear" }`. Saves it and re-checks that SKU. |
-| `GET /api/tiktok-sales` (`?refresh`) | `{ configured, error, fetchedAt, end, latestAvailableDate, windows: { 7: { start, end, totalCount, complete, products: [{ id, units, gmv, orders, skus }] }, … } }`. |
 | `GET /api/excel` (`?refresh`) | Connection status, workbook name and link, header row, row count, columns. |
 | `GET /api/excel/row?sku=` | `{ sku, row, sheet, cells: [{ col, header, label, value, text, editable, reason, formula? }] }`. 404 if not on the sheet, 409 if on two rows. |
 | `POST /api/excel/edit` | `{ sku, editor, changes: [{ col, header, expected, value }] }` (up to 200). Returns `results` per cell with `ok` or `error`. |
@@ -423,7 +417,8 @@ Other routes:
 | Path | Who | What |
 |---|---|---|
 | `GET /login`, `POST /login` (`token`, `next`), `GET /logout` | anyone | Admin sign-in |
-| `/`, `/index.html`, `/catalog-admin.html`, `/js/*`, `/css/*` | admin | Dashboard pages |
+| `/`, `/index.html`, `/catalog-admin.html`, `/js/*` | admin | Dashboard pages |
+| `/css/*` | anyone | The shared stylesheet (the sign-in pages and catalog use it too) |
 | `/catalog`, `/catalog2` | password | Catalog page or its sign-in |
 | `POST /catalog/login` (`password`), `GET /catalog/logout` | anyone | Catalog sign-in (same under `/catalog2`) |
 | `GET /catalog/data` | catalog session | Listed products with only catalog fields and stock status |
@@ -458,7 +453,7 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `CATALOG_NEW_DAYS` | 30 | Products added within this many days get the NEW tag. |
 | `CATALOG_DATA_DIR` | `COMPETITOR_DATA_DIR` | Where catalog settings are saved. |
 | `HUB_IMAGES_API` | hub `/api/ecom/search` | Storefront product list used for catalog pictures. |
-| `EUKA_API_KEY` | (none) | Turns on competitors and TikTok sales. |
+| `EUKA_API_KEY` | (none) | Turns on TikTok competitors. |
 | `EUKA_BRAND_ID` | first brand on the key | Which Euka brand to read as. |
 | `EUKA_API_BASE` | `https://server.euka.ai/api/v1` | |
 | `EUKA_PRODUCT_SEARCH_PATH` | `/social-intelligence/products` | |
@@ -475,7 +470,6 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `COMPETITOR_MIN_SCORE` | 0.6 | Match threshold. |
 | `OUR_TIKTOK_SHOP_NAMES` | (none) | Our shop names, left out of competitors. |
 | `COMPETITOR_DATA_DIR` | `./data` | Data directory. Point it at the Render disk. |
-| `TIKTOK_SALES_TTL_MIN` | 60 | Minutes to cache TikTok sales. |
 | `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` | (none) | Entra app for Excel write-back. |
 | `EXCEL_FILE_URL` | (none) | Link to the workbook (takes precedence over user + path). |
 | `EXCEL_USER` | `office@americanseairimports.onmicrosoft.com` | Workbook owner. |
@@ -494,53 +488,11 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `asi-dashboard` / `products` | IndexedDB | Last good products list, shown if the API is down |
 | `asi-v4-state` | localStorage | Current view, planning period, platform, grouping, filters |
 | `asi-v4-settings` | localStorage | The sheet's numbers (see Settings) |
-| `asi-v4-hidden` | localStorage | Hidden columns in Sheet view and Items sold |
+| `asi-v4-hidden` | localStorage | Hidden columns in Product master and Items sold |
+| `asi-theme` | localStorage | Light, dark or match device |
 | `asi-editor` | localStorage | Your name for the Excel edit history |
 | `asi-admin-token` | localStorage | Only if you're ever asked for the token on a 401 (header-auth fallback) |
 | catalog cart | localStorage on the catalog page | A customer's cart, for 6 hours |
-
-## Planned: dashboard assistant (MCP server and chat)
-
-Status: **planned, not built.** This section is the agreed design, kept here so the build follows it.
-
-**Goal:** ask plain questions inside the dashboard ("what should I reorder from Lux?", "where are we undercut on TikTok?") and get answers that match the tabs, without exposing the raw product feed.
-
-```
-Browser (signed in)            Render web service
-Assistant panel ── POST /api/assistant/chat (streamed) ──► auth.gate ─► lib/assistant/chat.js (model loop)
-                                                                          │ calls tools in-process
-External agent (optional, off) ── POST /mcp (MCP_TOKEN / OAuth) ──►  lib/assistant/tools.js (read-only)
-                                                                          │ same productList(), competitors, sales
-                                                                          ▼
-                                                                 model provider (OpenAI or Anthropic), key server-side
-```
-
-**Build steps:**
-
-1. **Shared metrics:** move `enrich`, `computePL`, `PL`, `CHANNELS` and `VENDORS` out of `public/index.html` into `public/js/metrics.js`, loaded by both the page and the server, so the assistant's numbers can't drift from the tabs. The page's settings travel with each chat request.
-2. **Read-only tools:** `inventory_summary`, `find_products` (up to 10), `product_detail` (one SKU), `reorder_list`, `top_sellers`, `dead_and_overstock`, `vendor_savings` (lists up to 25 rows plus totals), `channel_mix`, `tiktok_competitors`, `tiktok_sales`, `data_status`.
-3. **Chat route:** `POST /api/assistant/chat`, streamed with server-sent events, with a provider switch (`AI_PROVIDER=openai|anthropic`), a rate limit and a log.
-4. **Chat panel:** an "Ask" panel in the top bar.
-5. **MCP endpoint:** `/mcp` (official MCP SDK, streamable HTTP), off unless turned on.
-6. **Later:** voice (OpenAI gpt-realtime), write actions behind confirm buttons, and an outside agent (an OpenAI Dot, ChatGPT or Claude) connected to `/mcp`.
-
-**Data safety rules:**
-
-1. Chat sits behind the admin sign-in. `/mcp` is off by default and uses its own credential (OAuth 2.1 per the MCP spec, `MCP_TOKEN` only as a stopgap), never `ADMIN_TOKEN`.
-2. Read-only, with no internet, email or write tools. The tools only read what the server already holds.
-3. Small answers: row caps and totals, one SKU per detail call, no export tool.
-4. Field allow-list. Customer names (`qb_customer_sales`), raw `igloo_*` JSON, internal ids and notes are never returned. `ASSISTANT_HIDE` can hide more.
-5. Model keys stay server-side. Ask the provider for zero data retention (API data isn't used for training by default).
-6. Untrusted text stays data. Product names and Euka titles are never instructions, and answers render as plain text with no auto-loading links or images. This avoids the combination behind real MCP leaks: untrusted text, broad access and a way to send data out.
-7. Only our own code: no third-party MCP servers, and npm packages pinned to exact versions.
-8. Limits, a log and an alert:
-   - 20 questions per 10 minutes per session, 8 tool calls per question.
-   - `assistant-log.jsonl` records the question, the tools used and how many rows each returned. The data itself is never logged.
-   - A warning goes to the Render log on unusual volume.
-
-**Model choice:** start with OpenAI GPT-6.1 Sol through the Responses or Agents API, with Claude Sonnet 5.5 (`claude-sonnet-5-5`) behind the same switch for comparison. OpenAI's Dots (announced at DevDay on 29 Sept 2026) are always-on agents inside ChatGPT and can't be embedded in the page. A Dot could connect to `/mcp` later if OpenAI allows custom MCP servers.
-
-**Planned settings** (added to `.env.example` with the code): `AI_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ASSISTANT_ENABLED`, `ASSISTANT_MAX_ROWS` (25), `ASSISTANT_RATE` (20/10m), `ASSISTANT_HIDE`, `MCP_TOKEN`.
 
 ## Troubleshooting
 
@@ -553,7 +505,6 @@ External agent (optional, off) ── POST /mcp (MCP_TOKEN / OAuth) ──►  l
 | Competitor results vanish after a deploy | `COMPETITOR_DATA_DIR` isn't on a persistent disk (the tab shows "Results reset when the server restarts"). |
 | "Euka's weekly limit is used up" | Searching resumes Monday 00:00 UTC on its own. |
 | "Market intelligence unavailable" | The key's plan lacks it, or it's rate limited. Product search carries on alone. |
-| TikTok numbers marked est. | Connect the TikTok Shop in Euka so `/api/tiktok-sales` has data. |
 | Excel section says not connected | Set the three `MS_*` variables. "Couldn't open the workbook" means the file path or permission is wrong. |
 | Excel save says "changed in Excel since you opened it" | Someone edited that cell. Reopen the product to load the new value. |
 | Catalog says it's locked | Set its password in Catalog management or on Render. |

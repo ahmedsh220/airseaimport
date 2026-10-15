@@ -1,186 +1,282 @@
-/* Atlassian Design System look for the dashboard pages (index.html, catalog-admin.html).
-   Colors, type and spacing follow ADS design tokens (atlassian.design/foundations/tokens); the token
-   names are kept as --ds-* so they read like the real ones. The short names further down (--bg, --panel,
-   --text, …) are what the page scripts and excel-edit.js already use; they point at the tokens. */
+/* =====================================================================================================
+   ads.css: the one design system for every page (reports, catalog management, sign-in, customer catalog).
+   It follows the Atlassian Design System (atlassian.design): its color tokens, type scale, 4px spacing grid
+   and components (button, text field, select, checkbox, lozenge, dynamic table, pagination, dropdown menu,
+   modal, section message, top navigation, side navigation). Token names copy ADS (--ds-*) so they can be
+   looked up on atlassian.design/components/tokens/all-tokens.
+
+   Light and dark: the theme switch in the top bar sets <html data-theme="light" | "dark">; with neither the page
+   follows the device setting. The customer catalog always pins data-theme="light", so it looks the same everywhere.
+
+   Sections: 1 tokens · 2 base · 3 components · 4 app shell (top bar, side nav, page header) · 5 phone layout
+   ===================================================================================================== */
+
+/* ---------- 1. Tokens ---------- */
 :root {
   --ds-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, "Helvetica Neue", sans-serif;
   --ds-text: #172B4D; --ds-text-subtle: #44546F; --ds-text-subtlest: #626F86; --ds-text-inverse: #FFFFFF;
-  --ds-text-brand: #0C66E4; --ds-text-selected: #0C66E4; --ds-link: #0C66E4;
-  --ds-text-success: #216E4E; --ds-text-warning: #A54800; --ds-text-danger: #AE2E24; --ds-text-discovery: #5E4DB2; --ds-text-information: #0055CC;
+  --ds-text-brand: #0C66E4; --ds-text-selected: #0C66E4; --ds-link: #0C66E4; --ds-text-disabled: #091E424F;
+  --ds-text-success: #216E4E; --ds-text-warning: #A54800; --ds-text-danger: #AE2E24; --ds-text-information: #0055CC; --ds-text-discovery: #5E4DB2;
   --ds-surface: #FFFFFF; --ds-surface-sunken: #F7F8F9; --ds-surface-raised: #FFFFFF; --ds-surface-overlay: #FFFFFF;
-  --ds-border: #091E4224; --ds-border-input: #8590A2; --ds-border-focused: #388BFF; --ds-border-selected: #0C66E4; --ds-border-brand: #0C66E4;
-  --ds-bg-neutral: #091E420F; --ds-bg-neutral-hovered: #091E4224; --ds-bg-neutral-pressed: #091E424F;
-  --ds-bg-neutral-subtle-hovered: #091E420F; --ds-bg-neutral-subtle-pressed: #091E4224;
+  --ds-border: #091E4224; --ds-border-input: #8590A2; --ds-border-focused: #388BFF; --ds-border-selected: #0C66E4;
+  --ds-bg-neutral: #091E420F; --ds-bg-neutral-hovered: #091E4224; --ds-bg-neutral-pressed: #091E424F; --ds-bg-subtle-hovered: #091E420F;
   --ds-bg-brand-bold: #0C66E4; --ds-bg-brand-bold-hovered: #0055CC; --ds-bg-selected: #E9F2FF; --ds-bg-selected-hovered: #CCE0FF;
-  --ds-bg-input: #FFFFFF; --ds-bg-disabled: #091E4208; --ds-text-disabled: #091E424F;
-  --ds-bg-success: #DCFFF1; --ds-bg-warning: #FFF7D6; --ds-bg-danger: #FFECEB; --ds-bg-discovery: #F3F0FF; --ds-bg-information: #E9F2FF;
-  --ds-bg-success-bold: #1F845A; --ds-bg-danger-bold: #C9372C; --ds-bg-warning-bold: #F5CD47;
-  --ds-teal-subtle: #E7F9FF; --ds-teal-text: #206A83; --ds-yellow-subtle: #FFF7D6; --ds-yellow-text: #7F5F01;
+  --ds-bg-input: #FFFFFF; --ds-bg-input-hovered: #F7F8F9; --ds-bg-disabled: #091E4208;
+  --ds-bg-success: #DCFFF1; --ds-bg-warning: #FFF7D6; --ds-bg-danger: #FFECEB; --ds-bg-information: #E9F2FF; --ds-bg-discovery: #F3F0FF;
   --ds-shadow-raised: 0 1px 1px #091E4240, 0 0 1px #091E424F;
   --ds-shadow-overlay: 0 8px 12px #091E4226, 0 0 1px #091E424F;
   --ds-blanket: #091E427A;
   --ds-chart-brand: #388BFF; --ds-chart-danger: #F87168; --ds-chart-warning: #FCA700;
+  /* Product tiers (pricing_category), drawn as bold lozenges and the stripe on table rows. ADS accent colors. */
+  --tier-super: #6E5DC6; --tier-hero: #1D7AFC; --tier-green: #22A06B; --tier-new: #1D9AAA; --tier-dead: #8590A2;
+  --tier-empty: #C9372C; --tier-breathing: #B38600; --tier-other: #E56910;
+  /* Layout sizes used by the shell. */
+  --topbar-h: 56px; --sidenav-w: 232px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ds-text: #B6C2CF; --ds-text-subtle: #9FADBC; --ds-text-subtlest: #8C9BAB; --ds-text-inverse: #1D2125;
-    --ds-text-brand: #579DFF; --ds-text-selected: #579DFF; --ds-link: #579DFF;
-    --ds-text-success: #7EE2B8; --ds-text-warning: #FEC195; --ds-text-danger: #FD9891; --ds-text-discovery: #B8ACF6; --ds-text-information: #85B8FF;
+    --ds-text-brand: #579DFF; --ds-text-selected: #579DFF; --ds-link: #579DFF; --ds-text-disabled: #BFDBF847;
+    --ds-text-success: #7EE2B8; --ds-text-warning: #FEC195; --ds-text-danger: #FD9891; --ds-text-information: #85B8FF; --ds-text-discovery: #B8ACF6;
     --ds-surface: #1D2125; --ds-surface-sunken: #161A1D; --ds-surface-raised: #22272B; --ds-surface-overlay: #282E33;
-    --ds-border: #A6C5E229; --ds-border-input: #738496; --ds-border-focused: #85B8FF; --ds-border-selected: #579DFF; --ds-border-brand: #579DFF;
-    --ds-bg-neutral: #A1BDD914; --ds-bg-neutral-hovered: #A6C5E229; --ds-bg-neutral-pressed: #BFDBF847;
-    --ds-bg-neutral-subtle-hovered: #A1BDD914; --ds-bg-neutral-subtle-pressed: #A6C5E229;
+    --ds-border: #A6C5E229; --ds-border-input: #738496; --ds-border-focused: #85B8FF; --ds-border-selected: #579DFF;
+    --ds-bg-neutral: #A1BDD914; --ds-bg-neutral-hovered: #A6C5E229; --ds-bg-neutral-pressed: #BFDBF847; --ds-bg-subtle-hovered: #A1BDD914;
     --ds-bg-brand-bold: #579DFF; --ds-bg-brand-bold-hovered: #85B8FF; --ds-bg-selected: #1C2B41; --ds-bg-selected-hovered: #09326C;
-    --ds-bg-input: #22272B; --ds-bg-disabled: #BCD6F00A; --ds-text-disabled: #BFDBF847;
-    --ds-bg-success: #164B35; --ds-bg-warning: #533F04; --ds-bg-danger: #5D1F1A; --ds-bg-discovery: #352C63; --ds-bg-information: #092957;
-    --ds-bg-success-bold: #4BCE97; --ds-bg-danger-bold: #F87168; --ds-bg-warning-bold: #F5CD47;
-    --ds-teal-subtle: #164555; --ds-teal-text: #9DD9EE; --ds-yellow-subtle: #533F04; --ds-yellow-text: #F8E6A0;
+    --ds-bg-input: #22272B; --ds-bg-input-hovered: #282E33; --ds-bg-disabled: #BCD6F00A;
+    --ds-bg-success: #164B35; --ds-bg-warning: #533F04; --ds-bg-danger: #5D1F1A; --ds-bg-information: #092957; --ds-bg-discovery: #352C63;
     --ds-shadow-raised: 0 1px 1px #03040442, 0 0 1px #03040480;
     --ds-shadow-overlay: 0 0 0 1px #BCD6F01F, 0 8px 12px #0304045C, 0 0 1px #03040480;
     --ds-blanket: #10121499;
-    --ds-chart-brand: #579DFF; --ds-chart-danger: #F87168; --ds-chart-warning: #FCA700;
+    --ds-chart-brand: #579DFF;
   }
 }
-/* Names the page scripts use. Tier colors: the ADS accent colors. */
-:root {
-  --bg: var(--ds-surface-sunken); --panel: var(--ds-surface); --text: var(--ds-text); --muted: var(--ds-text-subtlest);
-  --border: var(--ds-border); --accent: var(--ds-text-brand); --accent-soft: var(--ds-bg-selected);
-  --good: var(--ds-text-success); --warn: var(--ds-text-warning); --bad: var(--ds-text-danger);
-  --t-super: #6E5DC6; --t-hero: #1D7AFC; --t-green: #22A06B; --t-new: #1D9AAA; --t-dead: #8590A2; --t-other: #E56910;
-  --t-empty: #C9372C; --t-breathing: #B38600;
-  --topbar-h: 56px; --sidenav-w: 240px;
+/* Dark chosen with the theme switch (shell.js sets data-theme), whatever the device setting. */
+:root[data-theme="dark"] {
+    --ds-text: #B6C2CF; --ds-text-subtle: #9FADBC; --ds-text-subtlest: #8C9BAB; --ds-text-inverse: #1D2125;
+    --ds-text-brand: #579DFF; --ds-text-selected: #579DFF; --ds-link: #579DFF; --ds-text-disabled: #BFDBF847;
+    --ds-text-success: #7EE2B8; --ds-text-warning: #FEC195; --ds-text-danger: #FD9891; --ds-text-information: #85B8FF; --ds-text-discovery: #B8ACF6;
+    --ds-surface: #1D2125; --ds-surface-sunken: #161A1D; --ds-surface-raised: #22272B; --ds-surface-overlay: #282E33;
+    --ds-border: #A6C5E229; --ds-border-input: #738496; --ds-border-focused: #85B8FF; --ds-border-selected: #579DFF;
+    --ds-bg-neutral: #A1BDD914; --ds-bg-neutral-hovered: #A6C5E229; --ds-bg-neutral-pressed: #BFDBF847; --ds-bg-subtle-hovered: #A1BDD914;
+    --ds-bg-brand-bold: #579DFF; --ds-bg-brand-bold-hovered: #85B8FF; --ds-bg-selected: #1C2B41; --ds-bg-selected-hovered: #09326C;
+    --ds-bg-input: #22272B; --ds-bg-input-hovered: #282E33; --ds-bg-disabled: #BCD6F00A;
+    --ds-bg-success: #164B35; --ds-bg-warning: #533F04; --ds-bg-danger: #5D1F1A; --ds-bg-information: #092957; --ds-bg-discovery: #352C63;
+    --ds-shadow-raised: 0 1px 1px #03040442, 0 0 1px #03040480;
+    --ds-shadow-overlay: 0 0 0 1px #BCD6F01F, 0 8px 12px #0304045C, 0 0 1px #03040480;
+    --ds-blanket: #10121499;
+    --ds-chart-brand: #579DFF;
 }
 
+/* ---------- 2. Base ---------- */
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { color-scheme: light dark; }
+html[data-theme="light"] { color-scheme: light; } html[data-theme="dark"] { color-scheme: dark; }
 body { margin: 0; background: var(--ds-surface); color: var(--ds-text); font: 400 14px/20px var(--ds-font); -webkit-font-smoothing: antialiased; }
 a { color: var(--ds-link); text-decoration: none; } a:hover { text-decoration: underline; }
-h1, h2, h3, h4 { color: var(--ds-text); }
 :focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 2px; }
+.muted, .meta { color: var(--ds-text-subtlest); } .meta { font-size: 12px; line-height: 16px; }
+.good { color: var(--ds-text-success); } .warn { color: var(--ds-text-warning); } .bad { color: var(--ds-text-danger); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label.t { color: var(--ds-text-subtle); font-size: 12px; font-weight: 600; }
 
-/* Buttons (ADS Button: default, primary, subtle, selected) */
+/* ---------- 3. Components ---------- */
+
+/* Button. Appearances: default, .primary, .subtle; .active = selected. Icons are 16px inline SVG. */
 button, .btn { font: 500 14px/20px var(--ds-font); color: var(--ds-text-subtle); background: var(--ds-bg-neutral); border: 0;
-  border-radius: 3px; padding: 6px 12px; min-height: 32px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 3px; padding: 6px 12px; min-height: 32px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   white-space: nowrap; text-decoration: none; transition: background .1s; }
 button:hover, .btn:hover { background: var(--ds-bg-neutral-hovered); text-decoration: none; }
 button:active, .btn:active { background: var(--ds-bg-neutral-pressed); }
 button:disabled { background: var(--ds-bg-disabled); color: var(--ds-text-disabled); cursor: not-allowed; }
 button.primary, .btn.primary { background: var(--ds-bg-brand-bold); color: var(--ds-text-inverse); }
 button.primary:hover, .btn.primary:hover { background: var(--ds-bg-brand-bold-hovered); }
+button.primary:disabled { background: var(--ds-bg-disabled); color: var(--ds-text-disabled); }
 button.subtle, .btn.subtle { background: none; }
-button.subtle:hover, .btn.subtle:hover { background: var(--ds-bg-neutral-subtle-hovered); }
-button.active, button[aria-pressed="true"] { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
-button.active:hover { background: var(--ds-bg-selected-hovered); }
+button.subtle:hover, .btn.subtle:hover { background: var(--ds-bg-subtle-hovered); }
+button.active { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
 button svg, .btn svg { width: 16px; height: 16px; flex: none; }
 
-/* Text field and select (ADS Textfield / Select) */
+/* Button group used as a segmented control (ADS: buttons in a group, the chosen one selected). */
+.seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 4px; background: var(--ds-bg-neutral); }
+.seg button { min-height: 28px; padding: 4px 10px; background: none; color: var(--ds-text-subtle); }
+.seg button:hover { background: var(--ds-bg-neutral-hovered); }
+.seg button.active { background: var(--ds-surface-raised); color: var(--ds-text-selected); box-shadow: var(--ds-shadow-raised); }
+
+/* Text field and native select. */
 input, select, textarea { font: 400 14px/20px var(--ds-font); color: var(--ds-text); background: var(--ds-bg-input);
   border: 1px solid var(--ds-border-input); border-radius: 3px; padding: 5px 8px; min-height: 32px; }
-input:hover, select:hover { border-color: var(--ds-border-input); background: var(--ds-surface-sunken); }
+input:hover, select:hover, textarea:hover { background: var(--ds-bg-input-hovered); }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--ds-border-focused); box-shadow: inset 0 0 0 1px var(--ds-border-focused); background: var(--ds-bg-input); }
-input[type=checkbox], input[type=radio] { min-height: 0; padding: 0; accent-color: var(--ds-bg-brand-bold); }
-input::placeholder { color: var(--ds-text-subtlest); }
+input::placeholder, textarea::placeholder { color: var(--ds-text-subtlest); }
+input[type=checkbox], input[type=radio] { min-height: 0; width: 16px; height: 16px; margin: 0; padding: 0; accent-color: var(--ds-bg-brand-bold); vertical-align: -3px; }
+input[type=search].search { padding-left: 30px; background: var(--ds-bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238590A2' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E") no-repeat 8px center / 16px; }
 
-/* Text helpers */
-.meta, .muted { color: var(--ds-text-subtlest); } .meta { font-size: 12px; line-height: 16px; }
-.good { color: var(--ds-text-success); } .warn { color: var(--ds-text-warning); } .bad { color: var(--ds-text-danger); }
-.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-label.t { color: var(--ds-text-subtle); font-size: 12px; font-weight: 600; }
-
-/* Lozenge (ADS Lozenge). .pill keeps its old class name; good/warn/bad/muted pick the appearance. */
+/* Lozenge (status label). .pill is the same thing; good/warn/bad/info/muted pick the color, .n keeps numbers in normal case. */
 .pill, .lozenge { display: inline-block; padding: 0 4px; border-radius: 3px; font: 700 11px/16px var(--ds-font); text-transform: uppercase;
   background: var(--ds-bg-neutral); color: var(--ds-text-subtle); white-space: nowrap; vertical-align: middle; }
 .pill.good { background: var(--ds-bg-success); color: var(--ds-text-success); }
 .pill.warn { background: var(--ds-bg-warning); color: var(--ds-text-warning); }
 .pill.bad { background: var(--ds-bg-danger); color: var(--ds-text-danger); }
 .pill.info { background: var(--ds-bg-information); color: var(--ds-text-information); }
-.pill.muted { background: var(--ds-bg-neutral); color: var(--ds-text-subtle); }
-/* Tag (ADS Tag, removable) */
+.pill.n { text-transform: none; font-size: 12px; font-weight: 600; }
+/* Bold lozenge in the product tier's color (style="--c: var(--tier-…)"). */
+.tier { display: inline-block; padding: 0 4px; border-radius: 3px; font: 700 11px/16px var(--ds-font); text-transform: uppercase; color: #fff; background: var(--c, var(--tier-other)); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c, var(--tier-other)); flex: none; }
+
+/* Tag (removable chip). */
 .chip { display: inline-flex; gap: 2px; align-items: center; background: var(--ds-bg-neutral); color: var(--ds-text);
   border-radius: 3px; padding: 0 0 0 8px; font-size: 12px; line-height: 20px; font-weight: 500; }
 .chip button { min-height: 20px; padding: 0 6px; background: none; color: var(--ds-text-subtle); }
 .chip button:hover { background: var(--ds-bg-danger); color: var(--ds-text-danger); }
 
-/* Cards and section messages */
-.card { background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-raised); border-radius: 8px; padding: 16px 20px; min-width: 0; margin-bottom: 24px; }
-.card h3 { margin: 0 0 4px; font: 600 16px/20px var(--ds-font); }
-.card .hint, .hint { margin: 0 0 12px; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+/* Card: a raised surface for a section of content. */
+.card { background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-raised); border-radius: 8px; padding: 16px; min-width: 0; margin-bottom: 16px; }
+.card h3 { margin: 0 0 2px; font: 600 16px/20px var(--ds-font); }
+.hint { margin: 0 0 12px; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
 .card .head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.card .head .hint { margin: 0; }
 
-/* Tables (ADS Dynamic table) */
-.tablewrap { overflow: auto; max-height: 70vh; border-top: 2px solid var(--ds-border); }
+/* Section message (information / warning). */
+.msg { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin: 0 0 16px;
+  padding: 12px 16px; border-radius: 3px; background: var(--ds-bg-information); color: var(--ds-text); }
+.msg.warn { background: var(--ds-bg-warning); }
+
+/* Dynamic table: sortable header, row hover, totals footer, pagination below. */
+.tablewrap { overflow: auto; border-top: 2px solid var(--ds-border); -webkit-overflow-scrolling: touch; }
 table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--ds-border); text-align: right; white-space: nowrap; }
 th.l, td.l { text-align: left; }
-thead th { position: sticky; top: 0; background: var(--ds-surface-raised); color: var(--ds-text-subtlest); font: 600 12px/16px var(--ds-font);
-  cursor: pointer; user-select: none; z-index: 1; border-bottom: 2px solid var(--ds-border); }
-thead th:hover { color: var(--ds-text-subtle); background: color-mix(in srgb, var(--ds-text) 4%, var(--ds-surface-raised)); }
-th.sorted { color: var(--ds-text); } th.sorted::after { content: " ↓"; } th.sorted.asc::after { content: " ↑"; }
-tbody tr:hover td { background: var(--ds-bg-neutral-subtle-hovered); }
+thead th { position: sticky; top: 0; z-index: 1; background: var(--ds-surface-raised); color: var(--ds-text-subtlest); font: 600 12px/16px var(--ds-font);
+  border-bottom: 2px solid var(--ds-border); }
+thead th[data-t] { cursor: pointer; user-select: none; }
+thead th[data-t]:hover { color: var(--ds-text); background: color-mix(in srgb, var(--ds-text) 5%, var(--ds-surface-raised)); }
+th.sorted { color: var(--ds-text); }
+th.sorted::after { content: ""; display: inline-block; width: 0; height: 0; margin-left: 4px; vertical-align: 2px;
+  border: 4px solid transparent; border-top-color: currentColor; border-bottom: 0; }
+th.sorted.asc::after { border-top: 0; border-bottom: 4px solid currentColor; }
+thead tr.grp th { font-size: 11px; text-align: center; border-left: 1px solid var(--ds-border); border-bottom-width: 1px; }
+thead tr.grp th:empty { border-left: 0; }
+thead tr.grp + tr th { top: 29px; }
+tbody tr:hover td { background: var(--ds-bg-subtle-hovered); }
 tbody tr.click { cursor: pointer; }
-tfoot td { font-weight: 600; background: var(--ds-surface-sunken); position: sticky; bottom: 0; border-top: 2px solid var(--ds-border); }
+tfoot td { font-weight: 600; background: var(--ds-surface-sunken); border-top: 2px solid var(--ds-border); }
+.empty { padding: 32px 16px; text-align: center; color: var(--ds-text-subtlest); }
+/* Pagination: ‹ 1 2 … 9 ›, then rows per page. */
+.pager { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding-top: 12px; color: var(--ds-text-subtlest); font-size: 12px; }
+.pager .pages { display: flex; gap: 2px; align-items: center; }
+.pager button { min-width: 32px; padding: 6px 8px; background: none; color: var(--ds-text-subtle); }
+.pager button:hover { background: var(--ds-bg-subtle-hovered); }
+.pager button.active { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
+.pager select { min-height: 28px; padding: 2px 6px; font-size: 12px; }
 
-/* Modal dialog (ADS Modal) */
+/* Dropdown menu: a trigger button and a floating panel (ui.js positions and opens it). */
+.dd-trigger { gap: 6px; padding: 6px 8px 6px 10px; }
+.dd-trigger .lbl { color: var(--ds-text-subtlest); font-weight: 500; }
+.dd-trigger .val { color: var(--ds-text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.dd-trigger::after { content: ""; width: 16px; height: 16px; flex: none; opacity: .7;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238590A2' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 10 5 5 5-5'/%3E%3C/svg%3E") center / 16px no-repeat; }
+.dd-trigger.on { background: var(--ds-bg-selected); } .dd-trigger.on .val { color: var(--ds-text-selected); }
+.dd-trigger[aria-expanded="true"] { background: var(--ds-bg-selected-hovered); }
+.dd-menu { position: fixed; z-index: 100; min-width: 220px; max-width: min(92vw, 420px); max-height: min(70vh, 480px); overflow: auto;
+  background: var(--ds-surface-overlay); box-shadow: var(--ds-shadow-overlay); border-radius: 4px; padding: 4px 0; }
+.dd-menu h4 { margin: 8px 16px 4px; font: 700 11px/16px var(--ds-font); color: var(--ds-text-subtlest); text-transform: uppercase; }
+.dd-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 6px 16px; border-radius: 0; background: none;
+  color: var(--ds-text); font-weight: 400; text-align: left; justify-content: flex-start; white-space: nowrap; cursor: pointer; }
+.dd-item:hover, .dd-item:focus-visible { background: var(--ds-bg-subtle-hovered); outline: none; }
+.dd-item.sel { background: var(--ds-bg-selected); color: var(--ds-text-selected); box-shadow: inset 2px 0 0 var(--ds-border-selected); }
+.dd-item .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.dd-item .mt { color: var(--ds-text-subtlest); font-size: 12px; font-variant-numeric: tabular-nums; }
+.dd-item input[type=checkbox] { pointer-events: none; }
+.dd-foot { display: flex; gap: 8px; padding: 8px 16px 4px; border-top: 1px solid var(--ds-border); margin-top: 4px; position: sticky; bottom: -4px; background: var(--ds-surface-overlay); }
+/* Platform logo badge: the platform's mark on its brand color, or its initials. */
+.plogo { width: 20px; height: 20px; border-radius: 4px; display: inline-grid; place-items: center; flex: none; background: var(--c, #626F86); color: #fff;
+  font: 700 9px/1 var(--ds-font); letter-spacing: -.02em; }
+.plogo svg { width: 13px; height: 13px; fill: currentColor; }
+.plogo.all { background: var(--ds-bg-neutral); color: var(--ds-text-subtle); }
+
+/* Modal dialog. */
 dialog { border: 0; border-radius: 3px; background: var(--ds-surface-overlay); color: var(--ds-text); box-shadow: var(--ds-shadow-overlay);
-  width: min(960px, calc(100vw - 32px)); max-height: 88vh; padding: 0; }
+  width: min(960px, calc(100vw - 24px)); max-height: 90vh; padding: 0; }
 dialog::backdrop { background: var(--ds-blanket); }
-dialog .dh { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 24px 24px 16px;
+dialog .dh { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 20px 24px 12px;
   position: sticky; top: 0; background: var(--ds-surface-overlay); z-index: 2; }
 dialog .db { padding: 0 24px 24px; }
 dialog h3 { margin: 0 0 4px; font: 500 20px/24px var(--ds-font); } dialog h4 { margin: 20px 0 8px; font: 600 14px/20px var(--ds-font); }
 
-/* ---------- App shell: top navigation + side navigation (shell.js fills them) ---------- */
-.topbar { position: fixed; inset: 0 0 auto 0; height: var(--topbar-h); z-index: 30; display: flex; align-items: center; gap: 12px;
+/* Key facts grid (label over value). */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.facts div { background: var(--ds-surface-sunken); border-radius: 3px; padding: 8px 12px; }
+.facts span { display: block; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+
+/* ---------- 4. App shell (shell.js builds it) ---------- */
+/* Top bar: logo · filters in the middle · search on the right · actions. */
+.topbar { position: fixed; inset: 0 0 auto 0; height: var(--topbar-h); z-index: 30; display: flex; align-items: center; gap: 8px;
   padding: 0 12px 0 8px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border); }
 .topbar .navtoggle { display: none; background: none; padding: 6px; }
 .topbar .navtoggle svg { width: 20px; height: 20px; }
-.topbar .home { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 3px; color: var(--ds-text); flex: none; }
-.topbar .home:hover { background: var(--ds-bg-neutral-subtle-hovered); text-decoration: none; }
-/* The logos are JPEGs on white, so they sit on a white plate in dark mode too. */
-.topbar .plate { background: #fff; border-radius: 4px; display: flex; align-items: center; padding: 3px 6px; }
-.topbar .plate img { height: 32px; width: auto; display: block; }
+.topbar .home { display: flex; align-items: center; gap: 10px; padding: 4px 6px; border-radius: 3px; color: var(--ds-text); flex: none; }
+.topbar .home:hover { background: var(--ds-bg-subtle-hovered); text-decoration: none; }
 .topbar .appname { display: flex; flex-direction: column; line-height: 16px; }
-.topbar .appname b { font-size: 14px; font-weight: 600; }
-.topbar .appname span { font-size: 12px; color: var(--ds-text-subtlest); }
-.topbar .brands { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden;
-  mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
-.topbar .brands .plate { padding: 1px 3px; flex: none; }
-.topbar .brands img { height: 40px; }
-.topbar .actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.topbar .appname b { font-size: 14px; font-weight: 600; } .topbar .appname span { font-size: 12px; color: var(--ds-text-subtlest); }
+.topbar .mid { flex: 1; min-width: 0; display: flex; justify-content: center; gap: 4px; }
+.topbar .searchslot { flex: 0 1 280px; min-width: 160px; }
+.topbar .actions { display: flex; align-items: center; gap: 2px; flex: none; }
+/* The logos are JPEGs on white, so they sit on a white plate in dark mode too. */
+.plate { background: #fff; border-radius: 4px; display: inline-flex; align-items: center; padding: 3px 6px; }
+.plate img { height: 32px; width: auto; display: block; }
+/* Side navigation. */
 .sidenav { position: fixed; top: var(--topbar-h); bottom: 0; left: 0; width: var(--sidenav-w); z-index: 20; overflow-y: auto;
-  background: var(--ds-surface); border-right: 1px solid var(--ds-border); padding: 12px 8px; display: flex; flex-direction: column; }
-.sidenav h2 { margin: 16px 8px 4px; font: 600 12px/16px var(--ds-font); color: var(--ds-text-subtlest); }
+  background: var(--ds-surface); border-right: 1px solid var(--ds-border); padding: 8px; display: flex; flex-direction: column; }
+.sidenav h2 { margin: 12px 8px 4px; font: 600 12px/16px var(--ds-font); color: var(--ds-text-subtlest); }
 .sidenav h2:first-child { margin-top: 4px; }
-.sidenav a { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 3px;
-  color: var(--ds-text-subtle); font-weight: 500; }
-.sidenav a:hover { background: var(--ds-bg-neutral-subtle-hovered); text-decoration: none; }
-.sidenav a:active { background: var(--ds-bg-neutral-subtle-pressed); }
+.sidenav a { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 3px; color: var(--ds-text-subtle); font-weight: 500; }
+.sidenav a:hover { background: var(--ds-bg-subtle-hovered); text-decoration: none; }
 .sidenav a.on { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
 .sidenav a svg { width: 20px; height: 20px; flex: none; }
 .sidenav a .ext { width: 14px; height: 14px; margin-left: auto; opacity: .7; }
-.sidenav .foot { margin-top: auto; padding: 16px 8px 4px; font-size: 12px; line-height: 16px; color: var(--ds-text-subtlest); }
-.sidenav .foot div + div { margin-top: 4px; }
-.shell-main { margin-left: var(--sidenav-w); padding-top: var(--topbar-h); min-height: 100vh; min-width: 0; background: var(--ds-surface); }
+.sidenav .brands { margin-top: auto; padding: 16px 4px 8px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.sidenav .brands .plate { padding: 1px; justify-content: center; }
+.sidenav .brands img { height: 28px; max-width: 100%; object-fit: contain; }
+.sidenav .foot { padding: 4px 8px; font-size: 12px; line-height: 16px; color: var(--ds-text-subtlest); }
 .navscrim { display: none; }
+/* Page area to the right of the side nav, and its compact header (breadcrumb, title, actions). */
+.shell-main { margin-left: var(--sidenav-w); padding-top: var(--topbar-h); min-height: 100vh; min-width: 0; }
+.pagehead { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: flex-end; justify-content: space-between; padding: 16px 24px 12px; }
+.pagehead h1 { margin: 2px 0 0; font: 600 20px/24px var(--ds-font); }
+.pagehead .desc { margin: 4px 0 0; color: var(--ds-text-subtle); }
+.page { padding: 0 24px 40px; }
 
-/* Page header (ADS Page header: breadcrumbs, title, actions, bottom bar) */
-.pagehead { padding: 24px 32px 0; }
-.crumbs { font-size: 14px; color: var(--ds-text-subtlest); margin-bottom: 8px; }
-.crumbs a { color: var(--ds-text-subtlest); }
-.pagehead .titlerow { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
-.pagehead h1 { margin: 0; font: 500 24px/28px var(--ds-font); letter-spacing: -0.01em; }
-.pagehead .desc { margin: 8px 0 0; color: var(--ds-text-subtle); max-width: 900px; }
-.pagehead .desc b { color: var(--ds-text); }
-
-@media (max-width: 1100px) { .topbar .brands { justify-content: flex-start; } .topbar .appname { display: none; } }
+/* ---------- 5. Phone and tablet ---------- */
+@media (max-width: 1180px) { .topbar .appname { display: none; } .topbar .searchslot { flex-basis: 200px; } }
 @media (max-width: 900px) {
+  /* Two rows: logo and actions on top; search and the filters below (the filters scroll sideways if they don't fit). */
+  :root { --topbar-h: 100px; }
+  .topbar { flex-wrap: wrap; align-content: center; row-gap: 6px; padding: 6px 8px; }
   .topbar .navtoggle { display: inline-flex; }
-  .topbar .brands { display: none; }
+  .topbar .home { margin-right: auto; } .plate img { height: 28px; }
   .topbar .actions .lbl { display: none; }
+  .topbar .searchslot { order: 5; flex: 1 1 120px; min-width: 110px; }
+  .topbar .mid { order: 6; flex: 0 1 auto; max-width: 64%; justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
+  .topbar .mid .dd-trigger:not(.on) .val, .topbar .mid .dd-trigger.on .lbl { display: none; }   /* label until something is picked */
+  .topbar .mid:empty, .topbar .searchslot:empty { display: none; }
   .sidenav { transform: translateX(-100%); transition: transform .15s; box-shadow: var(--ds-shadow-overlay); }
   body.nav-open .sidenav { transform: none; }
   body.nav-open .navscrim { display: block; position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 15; background: var(--ds-blanket); }
   .shell-main { margin-left: 0; }
-  .pagehead { padding: 16px 16px 0; }
+  .pagehead { padding: 12px 12px 8px; } .page { padding: 0 12px 32px; }
+  .card { padding: 12px; border-radius: 6px; }
+  dialog .dh { padding: 16px 16px 8px; } dialog .db { padding: 0 16px 16px; }
 }
+/* Pages without filters or search (catalog management) only need one row. */
+@media (max-width: 900px) { body.no-filters { --topbar-h: 52px; } }
+
+/* ---------- 6. Sign-in and notice pages (auth.js, catalog.js): one centered card ---------- */
+.signin-page { min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--ds-surface-sunken); }
+.signin { width: 100%; max-width: 380px; background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-overlay); border-radius: 8px; padding: 32px 24px 24px; text-align: center; }
+.signin .plate img { height: 48px; }
+.signin h1 { margin: 16px 0 4px; font: 600 20px/24px var(--ds-font); }
+.signin p { margin: 0 0 16px; color: var(--ds-text-subtle); }
+.signin input { width: 100%; min-height: 40px; }
+.signin button { width: 100%; min-height: 40px; margin-top: 12px; }
+.signin .err { margin: 12px 0 0; color: var(--ds-text-danger); }

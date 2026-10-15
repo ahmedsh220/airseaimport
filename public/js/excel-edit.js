@@ -1,20 +1,19 @@
 // "Excel sheet" section of the product detail: shows the SKU's row from the workbook and saves edits
-// back to it through /api/excel (see excel.js). Uses $, esc and compPost from index.html.
+// back to it through /api/excel (see excel.js). Uses $, esc and compPost from reports.js.
 (() => {
   const css = document.createElement("style");
   css.textContent = `
     .xl-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
     .xl-bar input[type=search] { flex: 1 1 180px; }
     .xl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
-    .xl-grid label { display: block; background: var(--bg); border-radius: 8px; padding: 6px 9px; border: 1px solid transparent; }
-    .xl-grid label span { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: 11px; }
-    .xl-grid input { width: 100%; box-sizing: border-box; margin-top: 3px; font: inherit; padding: 4px 6px;
-      border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+    .xl-grid label { display: block; background: var(--ds-surface-sunken); border-radius: 3px; padding: 6px 9px; border: 1px solid transparent; }
+    .xl-grid label span { display: flex; justify-content: space-between; gap: 6px; color: var(--ds-text-subtlest); font-size: 11px; }
+    .xl-grid input { width: 100%; margin-top: 3px; }
     .xl-grid label.ro div { margin-top: 3px; padding: 4px 0; overflow-wrap: anywhere; }
-    .xl-grid label.dirty { border-color: var(--accent); }
-    .xl-grid label.err { border-color: var(--bad); }
-    .xl-grid label.saved { border-color: var(--good); }
-    .xl-grid label em { font-style: normal; color: var(--bad); font-size: 11px; display: block; margin-top: 2px; }`;
+    .xl-grid label.dirty { border-color: var(--ds-border-selected); }
+    .xl-grid label.err { border-color: var(--ds-text-danger); }
+    .xl-grid label.saved { border-color: var(--ds-text-success); }
+    .xl-grid label em { font-style: normal; color: var(--ds-text-danger); font-size: 11px; display: block; margin-top: 2px; }`;
   document.head.appendChild(css);
 
   let info = null;

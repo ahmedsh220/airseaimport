@@ -1,17 +1,16 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wholesale Catalog · Fragrance Wholesaler USA</title>
+<!-- Buttons, fields, menus, badges and dialogs come from the shared design system (always light here);
+     the catalog's own layout, logos, fonts and colors below are what make it look like the price list. -->
+<link rel="stylesheet" href="/css/ads.css">
 <style>
   :root { --text: #14181f; --muted: #5d6675; --border: #d9dde3; --red: #e00000; --green: #d9ead3; --head: #156082; --bg: #fff; --soft: #f4f5f7; --hh: 0px; }
   * { box-sizing: border-box; } [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Aptos Narrow", "Arial Narrow", Arial, system-ui, sans-serif; }
-  button, input, select { font: inherit; color: var(--text); background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
-  button { cursor: pointer; font-weight: 600; } button:hover { border-color: #111; }
-  button.primary { background: #111; color: #fff; border-color: #111; }
-  button:disabled { opacity: .5; cursor: progress; }
   /* Brand bar and toolbar stay pinned; the brand bar shrinks to one slim row once the list is scrolled. */
   /* Fixed, with a spacer holding its full height, so shrinking it never moves the page (it used to make the page jump back to the top). */
   header#top { position: fixed; top: 0; left: 0; right: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
@@ -29,20 +28,20 @@
   .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; }
   .bar input[type=search] { flex: 1 1 200px; max-width: 360px; }
   .bar .sp { flex: 1; }
-  .seg { display: inline-flex; } .seg button { border-radius: 0; font-weight: 500; } .seg button:first-child { border-radius: 6px 0 0 6px; } .seg button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
-  .seg button.on { background: #111; color: #fff; border-color: #111; }
+  .seg button.on { background: var(--ds-surface-raised); color: var(--ds-text-selected); box-shadow: var(--ds-shadow-raised); }
   .filters { display: none; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 0 16px 10px; }
   .filters.open { display: flex; }
   .filters label { display: inline-flex; gap: 6px; align-items: center; }
   .filters input[type=number] { width: 86px; }
-  .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
+  .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--ds-bg-brand-bold); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
   .meta { color: var(--muted); font-size: 12px; }
   #status { color: var(--muted); font-size: 13px; }
   .wrap { overflow-x: clip; padding: 0 16px 48px; }
   table { border-collapse: separate; border-spacing: 0; width: 100%; margin-top: 12px; }
-  th { position: sticky; top: var(--hh); z-index: 3; background: #fff; text-align: left; color: var(--head); font-weight: 700; font-size: 15px; padding: 8px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+  /* The price list table keeps its own look (blue headings, green price header, left-aligned wrapping cells). */
+  table th { position: sticky; top: var(--hh); z-index: 3; background: #fff; text-align: left; color: var(--head); font-weight: 700; font-size: 15px; padding: 8px 8px; border-bottom: 2px solid var(--border); white-space: nowrap; }
   th.price { background: var(--green); color: #111; text-align: center; font-family: Arial, sans-serif; }
-  td { padding: 6px 8px; border-bottom: 1px solid #eceef1; vertical-align: middle; font-size: 15px; }
+  table td { padding: 6px 8px; border-bottom: 1px solid #eceef1; vertical-align: middle; font-size: 15px; text-align: left; white-space: normal; }
   td.pic { width: 84px; } td.pic img { width: 70px; height: 70px; object-fit: contain; display: block; background: #fff; }
   .none { width: 70px; height: 70px; display: grid; place-items: center; color: #b4bac3; font-size: 11px; background: var(--soft); border-radius: 4px; }
   td.price { text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -52,7 +51,7 @@
   .tag { background: var(--red); color: #fff; font-weight: 700; font-size: 11px; padding: 2px 6px; border-radius: 3px; }
   tr.sec td { background: var(--red); color: #fff; font-weight: 700; font-size: 16px; letter-spacing: .03em; padding: 7px 8px; }
   img[data-zoom] { cursor: zoom-in; }
-  button.add { padding: 5px 10px; white-space: nowrap; } button.add.in { background: var(--green); border-color: #9cc48f; }
+  button.add { white-space: nowrap; } button.add.in { background: var(--ds-bg-success); color: var(--ds-text-success); }
   /* Tile view */
   .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 12px; }
   .tiles h3 { grid-column: 1 / -1; margin: 10px 0 0; padding: 7px 10px; background: var(--red); color: #fff; font-size: 15px; letter-spacing: .03em; border-radius: 6px; }
@@ -62,11 +61,14 @@
   .tile .ph img { max-width: 100%; max-height: 100%; object-fit: contain; }
   .tile .ph .none { width: 100%; height: 100%; }
   .tile .tag { position: absolute; top: 8px; left: 8px; }
-  .st { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
-  .st.in { background: #dff3e4; color: #146c2e; } .st.qoh { background: #fff1d6; color: #8a5a00; } .st.ask { background: var(--soft); color: var(--muted); }
+  /* Stock status: ADS lozenges (success, warning, neutral). */
+  .st { display: inline-block; font: 700 11px/16px var(--ds-font); padding: 0 4px; border-radius: 3px; white-space: nowrap; text-transform: uppercase; }
+  .st.in { background: var(--ds-bg-success); color: var(--ds-text-success); } .st.qoh { background: var(--ds-bg-warning); color: var(--ds-text-warning); } .st.ask { background: var(--ds-bg-neutral); color: var(--ds-text-subtle); }
   td.nm .st { margin-left: 6px; vertical-align: 1px; } .tile .st { align-self: flex-start; }
   .stockpick { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 0 16px 8px; }
   .stockpick .seg button { padding: 6px 12px; } .stockpick .seg button b { font-weight: 700; }
+  /* Phone: the two stock choices share the row instead of running off the edge. */
+  @media (max-width: 600px) { .stockpick .seg { display: flex; width: 100%; } .stockpick .seg button { flex: 1; white-space: normal; padding: 6px 8px; } }
   .stockpick .meta { font-size: 12px; max-width: 640px; }
   @media (max-width: 640px) { .stockpick { padding: 0 10px 6px; } header.compact .stockpick .meta { display: none; } }
   .tile .bd { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -76,8 +78,6 @@
   .tile .pr div { flex: 1; } .tile .pr b { display: block; font-size: 17px; } .tile .pr small { color: var(--muted); font-size: 11px; }
   .tile button.add { margin-top: 8px; width: 100%; }
   /* Zoom and cart dialogs */
-  dialog { border: 0; border-radius: 12px; padding: 0; background: #fff; color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
-  dialog::backdrop { background: rgba(15,17,21,.6); }
   dialog#zoom { overflow: auto; width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); }
   #zoom .zimg { background: #fff; display: grid; place-items: center; height: min(70vh, 640px); padding: 12px; position: relative; overflow: hidden; }
   #zoom .zimg img { max-width: 100%; max-height: calc(min(70vh, 640px) - 24px); object-fit: contain; }
@@ -89,12 +89,12 @@
   dialog#cart { width: min(820px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; }
   #cart .in { padding: 18px 18px 16px; position: relative; }
   #cart h2 { margin: 0 0 4px; font-size: 20px; }
-  #cart .note { background: #fff7e0; border: 1px solid #f0d58a; border-radius: 8px; padding: 8px 10px; font-size: 13px; margin: 8px 0 12px; }
+  #cart .note { background: var(--ds-bg-warning); border-radius: 3px; padding: 8px 12px; font-size: 13px; margin: 8px 0 12px; }
   #cart table { margin-top: 0; } #cart th { position: static; font-size: 13px; } #cart td { font-size: 14px; }
   #cart td input[type=number] { width: 70px; }
   #cart .who { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin: 12px 0; }
   #cart .who input, #cart textarea { width: 100%; }
-  #cart textarea { font: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; min-height: 54px; }
+  #cart textarea { min-height: 54px; }
   #cart .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
   #cart .tot { font-size: 16px; font-weight: 700; text-align: right; margin-top: 8px; }
   .empty { padding: 40px; text-align: center; color: var(--muted); }
@@ -129,15 +129,15 @@
     <div class="addr">47-25 27th St Suite 1, Long Island City, NY 11101 · (929) 257-3502</div>
   </div>
   <div class="bar">
-    <input type="search" id="q" placeholder="Search name, SKU or UPC">
+    <input type="search" class="search" id="q" placeholder="Search name, SKU or UPC">
     <button id="fBtn" type="button">Filters</button>
-    <span class="seg"><button id="vList" type="button">List</button><button id="vTiles" type="button">Tiles</button></span>
+    <span class="seg" role="group" aria-label="Layout"><button id="vList" type="button">List</button><button id="vTiles" type="button">Tiles</button></span>
     <span id="status"></span>
     <span class="sp"></span>
     <button id="cartBtn" type="button">Cart<span class="badge" id="cartN" hidden></span></button>
     <button class="primary" id="pdf">PDF</button>
     <button class="primary" id="xlsx">Excel</button>
-    <a class="meta" id="signout" href="/catalog/logout">Sign out</a>
+    <a class="btn subtle" id="signout" href="/catalog/logout">Sign out</a>
   </div>
   <div class="stockpick">
     <span class="seg" role="group" aria-label="Which products to show"><button id="sIn" type="button">In stock now <span id="nIn"></span></button><button id="sAll" type="button">All products we carry <span id="nAll"></span></button></span>

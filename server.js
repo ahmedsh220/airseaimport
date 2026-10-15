@@ -17,7 +17,6 @@ const auth = require("./lib/auth");
 const catalog = require("./lib/catalog");
 const competitors = require("./lib/competitors");
 const excel = require("./lib/excel");
-const tiktokSales = require("./lib/tiktok-sales");
 
 const PORT = process.env.PORT || 3000;
 const API = process.env.PRODUCTS_API || "https://hub.fragrancewholesalerusa.com/api/open/products";
@@ -163,7 +162,6 @@ http.createServer(async (req, res) => {
   if (await catalog.handleAdmin(req, res, url, productList, catalogMeta)) return;
   if (await competitors.handle(req, res, url, productList)) return;
   if (await excel.handle(req, res, url)) return;
-  if (await tiktokSales.handle(req, res, url)) return;
   if (url.pathname === "/healthz") { res.writeHead(200); res.end("ok"); return; }
   const route = { "/": "/index.html", "/favicon.ico": "/media/favicon.svg" }[url.pathname] || url.pathname;
   const media = route.startsWith("/media/"), root = media ? MEDIA : PUBLIC;
