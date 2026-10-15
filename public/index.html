@@ -3,170 +3,110 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Air Sea Import Reports</title>
+<title>Reports · Fragrance Wholesaler USA</title>
 <link rel="icon" href="/media/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/ads.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-  :root {
-    --bg: #f5f6f8; --panel: #ffffff; --text: #1b1f24; --muted: #667085; --border: #e4e7ec;
-    --accent: #2563eb; --accent-soft: #eef3ff; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
-    --t-super: #7c3aed; --t-hero: #2563eb; --t-green: #15803d; --t-new: #0891b2; --t-dead: #6b7280; --t-other: #b45309;
-    --t-empty: #9f1239; --t-breathing: #ca8a04;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --panel: #171a21; --text: #e6e8eb; --muted: #9aa3af; --border: #2a2f3a;
-            --accent: #60a5fa; --accent-soft: #1a2436; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
-            --t-super: #a78bfa; --t-hero: #60a5fa; --t-green: #4ade80; --t-new: #22d3ee; --t-dead: #9ca3af; --t-other: #fbbf24;
-            --t-empty: #fb7185; --t-breathing: #facc15; }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  button, input, select { font: inherit; color: var(--text); background: var(--panel);
-         border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; }
-  button { cursor: pointer; } button:hover { border-color: var(--accent); }
-  button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-  header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between;
-           padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
-  header h1 { margin: 0; font-size: 17px; }
-  .meta { color: var(--muted); font-size: 12px; }
-  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: calc(100vh - 60px); }
-  aside { background: var(--panel); border-right: 1px solid var(--border); padding: 14px 10px; position: sticky; top: 0;
-          height: 100vh; overflow: auto; }
-  aside h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 8px 8px; }
-  .plat { display: block; width: 100%; text-align: left; border: 0; border-radius: 8px; padding: 8px 10px; margin-bottom: 2px; background: none; }
-  .plat:hover { background: var(--accent-soft); }
-  .plat.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
-  .plat .top { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
-  .plat .top span:last-child { font-variant-numeric: tabular-nums; }
-  .plat .bar { height: 4px; border-radius: 2px; background: var(--border); margin: 5px 0 3px; overflow: hidden; }
-  .plat .bar i { display: block; height: 100%; background: var(--accent); }
-  .plat .sub { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .content { min-width: 0; }
-  nav.tabs { display: flex; gap: 2px; padding: 0 20px; background: var(--panel); border-bottom: 1px solid var(--border); overflow-x: auto; }
-  nav.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 11px 14px;
-                    font-weight: 600; color: var(--muted); white-space: nowrap; }
-  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .bar2 { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
-          padding: 9px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
-  .bar2 input[type=search] { min-width: 220px; flex: 1; max-width: 360px; }
-  label.t { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
-  .seg { display: inline-flex; } .seg button { border-radius: 0; margin-left: -1px; padding: 5px 10px; }
-  .seg button:first-child { border-radius: 6px 0 0 6px; margin: 0; } .seg button:last-child { border-radius: 0 6px 6px 0; }
-  main { padding: 18px 20px 48px; max-width: 1600px; }
-  .lead { margin: 0 0 14px; color: var(--muted); }
-  .lead b { color: var(--text); }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 18px; }
-  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; text-align: left; }
-  button.kpi:hover { border-color: var(--accent); }
-  .kpi .label { color: var(--muted); font-size: 12px; }
-  .kpi .value { font-size: 24px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
-  .kpi .sub { color: var(--muted); font-size: 12px; }
-  .kpi.alert .value { color: var(--bad); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px; margin-bottom: 16px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; margin-bottom: 16px; }
+  /* Reports page. The shared look (tokens, buttons, tables, top bar, side nav) is in /css/ads.css. */
+  .toolbar { position: sticky; top: var(--topbar-h); z-index: 10; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+    padding: 12px 32px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border); }
+  .toolbar .field { display: flex; align-items: center; gap: 6px; }
+  .toolbar input[type=search] { flex: 1 1 220px; max-width: 320px; padding-left: 30px;
+    background: var(--ds-bg-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23626F86' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='6.5'/%3E%3Cpath d='m16 16 4 4'/%3E%3C/svg%3E") no-repeat 8px center / 16px; }
+  .toolbar select { max-width: 220px; }
+  .toolbar select.on { border-color: var(--ds-border-selected); background-color: var(--ds-bg-selected); color: var(--ds-text-selected); font-weight: 500; }
+  .toolbar .spacer { flex: 1; }
+  main { padding: 20px 32px 48px; max-width: 1680px; }
+  .lead { margin: 0 0 20px; color: var(--ds-text-subtle); max-width: 980px; }
+  .lead b { color: var(--ds-text); }
+  .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 4px; background: var(--ds-bg-neutral); }
+  .seg button { min-height: 28px; padding: 4px 10px; background: none; color: var(--ds-text-subtle); }
+  .seg button:hover { background: var(--ds-bg-neutral-hovered); }
+  .seg button.active { background: var(--ds-surface-raised); color: var(--ds-text-selected); box-shadow: var(--ds-shadow-raised); }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .kpi { display: block; background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-raised); border-radius: 8px; padding: 16px; text-align: left;
+    color: var(--ds-text); font-weight: 400; min-height: 0; white-space: normal; }
+  button.kpi { cursor: pointer; } button.kpi:hover { background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-raised), inset 0 0 0 1px var(--ds-border-brand); }
+  .kpi .label { color: var(--ds-text-subtle); font-size: 12px; font-weight: 600; line-height: 16px; }
+  .kpi .value { font: 600 28px/32px var(--ds-font); margin: 6px 0 4px; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .kpi .sub { color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+  .kpi.alert .value { color: var(--ds-text-danger); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 24px; margin-bottom: 24px; }
   .grid .card { margin-bottom: 0; }
-  .card h3 { margin: 0 0 2px; font-size: 15px; }
-  .card .hint { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
-  .card .head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .chart { position: relative; height: 300px; }
-  .tablewrap { overflow: auto; max-height: 70vh; border: 1px solid var(--border); border-radius: 8px; }
-  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
-  th, td { padding: 6px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
-  th.l, td.l { text-align: left; }
   td.prod { text-align: left; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
-  td.prod b { font-weight: 600; margin-right: 6px; } td.prod span { color: var(--muted); }
-  thead th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; font-weight: 600; z-index: 1; font-size: 12px; }
-  thead tr.grp th { cursor: default; top: 0; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); text-align: center; border-left: 1px solid var(--border); }
-  thead tr.grp + tr th { top: 28px; }
-  th.sorted::after { content: " ▾"; } th.sorted.asc::after { content: " ▴"; }
+  td.prod b { font-weight: 600; margin-right: 6px; } td.prod span { color: var(--ds-text-subtlest); }
+  thead tr.grp th { cursor: default; top: 0; font-size: 11px; color: var(--ds-text-subtlest); text-align: center; border-left: 1px solid var(--ds-border); border-bottom-width: 1px; }
+  thead tr.grp + tr th { top: 29px; }
   /* Rows tinted by the product's tier, with a solid stripe on the left edge. */
-  tbody tr[data-tier] td { background: color-mix(in srgb, var(--rowc) 13%, var(--panel)); }
-  tbody tr[data-tier] td:first-child { box-shadow: inset 4px 0 0 var(--rowc); }
-  tbody tr.click { cursor: pointer; } tbody tr.click:hover td { background: var(--accent-soft); }
-  tfoot td { font-weight: 650; background: var(--bg); position: sticky; bottom: 0; }
-  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); } .muted { color: var(--muted); }
-  .pill { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 12px; border: 1px solid currentColor; }
-  .tier { display: inline-block; padding: 0 7px; border-radius: 4px; font-size: 11px; font-weight: 650; text-transform: uppercase; color: #fff; }
-  .chip { display: inline-flex; gap: 4px; align-items: center; background: var(--accent-soft); color: var(--accent);
-          border-radius: 999px; padding: 2px 4px 2px 10px; font-size: 12px; font-weight: 600; }
-  .chip button { border: 0; background: none; color: inherit; padding: 0 6px; }
+  tbody tr[data-tier] td { background: color-mix(in srgb, var(--rowc) 7%, var(--ds-surface-raised)); }
+  tbody tr[data-tier] td:first-child { box-shadow: inset 3px 0 0 var(--rowc); }
+  tbody tr.click:hover td { background: color-mix(in srgb, var(--ds-text-brand) 9%, var(--ds-surface-raised)); }
+  .pill.n { text-transform: none; font-weight: 600; font-size: 12px; }
+  /* Tier: bold lozenge in the tier's color. */
+  .tier { display: inline-block; padding: 0 4px; border-radius: 3px; font: 700 11px/16px var(--ds-font); text-transform: uppercase; color: #fff; }
   td.wrap { white-space: normal; min-width: 280px; }
-  .calc { color: var(--muted); font-size: 11px; margin-left: 3px; }
-  .est { color: var(--warn); font-size: 10px; font-weight: 650; margin-left: 3px; text-transform: uppercase; }
-  .coverage { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px;
-              padding: 8px 12px; margin: 0 0 14px; font-size: 12px; color: var(--muted); }
-  .coverage.partial { border-left-color: var(--warn); }
-  .coverage b { color: var(--text); } .coverage div { margin-top: 3px; }
-  .coverage summary { cursor: pointer; } details.coverage { padding: 5px 12px; }
-  details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--muted); }
-  details.settings .row { margin-top: 8px; } details.settings input { width: 70px; padding: 3px 6px; }
-  .filterbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 0 0 12px;
-    padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--text); border: 1px solid var(--accent); }
-  details.colpick { margin-bottom: 10px; }
-  details.colpick > summary { display: inline-block; list-style: none; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent);
-    padding: 6px 12px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+  .calc { color: var(--ds-text-subtlest); font-size: 11px; margin-left: 4px; }
+  .est { color: var(--ds-text-warning); font-size: 10px; font-weight: 700; margin-left: 4px; text-transform: uppercase; }
+  details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--ds-link); display: inline; }
+  details.settings .row { margin-top: 8px; } details.settings input[type=number] { width: 72px; }
+  /* ADS Section message (information) */
+  .filterbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin: 0 0 16px;
+    padding: 12px 16px; border-radius: 3px; background: var(--ds-bg-information); color: var(--ds-text); }
+  details.colpick { margin-bottom: 12px; }
+  details.colpick > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-weight: 500; color: var(--ds-text-subtle);
+    padding: 6px 12px; border-radius: 3px; background: var(--ds-bg-neutral); }
+  details.colpick > summary:hover { background: var(--ds-bg-neutral-hovered); }
   details.colpick > summary::-webkit-details-marker { display: none; }
-  details.colpick > summary::before { content: "▸ "; } details.colpick[open] > summary::before { content: "▾ "; } details.colpick input { width: auto; padding: 0; }
-  details.colpick .colgrp { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; }
-  details.colpick .colgrp label { white-space: nowrap; } details.colpick .colg { flex-basis: 100%; }
-  #status { padding: 40px; text-align: center; color: var(--muted); }
-  #status .err { color: var(--bad); margin-bottom: 12px; }
-  dialog { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text);
-           width: min(960px, calc(100vw - 32px)); max-height: 88vh; padding: 0; }
-  dialog::backdrop { background: rgb(0 0 0 / .4); }
-  dialog .dh { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 14px 18px;
-               border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--panel); z-index: 2; }
-  dialog .db { padding: 14px 18px; }
-  dialog h3 { margin: 0; font-size: 16px; } dialog h4 { margin: 16px 0 8px; font-size: 13px; }
-  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
-  .facts div { background: var(--bg); border-radius: 8px; padding: 7px 10px; }
-  .facts span { display: block; color: var(--muted); font-size: 11px; }
-  @media (max-width: 860px) {
-    .layout { grid-template-columns: 1fr; }
-    aside { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; gap: 6px; overflow-x: auto; padding: 8px 12px; }
-    aside h2 { display: none; }
-    .plat { flex: 0 0 auto; width: auto; min-width: 130px; margin: 0; }
-    main, header, .bar2, nav.tabs { padding-left: 16px; padding-right: 16px; }
-  }
+  details.colpick > summary::after { content: "▾"; font-size: 11px; } details.colpick[open] > summary { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
+  details.colpick .colgrp { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; }
+  details.colpick .colgrp label { white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; } details.colpick .colg { flex-basis: 100%; }
+  #status { padding: 64px 32px; text-align: center; color: var(--ds-text-subtlest); }
+  #status .err { color: var(--ds-text-danger); margin-bottom: 12px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .facts div { background: var(--ds-surface-sunken); border-radius: 3px; padding: 8px 12px; }
+  .facts span { display: block; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+  .rank { display: grid; gap: 10px; }
+  .rank button { display: grid; grid-template-columns: 110px 1fr 70px; gap: 12px; align-items: center; background: none; padding: 2px 4px; color: var(--ds-text); font-weight: 400; min-height: 28px; }
+  .rank button:hover { background: var(--ds-bg-neutral-subtle-hovered); }
+  .rank button.on { background: var(--ds-bg-selected); }
+  .rank .bar { height: 8px; border-radius: 4px; background: var(--ds-bg-neutral); overflow: hidden; }
+  .rank .bar i { display: block; height: 100%; background: var(--ds-chart-brand); border-radius: 4px; }
+  .rank .n { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .rank .nm { text-align: left; overflow: hidden; text-overflow: ellipsis; }
+  thead tr.grp th:empty { border-left: 0; }
+  @media (max-width: 900px) { .toolbar, main { padding-left: 16px; padding-right: 16px; } .toolbar .spacer { display: none; }
+    .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; } .kpi .value { font-size: 22px; line-height: 28px; } }
 </style>
 </head>
-<body>
-<header>
-  <div>
-    <h1>Air Sea Import · Reports</h1>
-    <div class="meta" id="meta">Loading…</div>
+<body data-page="reports">
+<div class="shell-main">
+  <div class="pagehead">
+    <div class="crumbs"><a href="/#overview">Reports</a> / <span id="crumb">Overview</span></div>
+    <div class="titlerow"><h1 id="title">Overview</h1>
+      <div class="row"><button id="csv" title="Download the main table of this view, with the filters applied">Export CSV</button></div></div>
   </div>
-  <div class="row">
-    <button id="reload">Refresh data</button>
-    <a href="/catalog-admin.html"><button type="button">Catalog management</button></a>
-    <button id="csv">Export table CSV</button>
-    <a id="signout" href="/logout" hidden><button type="button">Sign out</button></a>
-  </div>
-</header>
-<div id="status">Fetching products…</div>
-<div class="layout" id="app" hidden>
-  <aside id="side"></aside>
-  <div class="content">
-    <nav class="tabs" id="tabs"></nav>
-    <div class="bar2">
-      <div class="row"><label class="t">Period</label>
-        <div class="seg" id="horizon"><button data-h="7">7 days</button><button data-h="14">14 days</button><button data-h="30">30 days</button><button data-h="60">60 days</button><button data-h="90">90 days</button></div></div>
-      <div class="row">
-        <label class="t" for="cat">Category</label><select id="cat"><option value="">All</option></select>
-        <label class="t" for="tier">Tier</label><select id="tier"><option value="">All</option></select>
-      </div>
-      <input type="search" id="q" placeholder="Find SKU, product name or UPC…">
-      <span id="platChip"></span>
+  <div id="status" style="padding-top:32px">Fetching products…</div>
+  <div id="app" hidden>
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Search SKU, product name or UPC" aria-label="Search">
+      <div class="field"><label class="t" for="plat">Platform</label><select id="plat"><option value="">All platforms</option></select></div>
+      <div class="field"><label class="t" for="cat">Category</label><select id="cat"><option value="">All</option></select></div>
+      <div class="field"><label class="t" for="tier">Tier</label><select id="tier"><option value="">All</option></select></div>
+      <span class="spacer"></span>
+      <div class="field" id="periodWrap" hidden><label class="t">Plan for the next</label>
+        <div class="seg" id="horizon"><button data-h="7">7 days</button><button data-h="14">14 days</button><button data-h="30">30 days</button><button data-h="60">60 days</button></div></div>
     </div>
     <main id="main"></main>
   </div>
 </div>
 
 <dialog id="detail"><div class="dh"><div><h3 id="dTitle"></h3><div class="meta" id="dSub"></div></div>
-  <button id="dClose">Close</button></div><div class="db" id="dBody"></div></dialog>
+  <button class="subtle" id="dClose">Close</button></div><div class="db" id="dBody"></div></dialog>
 
+<script src="/js/shell.js"></script>
+<script>shell.mount();</script>
 <script>
 const API = location.protocol.startsWith("http") ? "/api/products" : "https://hub.fragrancewholesalerusa.com/api/open/products";
 
@@ -381,9 +321,11 @@ async function load(force) {
 }
 
 // ---------- state ----------
-let all = [], rows = [], charts = {};
-const ST = (() => { const d = { tab: "overview", plat: "", horizon: 7, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "", cover: 90, vf: "all", sheetFilter: "" };
-  try { return { ...d, ...JSON.parse(localStorage.getItem("asi-v4-state") || "{}"), groupPick: null, vendor: "" }; } catch { return d; } })();
+let all = [], rows = [], charts = {}, SOURCE = "", LOADED = null;
+const ST = (() => { const d = { tab: "overview", plat: "", horizon: 30, group: "vendor", show: "order", groupPick: null, plFilter: "all", vendor: "", cover: 90, vf: "all", sheetFilter: "", soldShow: "sold" };
+  let s; try { s = { ...d, ...JSON.parse(localStorage.getItem("asi-v4-state") || "{}"), groupPick: null, vendor: "" }; } catch { s = d; }
+  if (![7, 14, 30, 60].includes(s.horizon)) s.horizon = 30;   // 90 days was dropped: 60 days is the longest the API has per platform
+  return s; })();
 const saveState = () => { try { localStorage.setItem("asi-v4-state", JSON.stringify(ST)); } catch {} };
 const SORT = {}, TABLES = {};
 let settingsOpen = false;
@@ -396,7 +338,7 @@ function ingest(data, source) {
   for (const p of list) { try { all.push(enrich(p)); } catch (e) { bad++; console.warn("Skipped product", p?.sku, e); } }
   if (!all.length) { setStatus(`<div class="err">The API answered but no products could be read (${list.length} records, ${bad} failed).</div>`); return; }
   fillSelect("cat", all.map(r => r.category)); fillSelect("tier", all.map(r => r.pricing_category));
-  $("meta").textContent = `${all.length.toLocaleString()} products · ${source} · loaded ${new Date().toLocaleString()}`;
+  SOURCE = source; LOADED = new Date();
   $("status").hidden = true; $("app").hidden = false;
   indexTiktokSales();
   apply();
@@ -412,14 +354,15 @@ function apply() {
   const cat = $("cat").value, tier = $("tier").value, q = $("q").value.trim().toLowerCase();
   rows = all.filter(r => (!cat || r.category === cat) && (!tier || r.pricing_category === tier)
     && (!q || [r.sku, r.name, r.upc].some(x => String(x ?? "").toLowerCase().includes(q))));
+  fillPlatforms();
   render();
 }
 
-// ---------- sales by period ----------
-// The products API has an all-platform 90-day total (sales_90_days) and per-platform 60-day columns,
-// nothing shorter. Exact TikTok units for any period come from Euka (/api/tiktok-sales) once TikTok
-// Shop is connected there; everything else is estimated from the daily average and marked "est.".
-const PERIODS = [7, 14, 30, 60, 90];
+// ---------- sales data ----------
+// The products API has fixed counts only: an all-platform 90-day total (sales_90_days, used by the sheet's
+// reorder math) and per-platform 60-day columns. Exact TikTok units for 7/14/30/60 days come from Euka
+// (/api/tiktok-sales) once TikTok Shop is connected there. Nothing on the page estimates past sales.
+const PERIODS = [7, 14, 30, 60];
 let TTS = null, TT_UNITS = {};
 async function loadTiktokSales() {
   try { const res = await fetch("/api/tiktok-sales", { cache: "no-store" }); TTS = await res.json(); }
@@ -440,39 +383,24 @@ function indexTiktokSales() {
     }
   }
 }
-// Units sold in the last n days for the selected platform (or all). src: api | euka | est.
-function soldIn(r, n) {
-  const tt = TT_UNITS[n];
-  if (ST.plat) {
-    if (ST.plat === "tt" && tt) return { v: tt[r.sku] || 0, src: "euka" };
-    if (n === 60) return { v: r._ch[ST.plat] || 0, src: "api" };
-    return { v: (r._ch[ST.plat] || 0) / 60 * n, src: "est" };
-  }
-  if (n === 90) return { v: r._sold, src: "api" };
-  if (n === 60) return { v: r._ch60, src: "api" };
-  return { v: r._ch60 / 60 * n, src: "est" };
-}
-const soldCell = x => `${fmtInt(x.v)}${x.src === "est" ? `<span class="est" title="Estimated: the products API has no sales for this exact period">est.</span>` : ""}`;
-// Days since the product was first added; a product younger than the period has less history than it.
-const ageDays = r => { const d = parseDate(r.first_added_date); return d ? Math.floor((Date.now() - d) / 864e5) : null; };
 const apiSyncedAt = () => { let m = 0; for (const r of all) { const d = parseDate(r.updated_at); if (d && +d > m) m = +d; } return m ? new Date(m) : null; };
-// One collapsed line saying whether the period's numbers are exact; details on click.
-function coverageHtml() {
-  const n = H(), synced = apiSyncedAt(), ttOk = !!TTS?.windows;
-  const exact = (ST.plat === "tt" && ttOk) || n === 60 || (n === 90 && !ST.plat);
-  const young = n >= 30 ? rows.filter(r => { const a = ageDays(r); return a != null && a < n && soldIn(r, n).v > 0; }).length : 0;
-  const lines = [
-    exact ? null : `No ${n}-day sales in the products API, so units are scaled from 60 days.`,
-    `Products API updated ${synced ? synced.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "unknown"}.`,
-    ttOk ? `TikTok data through ${esc(TTS.end)}.` : `Exact TikTok numbers need your TikTok Shop connected in Euka.`,
-    young ? `${fmtInt(young)} products are newer than ${n} days.` : null,
-  ].filter(Boolean);
-  return `<details class="coverage ${exact ? "" : "partial"}" ${ST.coverageOpen ? "open" : ""}>
-    <summary>Last ${n} days: <b>${exact ? "exact" : "estimated"}</b></summary>${lines.map(l => `<div>${l}</div>`).join("")}</details>`;
+// Where the numbers come from, under the side navigation.
+function renderFoot() {
+  const el = $("navFoot"); if (!el) return;
+  const synced = apiSyncedAt(), short = d => d.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  el.innerHTML = [`<b>${fmtInt(all.length)}</b> products`, `Products API updated ${synced ? short(synced) : "unknown"}`,
+    TTS?.windows ? `TikTok Shop data through ${esc(TTS.end)}` : null, LOADED ? `Loaded ${short(LOADED)}` : null,
+    SOURCE && !/^live API/.test(SOURCE) ? `<span class=warn>${esc(SOURCE)}</span>` : null].filter(Boolean).map(x => `<div>${x}</div>`).join("");
+}
+// Platform filter: every channel with its 60-day units for the rows the other filters leave.
+function fillPlatforms() {
+  const el = $("plat"), list = Object.keys(CHANNELS).map(k => ({ k, u: sum(rows, r => r._ch[k]) })).sort((a, b) => b.u - a.u);
+  el.innerHTML = `<option value="">All platforms · ${fmtInt(sum(rows, r => r._ch60))}</option>`
+    + list.map(x => `<option value="${x.k}">${CHANNELS[x.k]} · ${fmtInt(x.u)}</option>`).join("");
+  el.value = ST.plat;
 }
 
 // ---------- formatting ----------
-const H = () => ST.horizon;
 const platName = ch => CHANNELS[ch] || "All platforms";
 const prodCell = r => `<b>${esc(r.sku)}</b><span>${esc(r.name)}</span>`;
 const TIER_COLOR = { super: "--t-super", hero: "--t-hero", green: "--t-green", reg: "--t-green", new: "--t-new", dead: "--t-dead",
@@ -483,10 +411,10 @@ const tierTag = r => r._tier === "none" ? "<span class=muted>—</span>"
   : `<span class="tier" style="background:var(${TIER_COLOR[r._tier] || "--t-other"})">${esc(r._tier)}</span>`;
 const daysPill = v => { if (v == null) return "<span class=muted>no sales</span>";
   const c = v <= 0 ? "bad" : v <= SET.trigger ? "bad" : v <= SET.mult ? "warn" : v < 180 ? "good" : "muted";
-  return `<span class="pill ${c}">${v <= 0 ? "out" : Math.round(v) + "d"}</span>`; };
+  return v <= 0 ? `<span class="pill bad">out</span>` : `<span class="pill n ${c}">${Math.round(v)}d</span>`; };
 const money = v => v == null ? "<span class=muted>—</span>" : `<span class="${v > 0.005 ? "good" : v < -0.005 ? "bad" : ""}">${fmtUsd(v)}</span>`;
 const pctPill = v => v == null ? "<span class=muted>—</span>"
-  : `<span class="pill ${v < 0 ? "bad" : v * 100 < SET.minMargin ? "warn" : "good"}">${fmtPct(v)}</span>`;
+  : `<span class="pill n ${v < 0 ? "bad" : v * 100 < SET.minMargin ? "warn" : "good"}">${fmtPct(v)}</span>`;
 const FMT = { int: fmtInt, usd: v => v == null ? "—" : fmtUsd(v), pct: fmtPct, "1": fmt1, text: v => esc(v ?? "—") };
 const casesFmt = v => v == null ? "—" : v.toLocaleString(undefined, { maximumFractionDigits: 1 });
 // Demand for the selected platform (or all): units per day.
@@ -525,7 +453,9 @@ const HIDDEN = (() => { try { return JSON.parse(localStorage.getItem("asi-v4-hid
 const saveHidden = () => { try { localStorage.setItem("asi-v4-hidden", JSON.stringify(HIDDEN)); } catch {} };
 const hiddenSet = id => new Set(HIDDEN[id] || []);
 let colsOpen = false;
+const PICK = {};   // table id → { cols, keep } of the picker last drawn for it
 function columnPicker(id, cols, keep = []) {
+  PICK[id] = { cols, keep };
   const hide = hiddenSet(id), groups = [];
   for (const c of cols) { if (keep.includes(colKey(c))) continue; const g = c.grp || "Product"; let x = groups.find(y => y.g === g); if (!x) groups.push(x = { g, cols: [] }); x.cols.push(c); }
   const shown = cols.filter(c => !hide.has(colKey(c))).length;
@@ -551,39 +481,36 @@ const PROD = { h: "Product", v: r => r.name, f: prodCell, prod: true, l: true };
 const TIER = { h: "Tier", v: r => r._tier, f: tierTag, l: true };
 
 // ---------- layout ----------
-const TABS = { overview: "Overview", actions: "Actions", reorder: "Reorder", pl: "Profit & Loss", sheet: "Sheet view", vendors: "Vendors", competitors: "TikTok competitors" };
+const TABS = shell.VIEWS;
+// Only Reorder plans ahead for a chosen number of days; the other views show the API's fixed counts.
+const H = () => ST.tab === "reorder" ? ST.horizon : 30;
 function render() {
   saveState();
   // Re-rendering replaces every table, so remember where each one (and the page) was scrolled.
   const scrolls = {}, pageY = window.scrollY;
   document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { scrolls[el.dataset.scroll] = [el.scrollTop, el.scrollLeft]; });
-  $("tabs").innerHTML = Object.entries(TABS).map(([k, v]) => `<button data-tab="${k}" class="${ST.tab === k ? "active" : ""}">${v}</button>`).join("");
+  shell.setActive(ST.tab);
+  $("title").textContent = $("crumb").textContent = TABS[ST.tab];
+  document.title = `${TABS[ST.tab]} · Reports · Fragrance Wholesaler USA`;
+  if (location.hash.slice(1) !== ST.tab) history.replaceState(null, "", "#" + ST.tab);
+  $("periodWrap").hidden = ST.tab !== "reorder";
   document.querySelectorAll("#horizon button").forEach(b => b.classList.toggle("active", +b.dataset.h === ST.horizon));
-  $("platChip").innerHTML = ST.plat ? `<span class="chip">Platform: ${platName(ST.plat)}<button data-plat="" title="Show all platforms">×</button></span>` : "";
-  renderSide();
+  $("plat").value = ST.plat; $("plat").classList.toggle("on", !!ST.plat);
+  for (const id of ["cat", "tier"]) $(id).classList.toggle("on", !!$(id).value);
+  renderFoot();
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
-  $("main").innerHTML = coverageHtml() + ({ overview: overviewHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
-  if (ST.tab === "overview") drawPlatformChart("chPlat", "units");
+  $("main").innerHTML = ({ overview: overviewHtml, sold: soldHtml, actions: actionsHtml, reorder: reorderHtml, pl: plHtml, sheet: sheetHtml, vendors: vendorsHtml, competitors: competitorsHtml })[ST.tab]();
+  if (ST.tab === "overview" || ST.tab === "sold") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
   document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { const s = scrolls[el.dataset.scroll]; if (s) [el.scrollTop, el.scrollLeft] = s; });
   window.scrollTo(window.scrollX, pageY);
 }
-
-function renderSide() {
-  const h = H(), tt = TT_UNITS[h];
-  // Units per platform for the period: exact for 60 days (API) and TikTok via Euka, otherwise scaled from 60 days.
-  const unitsFor = k => k === "tt" && tt ? { u: sum(rows, r => tt[r.sku]), est: false } : { u: sum(rows, r => r._ch[k]) / 60 * h, est: h !== 60 };
-  const list = Object.keys(CHANNELS).map(k => ({ k, ...unitsFor(k) })).sort((a, b) => b.u - a.u);
-  const tot = h === 90 ? { u: sum(rows, r => r._sold), est: false } : h === 60 ? { u: sum(rows, r => r._ch60), est: false } : { u: sum(rows, r => r._ch60) / 60 * h, est: true };
-  const max = Math.max(1, ...list.map(x => x.u));
-  const item = (k, label, x, share) => `<button class="plat ${ST.plat === k ? "on" : ""}" data-plat="${k}">
-    <div class="top"><span>${label}</span><span>${fmtInt(x.u)}${x.est ? `<span class="est">est.</span>` : ""}</span></div>
-    <div class="bar"><i style="width:${(share * 100).toFixed(1)}%"></i></div>
-    <div class="sub">${fmt1(x.u / h)}/day over the last ${h} days</div></button>`;
-  $("side").innerHTML = `<h2>Sales by platform · last ${h} days</h2>` + item("", "All platforms", tot, 1)
-    + list.map(x => item(x.k, CHANNELS[x.k], x, x.u / max)).join("")
-    + `<p class="meta" style="margin:10px 8px">Exact: 60-day platform columns and the 90-day total from the products API${tt ? ", and TikTok from TikTok Shop analytics" : ""}. <span class="est">est.</span> figures are scaled from 60 days because the API has nothing shorter. Click a platform to focus every tab on it.</p>`;
+function goTab(tab) {
+  if (!(tab in TABS)) return;
+  ST.tab = tab; ST.groupPick = null; ST.vendor = ""; ST.sheetFilter = "";
+  if (all.length) render();
+  window.scrollTo(0, 0);
 }
 
 // ---------- Overview ----------
@@ -614,20 +541,19 @@ function overviewHtml() {
     ${tile("stock", "Stock value", fmtUsd(sum(rows, r => r._value)), `${fmtInt(sum(rows, r => Math.max(0, r._qoh)))} units on hand`)}
   </section>
   <div class="grid">
-    <section class="card"><h3>Units sold by platform, last 60 days</h3><p class="hint">Click a bar to focus on that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
+    <section class="card"><h3>Units sold by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
     <section class="card"><h3>Running out first</h3><p class="hint">Selling products with the fewest days of stock left. Red means at or under the ${SET.trigger}-day trigger.</p>
       ${table("soon", [PROD, { h: "Live inv", v: r => r._qoh }, { h: "Day ave", v: dayFor, t: "1" }, { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days) }, { h: "Order qty", v: r => r._orderQty }],
-        rows.filter(r => r._days != null && (!ST.plat || r._ch[ST.plat] > 0)), { sort: 3, asc: true, limit: 12, onRow: showDetail, height: "300px" })}</section>
+        rows.filter(r => r._days != null && (!ST.plat || r._ch[ST.plat] > 0)), { sort: 3, asc: true, limit: 12, onRow: showDetail, height: "320px" })}</section>
   </div>
   <section class="card" id="topCard"><div class="head"><div><h3>Top sellers, projected next ${h} days</h3><p class="hint" style="margin:0">Sorted by projected units. Click a row for the full breakdown.</p></div></div>
     ${table("top", [PROD, TIER, { h: "Live inv", v: r => r._qoh },
       { h: soldLabel(), v: soldFor },
-      { h: `Sold last ${h}d`, v: r => soldIn(r, h).v, f: r => soldCell(soldIn(r, h)), tip: "Units sold in the selected period; est. means the API has no exact figure for it" },
       { h: "Day ave", v: dayFor, t: "1" },
       ...PERIODS.map(n => ({ h: `Next ${n}d`, v: r => dayFor(r) * n, tip: `Day ave × ${n}` })),
       { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days) },
       { h: `Short in ${h}d`, v: r => Math.max(0, dayFor(r) * h - r._qoh - r._inProg), f: r => { const v = Math.max(0, dayFor(r) * h - r._qoh - r._inProg); return v ? `<span class=bad>${fmtInt(v)}</span>` : "<span class=muted>0</span>"; }, tip: "Projected units minus live inventory and on order" }],
-      top, { sort: 6 + PERIODS.indexOf(h), limit: 100, onRow: showDetail, main: "top-sellers" })}</section>`;
+      top, { sort: 5 + PERIODS.indexOf(h), limit: 100, onRow: showDetail, main: "top-sellers" })}</section>`;
 }
 
 function drawPlatformChart(id, mode) {
@@ -636,11 +562,12 @@ function drawPlatformChart(id, mode) {
     ? Object.keys(CHANNELS).map(k => ({ k, label: CHANNELS[k], v: sum(rows, r => r._ch[k]) }))
     : PL.map(x => ({ k: x.ch, label: x.label, v: sum(rows, r => r._pl[x.k].profit60 ?? 0) }));
   list.sort((a, b) => b.v - a.v);
-  const accent = css("--accent"), muted = css("--muted"), border = css("--border");
+  const accent = css("--ds-chart-brand"), muted = css("--ds-text-subtlest"), border = css("--ds-border");
+  Chart.defaults.font.family = css("--ds-font");
   charts[id] = new Chart(el, {
     type: "bar",
     data: { labels: list.map(x => x.label), datasets: [{ data: list.map(x => x.v),
-      backgroundColor: list.map(x => x.k === ST.plat ? css("--warn") : x.v < 0 ? css("--bad") : accent) }] },
+      backgroundColor: list.map(x => x.k === ST.plat ? css("--ds-chart-warning") : x.v < 0 ? css("--ds-chart-danger") : accent) }] },
     options: { indexAxis: "y", maintainAspectRatio: false, animation: false, plugins: { legend: { display: false },
         tooltip: { callbacks: { label: c => mode === "units" ? `${fmtInt(c.raw)} units` : fmtUsd(c.raw) } } },
       scales: { x: { ticks: { color: muted, callback: v => mode === "units" ? fmtInt(v) : fmtUsd(v) }, grid: { color: border } }, y: { ticks: { color: muted }, grid: { display: false } } },
@@ -648,6 +575,53 @@ function drawPlatformChart(id, mode) {
   });
 }
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+// ---------- Items sold ----------
+// Exact units from the products API: each platform's last 60 days. TikTok also gets exact 7/14/30-day
+// counts from TikTok Shop analytics (Euka) when that's connected. No estimates on this view.
+function soldHtml() {
+  const p = ST.plat, units = r => p ? r._ch[p] || 0 : r._ch60;
+  const base = rows.filter(r => !p || r._ch[p] > 0);
+  const list = ST.soldShow === "all" ? rows : rows.filter(r => units(r) > 0);
+  const sold = rows.filter(r => units(r) > 0), total = sum(rows, units);
+  const chList = Object.keys(CHANNELS).map(k => ({ k, u: sum(rows, r => r._ch[k]) })).sort((a, b) => b.u - a.u);
+  const best = [...sold].sort((a, b) => units(b) - units(a))[0];
+  const tt = [7, 14, 30].filter(n => TT_UNITS[n]);
+  const cats = new Map();
+  for (const r of sold) { const c = r.category || "No category"; const x = cats.get(c) || { name: c, skus: 0, units: 0 }; x.skus++; x.units += units(r); cats.set(c, x); }
+  const kpi = (label, value, sub) => `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="sub">${sub}</div></div>`;
+  const cols = [
+    { ...PROD, grp: "" }, { ...TIER, grp: "" }, { h: "Category", v: r => r.category, t: "text", l: true, grp: "" },
+    { h: "Live inv", v: r => r._qoh, grp: "" },
+    ...tt.map(n => ({ h: `${n} days`, key: `TikTok ${n}d`, v: r => TT_UNITS[n][r.sku] || 0, f: r => TT_UNITS[n][r.sku] ? fmtInt(TT_UNITS[n][r.sku]) : "<span class=muted>0</span>", grp: "TikTok Shop (exact)", total: true })),
+    ...Object.keys(CHANNELS).map(k => ({ h: CHANNELS[k], v: r => r._ch[k], f: r => r._ch[k] ? (k === p ? `<b>${fmtInt(r._ch[k])}</b>` : fmtInt(r._ch[k])) : "<span class=muted>0</span>", grp: "Last 60 days by platform", total: true })),
+    { h: "Total 60 days", v: r => r._ch60, f: r => `<b>${fmtInt(r._ch60)}</b>`, grp: "Last 60 days by platform", total: true },
+    { h: "Per day", v: r => units(r) / 60, t: "1", grp: "", tip: "Units in the last 60 days ÷ 60" + (p ? `, on ${platName(p)}` : "") },
+  ];
+  const sortKey = p ? CHANNELS[p] : "Total 60 days", hide = hiddenSet("sold");
+  // Columns stay in a fixed order so a sort survives filter changes; picking a platform sorts by it.
+  if (!SORT.sold || SORT.sold.plat !== p || SORT.sold.tt !== tt.length) SORT.sold = { i: cols.findIndex(c => colKey(c) === sortKey), asc: false, plat: p, tt: tt.length };
+  return `<p class="lead">How many of each product sold in the <b>last 60 days</b>${p ? ` on <b>${platName(p)}</b>` : ", per platform"}. These are the exact counts from the products API, which has no shorter period per platform.${tt.length ? " TikTok also shows exact 7, 14 and 30 day counts from TikTok Shop." : ""}</p>
+  <section class="kpis">
+    ${kpi(`Units sold, 60 days${p ? ` · ${platName(p)}` : ""}`, fmtInt(total), `${fmt1(total / 60)} a day on average`)}
+    ${kpi("Products sold", fmtInt(sold.length), `of ${fmtInt(rows.length)} in the filters`)}
+    ${p ? kpi("Share of all sales", sum(rows, r => r._ch60) ? fmtPct(total / sum(rows, r => r._ch60)) : "—", `${platName(p)} vs every platform`)
+        : kpi("Top platform", chList[0]?.u ? CHANNELS[chList[0].k] : "—", chList[0]?.u ? `${fmtInt(chList[0].u)} units · ${fmtPct(chList[0].u / (total || 1))}` : "no sales")}
+    ${kpi("Best seller", best ? esc(best.sku) : "—", best ? `${fmtInt(units(best))} units · ${esc(String(best.name || "").slice(0, 40))}` : "no sales")}
+    ${tt.length ? kpi("TikTok Shop, last 7 days", fmtInt(sum(base, r => TT_UNITS[7]?.[r.sku] || 0)), `exact, through ${esc(TTS.end)}`) : ""}
+  </section>
+  <div class="grid">
+    <section class="card"><h3>Units by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
+    <section class="card"><h3>By category</h3><p class="hint">Units sold in the last 60 days${p ? ` on ${platName(p)}` : ""}.</p>
+      ${table("soldcat", [{ h: "Category", v: x => x.name, l: true, f: x => `<b>${esc(x.name)}</b>` }, { h: "Products sold", v: x => x.skus, total: true },
+        { h: "Units", v: x => x.units, total: true }, { h: "Share", v: x => total ? x.units / total : null, t: "pct" }], [...cats.values()],
+        { sort: 2, onRow: x => { $("cat").value = x.name === "No category" ? "" : x.name; apply(); }, height: "300px", empty: "No sales in the last 60 days." })}</section>
+  </div>
+  <section class="card"><div class="head"><div><h3>Products</h3><p class="hint" style="margin:0">Click a column to sort, a row for the full breakdown.</p></div>
+    <div class="seg">${[["sold", `Sold (${fmtInt(sold.length)})`], ["all", `All products (${fmtInt(rows.length)})`]].map(([k, v]) => `<button data-ss="${k}" class="${ST.soldShow === k ? "active" : ""}">${v}</button>`).join("")}</div></div>
+    ${columnPicker("sold", cols, ["Product"])}
+    ${table("sold", cols, list, { onRow: showDetail, main: "items-sold", limit: 2000, hide, empty: "Nothing sold in the last 60 days with these filters." })}</section>`;
+}
 
 // ---------- Reorder ----------
 const GROUPS = {
@@ -792,7 +766,6 @@ function plHtml() {
 }
 
 // ---------- Sheet view (mirrors the Excel columns) ----------
-let SHEET_COLS = [];
 function sheetCols() {
   const h = H();
   return [
@@ -830,7 +803,6 @@ function sheetCols() {
 function sheetHtml() {
   const cols = sheetCols(), f = TILE_FILTERS[ST.sheetFilter];
   const list = rows.filter(r => (f?.allPlats || onPlat(r)) && (!f || f.test(r)));
-  SHEET_COLS = cols;
   const banner = f ? `<div class="filterbar"><span>Showing <b>${esc(f.label())}</b>${ST.plat && !f.allPlats ? ` on ${esc(platName(ST.plat))}` : ""} · ${fmtInt(list.length)} of ${fmtInt(rows.length)} products</span>
     <button id="clearSheetFilter">Show all products</button></div>` : "";
   return `<p class="lead">Your spreadsheet's main columns in the same order, filled from the API. Click any column to sort, any row for details.</p>
@@ -1112,7 +1084,7 @@ function showDetail(r) {
       ${f("Total cost to ship (Q)", fmtUsd(r._Q))}${f("Platform cost", fmtUsd(r._AN))}${f("Ship charge", fmtUsd(r._AG))}
       ${f("Wholesale cost", fmtUsd(r._AS))}${f("Case qty", fmtInt(r._caseQty))}${f("Last ordered", `${esc(r.last_ordered_date || "—")} · ${esc(r.last_ordered_name || "")}`)}
     </div>
-    <h4>Projected sales</h4><div class="facts">${[7, 14, 30, 60, 90].map(n => f(`Next ${n} days`, `${fmtInt(r._day * n)} <span class=muted>· stock after ${fmtInt(r._qoh - r._day * n)}</span>`)).join("")}</div>
+    <h4>Projected sales</h4><div class="facts">${PERIODS.map(n => f(`Next ${n} days`, `${fmtInt(r._day * n)} <span class=muted>· stock after ${fmtInt(r._qoh - r._day * n)}</span>`)).join("")}</div>
     <h4>Platforms (60-day units and P&L)</h4>
     <div class="tablewrap"><table><thead><tr><th class=l>Platform</th><th>60 days</th><th>Price</th><th>Fees</th><th>Ship</th><th>Profit</th><th>PFT%</th><th>60-day profit</th></tr></thead><tbody>
     ${Object.keys(CHANNELS).sort((a, b) => r._ch[b] - r._ch[a]).map(ch => { const x = PL_BY_CH[ch], L = x ? r._pl[x.k] : null;
@@ -1139,16 +1111,15 @@ function exportCsv() {
 // ---------- events ----------
 document.addEventListener("click", e => {
   const ca = e.target.closest("[data-colact]");
-  if (ca) { HIDDEN[ca.dataset.tbl] = ca.dataset.colact === "all" ? [] : SHEET_COLS.map(colKey).filter(k => k !== "SKU #"); saveHidden(); render(); return; }
-  const t = e.target.closest("[data-tab],[data-plat],[data-go],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#clearSheetFilter,#horizon button");
+  if (ca) { const pk = PICK[ca.dataset.tbl]; HIDDEN[ca.dataset.tbl] = ca.dataset.colact === "all" ? [] : pk.cols.map(colKey).filter(k => !pk.keep.includes(k)); saveHidden(); render(); return; }
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],th[data-t],tr[data-t],#ungroup,#unvendor,#resetSet,#clearSheetFilter,#horizon button");
   if (!t) return;
-  if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.groupPick = null; ST.vendor = ""; ST.sheetFilter = ""; render(); window.scrollTo(0, 0); }
-  else if (t.dataset.plat !== undefined) { ST.plat = t.dataset.plat; ST.groupPick = null; render(); }
+  if (t.dataset.ss) { ST.soldShow = t.dataset.ss; render(); }
   else if (t.dataset.h) { ST.horizon = +t.dataset.h; render(); }
   else if (t.dataset.go) {
     const f = TILE_FILTERS[t.dataset.go];
     if (!f) return;
-    ST.tab = "sheet"; ST.sheetFilter = t.dataset.go; ST.groupPick = null;
+    ST.tab = "sheet"; ST.sheetFilter = t.dataset.go; ST.groupPick = null; ST.vendor = "";
     const i = sheetCols().findIndex(c => colKey(c) === f.sort[0]);
     if (i >= 0) SORT.sheet = { i, asc: f.sort[1] };
     render(); window.scrollTo(0, 0);
@@ -1168,7 +1139,7 @@ document.addEventListener("change", e => {
   const t = e.target;
   if (t.dataset.colhide || t.dataset.colgrp) {
     const id = t.dataset.tbl, hide = hiddenSet(id);
-    const keys = t.dataset.colhide ? [t.dataset.colhide] : SHEET_COLS.filter(c => (c.grp || "Product") === t.dataset.colgrp && colKey(c) !== "SKU #").map(colKey);
+    const pk = PICK[id], keys = t.dataset.colhide ? [t.dataset.colhide] : pk.cols.filter(c => (c.grp || "Product") === t.dataset.colgrp && !pk.keep.includes(colKey(c))).map(colKey);
     for (const k of keys) t.checked ? hide.delete(k) : hide.add(k);
     HIDDEN[id] = [...hide]; saveHidden(); render(); return;
   }
@@ -1176,6 +1147,7 @@ document.addEventListener("change", e => {
   else if (t.id === "livePrices") { SET.livePrices = t.checked; saveSettings(); reEnrich(); }
   else if (t.dataset.set) { const v = +t.value; if (v > 0 || (t.dataset.set === "minMargin" && v >= 0)) { SET[t.dataset.set] = v; saveSettings(); reEnrich(); } }
   else if (t.id === "cat" || t.id === "tier") apply();
+  else if (t.id === "plat") { ST.plat = t.value; ST.groupPick = null; render(); }
 });
 $("q").addEventListener("input", apply);
 document.addEventListener("toggle", e => { if (e.target.matches?.("details.colpick")) { colsOpen = e.target.open; return; }
@@ -1186,6 +1158,9 @@ $("detail").addEventListener("click", e => { if (e.target === $("detail")) $("de
 $("reload").onclick = () => load(true);
 $("csv").onclick = exportCsv;
 if (location.hash.slice(1) in TABS) ST.tab = location.hash.slice(1);
+else if (!(ST.tab in TABS)) ST.tab = "overview";
+// Side navigation links are /#view: switch views in place.
+addEventListener("hashchange", () => { const t = location.hash.slice(1); if (t !== ST.tab) goTab(t); });
 // Signed-in session (auth.js): send the user back to sign in when it runs out or the server says so.
 if (location.protocol.startsWith("http")) {
   const toLogin = () => location.assign("/login?next=" + encodeURIComponent(location.pathname + location.hash));
@@ -1199,7 +1174,6 @@ if (location.protocol.startsWith("http")) {
     }
     return res;
   };
-  $("signout").hidden = false;
   origFetch("/api/session", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(s => {
     const left = s?.expiresAt ? Date.parse(s.expiresAt) - Date.now() : null;
     if (left != null) setTimeout(toLogin, Math.max(0, Math.min(left, 2 ** 31 - 1)));

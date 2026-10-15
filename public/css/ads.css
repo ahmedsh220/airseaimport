@@ -1,0 +1,186 @@
+/* Atlassian Design System look for the dashboard pages (index.html, catalog-admin.html).
+   Colors, type and spacing follow ADS design tokens (atlassian.design/foundations/tokens); the token
+   names are kept as --ds-* so they read like the real ones. The short names further down (--bg, --panel,
+   --text, …) are what the page scripts and excel-edit.js already use; they point at the tokens. */
+:root {
+  --ds-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, "Helvetica Neue", sans-serif;
+  --ds-text: #172B4D; --ds-text-subtle: #44546F; --ds-text-subtlest: #626F86; --ds-text-inverse: #FFFFFF;
+  --ds-text-brand: #0C66E4; --ds-text-selected: #0C66E4; --ds-link: #0C66E4;
+  --ds-text-success: #216E4E; --ds-text-warning: #A54800; --ds-text-danger: #AE2E24; --ds-text-discovery: #5E4DB2; --ds-text-information: #0055CC;
+  --ds-surface: #FFFFFF; --ds-surface-sunken: #F7F8F9; --ds-surface-raised: #FFFFFF; --ds-surface-overlay: #FFFFFF;
+  --ds-border: #091E4224; --ds-border-input: #8590A2; --ds-border-focused: #388BFF; --ds-border-selected: #0C66E4; --ds-border-brand: #0C66E4;
+  --ds-bg-neutral: #091E420F; --ds-bg-neutral-hovered: #091E4224; --ds-bg-neutral-pressed: #091E424F;
+  --ds-bg-neutral-subtle-hovered: #091E420F; --ds-bg-neutral-subtle-pressed: #091E4224;
+  --ds-bg-brand-bold: #0C66E4; --ds-bg-brand-bold-hovered: #0055CC; --ds-bg-selected: #E9F2FF; --ds-bg-selected-hovered: #CCE0FF;
+  --ds-bg-input: #FFFFFF; --ds-bg-disabled: #091E4208; --ds-text-disabled: #091E424F;
+  --ds-bg-success: #DCFFF1; --ds-bg-warning: #FFF7D6; --ds-bg-danger: #FFECEB; --ds-bg-discovery: #F3F0FF; --ds-bg-information: #E9F2FF;
+  --ds-bg-success-bold: #1F845A; --ds-bg-danger-bold: #C9372C; --ds-bg-warning-bold: #F5CD47;
+  --ds-teal-subtle: #E7F9FF; --ds-teal-text: #206A83; --ds-yellow-subtle: #FFF7D6; --ds-yellow-text: #7F5F01;
+  --ds-shadow-raised: 0 1px 1px #091E4240, 0 0 1px #091E424F;
+  --ds-shadow-overlay: 0 8px 12px #091E4226, 0 0 1px #091E424F;
+  --ds-blanket: #091E427A;
+  --ds-chart-brand: #388BFF; --ds-chart-danger: #F87168; --ds-chart-warning: #FCA700;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ds-text: #B6C2CF; --ds-text-subtle: #9FADBC; --ds-text-subtlest: #8C9BAB; --ds-text-inverse: #1D2125;
+    --ds-text-brand: #579DFF; --ds-text-selected: #579DFF; --ds-link: #579DFF;
+    --ds-text-success: #7EE2B8; --ds-text-warning: #FEC195; --ds-text-danger: #FD9891; --ds-text-discovery: #B8ACF6; --ds-text-information: #85B8FF;
+    --ds-surface: #1D2125; --ds-surface-sunken: #161A1D; --ds-surface-raised: #22272B; --ds-surface-overlay: #282E33;
+    --ds-border: #A6C5E229; --ds-border-input: #738496; --ds-border-focused: #85B8FF; --ds-border-selected: #579DFF; --ds-border-brand: #579DFF;
+    --ds-bg-neutral: #A1BDD914; --ds-bg-neutral-hovered: #A6C5E229; --ds-bg-neutral-pressed: #BFDBF847;
+    --ds-bg-neutral-subtle-hovered: #A1BDD914; --ds-bg-neutral-subtle-pressed: #A6C5E229;
+    --ds-bg-brand-bold: #579DFF; --ds-bg-brand-bold-hovered: #85B8FF; --ds-bg-selected: #1C2B41; --ds-bg-selected-hovered: #09326C;
+    --ds-bg-input: #22272B; --ds-bg-disabled: #BCD6F00A; --ds-text-disabled: #BFDBF847;
+    --ds-bg-success: #164B35; --ds-bg-warning: #533F04; --ds-bg-danger: #5D1F1A; --ds-bg-discovery: #352C63; --ds-bg-information: #092957;
+    --ds-bg-success-bold: #4BCE97; --ds-bg-danger-bold: #F87168; --ds-bg-warning-bold: #F5CD47;
+    --ds-teal-subtle: #164555; --ds-teal-text: #9DD9EE; --ds-yellow-subtle: #533F04; --ds-yellow-text: #F8E6A0;
+    --ds-shadow-raised: 0 1px 1px #03040442, 0 0 1px #03040480;
+    --ds-shadow-overlay: 0 0 0 1px #BCD6F01F, 0 8px 12px #0304045C, 0 0 1px #03040480;
+    --ds-blanket: #10121499;
+    --ds-chart-brand: #579DFF; --ds-chart-danger: #F87168; --ds-chart-warning: #FCA700;
+  }
+}
+/* Names the page scripts use. Tier colors: the ADS accent colors. */
+:root {
+  --bg: var(--ds-surface-sunken); --panel: var(--ds-surface); --text: var(--ds-text); --muted: var(--ds-text-subtlest);
+  --border: var(--ds-border); --accent: var(--ds-text-brand); --accent-soft: var(--ds-bg-selected);
+  --good: var(--ds-text-success); --warn: var(--ds-text-warning); --bad: var(--ds-text-danger);
+  --t-super: #6E5DC6; --t-hero: #1D7AFC; --t-green: #22A06B; --t-new: #1D9AAA; --t-dead: #8590A2; --t-other: #E56910;
+  --t-empty: #C9372C; --t-breathing: #B38600;
+  --topbar-h: 56px; --sidenav-w: 240px;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { color-scheme: light dark; }
+body { margin: 0; background: var(--ds-surface); color: var(--ds-text); font: 400 14px/20px var(--ds-font); -webkit-font-smoothing: antialiased; }
+a { color: var(--ds-link); text-decoration: none; } a:hover { text-decoration: underline; }
+h1, h2, h3, h4 { color: var(--ds-text); }
+:focus-visible { outline: 2px solid var(--ds-border-focused); outline-offset: 2px; }
+
+/* Buttons (ADS Button: default, primary, subtle, selected) */
+button, .btn { font: 500 14px/20px var(--ds-font); color: var(--ds-text-subtle); background: var(--ds-bg-neutral); border: 0;
+  border-radius: 3px; padding: 6px 12px; min-height: 32px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap; text-decoration: none; transition: background .1s; }
+button:hover, .btn:hover { background: var(--ds-bg-neutral-hovered); text-decoration: none; }
+button:active, .btn:active { background: var(--ds-bg-neutral-pressed); }
+button:disabled { background: var(--ds-bg-disabled); color: var(--ds-text-disabled); cursor: not-allowed; }
+button.primary, .btn.primary { background: var(--ds-bg-brand-bold); color: var(--ds-text-inverse); }
+button.primary:hover, .btn.primary:hover { background: var(--ds-bg-brand-bold-hovered); }
+button.subtle, .btn.subtle { background: none; }
+button.subtle:hover, .btn.subtle:hover { background: var(--ds-bg-neutral-subtle-hovered); }
+button.active, button[aria-pressed="true"] { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
+button.active:hover { background: var(--ds-bg-selected-hovered); }
+button svg, .btn svg { width: 16px; height: 16px; flex: none; }
+
+/* Text field and select (ADS Textfield / Select) */
+input, select, textarea { font: 400 14px/20px var(--ds-font); color: var(--ds-text); background: var(--ds-bg-input);
+  border: 1px solid var(--ds-border-input); border-radius: 3px; padding: 5px 8px; min-height: 32px; }
+input:hover, select:hover { border-color: var(--ds-border-input); background: var(--ds-surface-sunken); }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--ds-border-focused); box-shadow: inset 0 0 0 1px var(--ds-border-focused); background: var(--ds-bg-input); }
+input[type=checkbox], input[type=radio] { min-height: 0; padding: 0; accent-color: var(--ds-bg-brand-bold); }
+input::placeholder { color: var(--ds-text-subtlest); }
+
+/* Text helpers */
+.meta, .muted { color: var(--ds-text-subtlest); } .meta { font-size: 12px; line-height: 16px; }
+.good { color: var(--ds-text-success); } .warn { color: var(--ds-text-warning); } .bad { color: var(--ds-text-danger); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+label.t { color: var(--ds-text-subtle); font-size: 12px; font-weight: 600; }
+
+/* Lozenge (ADS Lozenge). .pill keeps its old class name; good/warn/bad/muted pick the appearance. */
+.pill, .lozenge { display: inline-block; padding: 0 4px; border-radius: 3px; font: 700 11px/16px var(--ds-font); text-transform: uppercase;
+  background: var(--ds-bg-neutral); color: var(--ds-text-subtle); white-space: nowrap; vertical-align: middle; }
+.pill.good { background: var(--ds-bg-success); color: var(--ds-text-success); }
+.pill.warn { background: var(--ds-bg-warning); color: var(--ds-text-warning); }
+.pill.bad { background: var(--ds-bg-danger); color: var(--ds-text-danger); }
+.pill.info { background: var(--ds-bg-information); color: var(--ds-text-information); }
+.pill.muted { background: var(--ds-bg-neutral); color: var(--ds-text-subtle); }
+/* Tag (ADS Tag, removable) */
+.chip { display: inline-flex; gap: 2px; align-items: center; background: var(--ds-bg-neutral); color: var(--ds-text);
+  border-radius: 3px; padding: 0 0 0 8px; font-size: 12px; line-height: 20px; font-weight: 500; }
+.chip button { min-height: 20px; padding: 0 6px; background: none; color: var(--ds-text-subtle); }
+.chip button:hover { background: var(--ds-bg-danger); color: var(--ds-text-danger); }
+
+/* Cards and section messages */
+.card { background: var(--ds-surface-raised); box-shadow: var(--ds-shadow-raised); border-radius: 8px; padding: 16px 20px; min-width: 0; margin-bottom: 24px; }
+.card h3 { margin: 0 0 4px; font: 600 16px/20px var(--ds-font); }
+.card .hint, .hint { margin: 0 0 12px; color: var(--ds-text-subtlest); font-size: 12px; line-height: 16px; }
+.card .head { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+
+/* Tables (ADS Dynamic table) */
+.tablewrap { overflow: auto; max-height: 70vh; border-top: 2px solid var(--ds-border); }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--ds-border); text-align: right; white-space: nowrap; }
+th.l, td.l { text-align: left; }
+thead th { position: sticky; top: 0; background: var(--ds-surface-raised); color: var(--ds-text-subtlest); font: 600 12px/16px var(--ds-font);
+  cursor: pointer; user-select: none; z-index: 1; border-bottom: 2px solid var(--ds-border); }
+thead th:hover { color: var(--ds-text-subtle); background: color-mix(in srgb, var(--ds-text) 4%, var(--ds-surface-raised)); }
+th.sorted { color: var(--ds-text); } th.sorted::after { content: " ↓"; } th.sorted.asc::after { content: " ↑"; }
+tbody tr:hover td { background: var(--ds-bg-neutral-subtle-hovered); }
+tbody tr.click { cursor: pointer; }
+tfoot td { font-weight: 600; background: var(--ds-surface-sunken); position: sticky; bottom: 0; border-top: 2px solid var(--ds-border); }
+
+/* Modal dialog (ADS Modal) */
+dialog { border: 0; border-radius: 3px; background: var(--ds-surface-overlay); color: var(--ds-text); box-shadow: var(--ds-shadow-overlay);
+  width: min(960px, calc(100vw - 32px)); max-height: 88vh; padding: 0; }
+dialog::backdrop { background: var(--ds-blanket); }
+dialog .dh { display: flex; justify-content: space-between; gap: 12px; align-items: start; padding: 24px 24px 16px;
+  position: sticky; top: 0; background: var(--ds-surface-overlay); z-index: 2; }
+dialog .db { padding: 0 24px 24px; }
+dialog h3 { margin: 0 0 4px; font: 500 20px/24px var(--ds-font); } dialog h4 { margin: 20px 0 8px; font: 600 14px/20px var(--ds-font); }
+
+/* ---------- App shell: top navigation + side navigation (shell.js fills them) ---------- */
+.topbar { position: fixed; inset: 0 0 auto 0; height: var(--topbar-h); z-index: 30; display: flex; align-items: center; gap: 12px;
+  padding: 0 12px 0 8px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-border); }
+.topbar .navtoggle { display: none; background: none; padding: 6px; }
+.topbar .navtoggle svg { width: 20px; height: 20px; }
+.topbar .home { display: flex; align-items: center; gap: 10px; padding: 4px 8px; border-radius: 3px; color: var(--ds-text); flex: none; }
+.topbar .home:hover { background: var(--ds-bg-neutral-subtle-hovered); text-decoration: none; }
+/* The logos are JPEGs on white, so they sit on a white plate in dark mode too. */
+.topbar .plate { background: #fff; border-radius: 4px; display: flex; align-items: center; padding: 3px 6px; }
+.topbar .plate img { height: 32px; width: auto; display: block; }
+.topbar .appname { display: flex; flex-direction: column; line-height: 16px; }
+.topbar .appname b { font-size: 14px; font-weight: 600; }
+.topbar .appname span { font-size: 12px; color: var(--ds-text-subtlest); }
+.topbar .brands { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%); }
+.topbar .brands .plate { padding: 1px 3px; flex: none; }
+.topbar .brands img { height: 40px; }
+.topbar .actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.sidenav { position: fixed; top: var(--topbar-h); bottom: 0; left: 0; width: var(--sidenav-w); z-index: 20; overflow-y: auto;
+  background: var(--ds-surface); border-right: 1px solid var(--ds-border); padding: 12px 8px; display: flex; flex-direction: column; }
+.sidenav h2 { margin: 16px 8px 4px; font: 600 12px/16px var(--ds-font); color: var(--ds-text-subtlest); }
+.sidenav h2:first-child { margin-top: 4px; }
+.sidenav a { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; border-radius: 3px;
+  color: var(--ds-text-subtle); font-weight: 500; }
+.sidenav a:hover { background: var(--ds-bg-neutral-subtle-hovered); text-decoration: none; }
+.sidenav a:active { background: var(--ds-bg-neutral-subtle-pressed); }
+.sidenav a.on { background: var(--ds-bg-selected); color: var(--ds-text-selected); }
+.sidenav a svg { width: 20px; height: 20px; flex: none; }
+.sidenav a .ext { width: 14px; height: 14px; margin-left: auto; opacity: .7; }
+.sidenav .foot { margin-top: auto; padding: 16px 8px 4px; font-size: 12px; line-height: 16px; color: var(--ds-text-subtlest); }
+.sidenav .foot div + div { margin-top: 4px; }
+.shell-main { margin-left: var(--sidenav-w); padding-top: var(--topbar-h); min-height: 100vh; min-width: 0; background: var(--ds-surface); }
+.navscrim { display: none; }
+
+/* Page header (ADS Page header: breadcrumbs, title, actions, bottom bar) */
+.pagehead { padding: 24px 32px 0; }
+.crumbs { font-size: 14px; color: var(--ds-text-subtlest); margin-bottom: 8px; }
+.crumbs a { color: var(--ds-text-subtlest); }
+.pagehead .titlerow { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.pagehead h1 { margin: 0; font: 500 24px/28px var(--ds-font); letter-spacing: -0.01em; }
+.pagehead .desc { margin: 8px 0 0; color: var(--ds-text-subtle); max-width: 900px; }
+.pagehead .desc b { color: var(--ds-text); }
+
+@media (max-width: 1100px) { .topbar .brands { justify-content: flex-start; } .topbar .appname { display: none; } }
+@media (max-width: 900px) {
+  .topbar .navtoggle { display: inline-flex; }
+  .topbar .brands { display: none; }
+  .topbar .actions .lbl { display: none; }
+  .sidenav { transform: translateX(-100%); transition: transform .15s; box-shadow: var(--ds-shadow-overlay); }
+  body.nav-open .sidenav { transform: none; }
+  body.nav-open .navscrim { display: block; position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 15; background: var(--ds-blanket); }
+  .shell-main { margin-left: 0; }
+  .pagehead { padding: 16px 16px 0; }
+}

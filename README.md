@@ -38,7 +38,7 @@ npm start                # or: node server.js
 
 ## How it's built
 
-Plain Node `http` server, no framework, no build step. Pages are static HTML with inline scripts; charts use Chart.js 4.4.1 from cdnjs. The catalog page loads jsPDF and ExcelJS from a CDN only when a customer downloads.
+Plain Node `http` server, no framework, no build step. Pages are static HTML with inline scripts; charts use Chart.js 4.4.1 from cdnjs. The dashboard pages follow the [Atlassian Design System](https://atlassian.design/get-started) look (its color, type and spacing tokens, side navigation, top bar, lozenges and tables), written as plain CSS in `public/css/ads.css`, so there is still nothing to build. The catalog page loads jsPDF and ExcelJS from a CDN only when a customer downloads.
 
 ```
 .
@@ -52,7 +52,9 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML wit
 ├── public/
 │   ├── index.html            the dashboard (all report logic and formulas run here, in the browser)
 │   ├── catalog-admin.html    Catalog management page
+│   ├── css/ads.css           shared look: Atlassian design tokens (light and dark), buttons, tables, top bar, side nav
 │   └── js/
+│       ├── shell.js          top bar and side navigation shared by both dashboard pages
 │       ├── excel-edit.js     "Excel sheet" section of a product's detail view
 │       └── catalog-admin.js  Catalog management logic
 ├── catalog/index.html        customer catalog page (served only after the catalog password)
@@ -150,24 +152,30 @@ Field notes on the API (one JSON array, about 134 fields per product):
 
 `public/index.html` is a single page. All metrics are computed in the browser from the products list, so every number on screen can be traced to the [Formulas](#formulas) below.
 
-**Top bar:** Refresh data, Catalog management (opens `/catalog-admin.html`), Export table CSV (the main table of the current tab, with the filters applied), Sign out.
+`public/index.html` and `public/catalog-admin.html` share one shell (`public/js/shell.js`, styled by `public/css/ads.css`). It follows the system's light or dark mode.
 
-**Side panel, Sales by platform:** units for the chosen period on each of the 14 channels. Click a channel to focus every tab on it. A channel's numbers come from three places:
+**Top bar:** the Fragrance Wholesaler USA logo and the brand logos (the same files as the catalog header, from `media/`), then Refresh data and Sign out. On narrow screens the brand strip hides and a menu button opens the side navigation.
 
-- 60 days: exact, from `<channel>_60_days`.
-- 90 days, all channels: exact, from `sales_90_days`.
-- TikTok, any period: exact from Euka when TikTok Shop is connected there.
-- Everything else: scaled from 60 days and marked **est.** A note above each tab says whether the period is exact or estimated.
+**Side navigation:** one place for every page.
 
-**Filter bar:** Period (7, 14, 30, 60, 90 days), Category, Tier (`pricing_category`: super, hero, green, new, dead, …), and a search box for SKU, name or UPC.
+- **Reports:** Overview, Items sold, Actions, Reorder, Profit & Loss, Sheet view, Vendors, TikTok competitors. Each is a view of the same page at `/#<view>` (`#overview`, `#sold`, `#actions`, `#reorder`, `#pl`, `#sheet`, `#vendors`, `#competitors`), so a view can be bookmarked.
+- **Catalog:** Catalog management (`/catalog-admin.html`), and Catalog 1 (`/catalog`) and Catalog 2 (`/catalog2`), which open the customer pages in a new tab.
+- At the bottom: how many products are loaded, when the products API last updated, and how far the TikTok Shop data goes.
 
-**Tabs:**
+**Page header:** breadcrumb, the view's title and **Export CSV** (the main table of the current view, with the filters applied).
 
-| Tab | What it shows |
+**Filters** (under the page header, on every report view): search (SKU, name or UPC), **Platform** (all platforms or one of the 14 channels, each listed with its 60-day units; choosing one focuses every view on it, and clicking a bar in a platform chart does the same), Category, and Tier (`pricing_category`: super, hero, green, new, dead, …).
+
+**Plan for the next 7, 14, 30 or 60 days** shows on the Reorder view only. It's a projection (day ave × days), so it only belongs where you plan an order. Every other view shows the API's fixed counts, and projections there (Overview, Sheet view) use 30 days. Nothing on the page estimates past sales: the API has 60-day units per platform and the 90-day all-platform total the reorder math uses, and nothing shorter except TikTok from Euka.
+
+**Views:**
+
+| View | What it shows |
 |---|---|
-| Overview | Tiles: projected sales for the period, reorder now (SKUs, cases, cost), runs out within the period, out of stock but still selling, stock value. Units by platform chart, running out first, and top sellers projected for 7 to 90 days. Clicking a tile opens Sheet view filtered to those products. |
+| Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Units by platform chart, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Sheet view filtered to those products. |
+| Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), units by platform chart, units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them; columns can be hidden. When TikTok Shop is connected in Euka, TikTok's exact 7, 14 and 30-day units are added. |
 | Actions | Overstock: cash tied up above a 60, 90 or 180-day cover target, with a suggested action and TikTok break-even price. Switch vendor: selling products a vendor quotes cheaper than we pay, with per-order and yearly savings. |
-| Reorder | Products at or under the trigger, grouped by supplier, cheapest vendor, top platform or tier (or not grouped), with cases, order quantity and order cost. Show: needs order, all selling, everything. The sheet's numbers can be changed here (see Settings below). |
+| Reorder | Products at or under the trigger, grouped by supplier, cheapest vendor, top platform or tier (or not grouped), with cases, order quantity and order cost. Show: needs order, all selling, everything. The planning period sets the "Next N days" projections. The sheet's numbers can be changed here (see Settings below). |
 | Profit & Loss | Per platform: price rule, average profit per unit, 60-day weighted PFT%, 60-day units, revenue and profit, how many SKUs are under the minimum margin and how many lose money. Click a platform for its per-product P&L. Option: use live listing prices instead of the sheet's price formulas. |
 | Sheet view | The workbook's main columns filled from the API. Columns can be hidden per group. |
 | Vendors | Each supplier's price list: products quoted, how many they're cheapest on, latest price date. Click one to compare their prices with ours. |
@@ -176,7 +184,7 @@ Field notes on the API (one JSON array, about 134 fields per product):
 Clicking any product opens its **detail view**, which has:
 
 - stock and reorder figures
-- projected sales and stock left after 7 to 90 days
+- projected sales and stock left after 7 to 60 days
 - a per-platform table of 60-day units and P&L
 - every vendor quote
 - its row in the Excel workbook, editable (see [Editing the Excel sheet](#editing-the-excel-sheet))
@@ -258,8 +266,9 @@ The platform summary's PFT% is weighted by 60-day units: total 60-day profit ÷ 
 
 ### Sales over a period
 
-- Projected sales for the next N days = day ave × N.
-- Sold in the last N days: exact for 60 days (channel columns), 90 days for all channels (`sales_90_days`), and TikTok from Euka. Anything else is 60-day units ÷ 60 × N, marked est.
+- Projected sales for the next N days = day ave × N (N is the Reorder view's planning period, 30 elsewhere).
+- Sold: only exact counts are shown. 60 days per channel (`<channel>_60_days`), the 90-day all-channel total (`sales_90_days`, for the reorder math), and TikTok for 7, 14 and 30 days from Euka. Shorter periods aren't estimated.
+- Items sold per day = 60-day units ÷ 60.
 - Short in N days = max(0, day ave × N − live inv − on order).
 
 ### Actions tab
@@ -414,7 +423,7 @@ Other routes:
 | Path | Who | What |
 |---|---|---|
 | `GET /login`, `POST /login` (`token`, `next`), `GET /logout` | anyone | Admin sign-in |
-| `/`, `/index.html`, `/catalog-admin.html`, `/js/*` | admin | Dashboard pages |
+| `/`, `/index.html`, `/catalog-admin.html`, `/js/*`, `/css/*` | admin | Dashboard pages |
 | `/catalog`, `/catalog2` | password | Catalog page or its sign-in |
 | `POST /catalog/login` (`password`), `GET /catalog/logout` | anyone | Catalog sign-in (same under `/catalog2`) |
 | `GET /catalog/data` | catalog session | Listed products with only catalog fields and stock status |
@@ -483,9 +492,9 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | Key | Where | What |
 |---|---|---|
 | `asi-dashboard` / `products` | IndexedDB | Last good products list, shown if the API is down |
-| `asi-v4-state` | localStorage | Current tab, period, platform, grouping, filters |
+| `asi-v4-state` | localStorage | Current view, planning period, platform, grouping, filters |
 | `asi-v4-settings` | localStorage | The sheet's numbers (see Settings) |
-| `asi-v4-hidden` | localStorage | Hidden Sheet view columns |
+| `asi-v4-hidden` | localStorage | Hidden columns in Sheet view and Items sold |
 | `asi-editor` | localStorage | Your name for the Excel edit history |
 | `asi-admin-token` | localStorage | Only if you're ever asked for the token on a 401 (header-auth fallback) |
 | catalog cart | localStorage on the catalog page | A customer's cart, for 6 hours |
