@@ -195,8 +195,8 @@
 const ADDRESS = "47-25 27th St Suite 1, Long Island City, NY 11101", PHONE = "(929) 257-3502";
 const LOGOS = { lattafa: "/media/brand-lattafa.jpg", arabiyat: "/media/brand-arabiyat.jpg", main: "/media/logo-fwusa.jpg", bharara: "/media/brand-bharara.png", armaf: "/media/brand-armaf.jpg" };
 const $ = id => document.getElementById(id);
-// Catalog 1 lives at /catalog and Catalog 2 at /catalog2; the same page serves both.
-const BASE = location.pathname.startsWith("/catalog2") ? "/catalog2" : "/catalog";
+// Catalog 1 lives at /catalog and Catalog N at /catalogN; the same page serves them all.
+const BASE = (location.pathname.match(/^\/catalog\d*/) || ["/catalog"])[0];
 $("signout").href = BASE + "/logout";
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const money = n => n == null ? "Contact Sales" : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

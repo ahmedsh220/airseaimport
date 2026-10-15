@@ -43,7 +43,7 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 ├── server.js                 entry point: .env loader, products API proxy and cache, routing, static files
 ├── lib/
 │   ├── auth.js               admin sign-in gate for everything except /catalog*, /healthz, /media/, /css/
-│   ├── catalog.js            customer catalogs (/catalog, /catalog2) and their settings API
+│   ├── catalog.js            customer catalogs (/catalog, /catalog2, …), adding and removing them, their settings API
 │   ├── competitors.js        Euka competitor search, matching, scheduling, overrides
 │   └── excel.js              read and write the pricing workbook through Microsoft Graph
 ├── public/
@@ -70,8 +70,8 @@ Every request goes through `auth.gate` first. Then each module is asked in turn 
 request
   └─ auth.gate (lib/auth.js)          sign-in page, redirect or 401 unless signed in (catalogs, /healthz, /media/, /css/ pass through)
       ├─ /api/products                 server.js: cached products API
-      ├─ /catalog*, /catalog2*         catalog.handle: its own password, page, data, pictures
-      ├─ /api/catalog/settings         catalog.handleAdmin
+      ├─ /catalog, /catalogN           catalog.handle: its own password, page, data, pictures
+      ├─ /api/catalog/*                catalog.handleAdmin: list, add, remove, settings
       ├─ /api/competitors*             competitors.handle
       ├─ /api/excel*                   excel.handle
       ├─ /healthz
@@ -91,7 +91,7 @@ request
 |---|---|---|
 | Admin in a browser | `ADMIN_TOKEN` on `/login` starts a signed cookie session (`asi_session`, HttpOnly, SameSite=Lax, Secure on https) for `SESSION_HOURS` (6) | Dashboard pages and all of `/api/*` |
 | Scripts | `x-admin-token: <ADMIN_TOKEN>` header | `/api/*` |
-| Catalog customers | The catalog's password (`CATALOG_PASSWORD` / `CATALOG2_PASSWORD`, or one set in Catalog management) | Only their catalog's `/catalog*` or `/catalog2*` paths |
+| Catalog customers | The catalog's password (`CATALOG_PASSWORD`, `CATALOG<N>_PASSWORD`, or one set in Catalog management) | Only their own catalog's paths |
 | Anyone | Nothing | `/healthz`, `/media/`, `/css/`, `/favicon.ico`, the sign-in pages |
 
 How it works (`lib/auth.js`):
@@ -165,7 +165,7 @@ On a phone the menu button opens the side navigation, and the filters and search
 **Side navigation:** one place for every page.
 
 - **Reports:** Overview, Items sold, Reorder, Profit & Loss, Product master, Vendors, TikTok competitors, Insights. Each is a view of the same page at `/#<view>` (`#overview`, `#sold`, `#reorder`, `#pl`, `#master`, `#vendors`, `#competitors`, `#insights`), so a view can be bookmarked. Old links (`#sheet`, `#actions`) still open the renamed views.
-- **Catalog:** Catalog management (`/catalog-admin.html`), and Catalog 1 (`/catalog`) and Catalog 2 (`/catalog2`), which open the customer pages in a new tab.
+- **Catalog:** Catalog management (`/catalog-admin.html`), and a link to each customer catalog (`/catalog`, `/catalog2`, …), which opens it in a new tab.
 - At the bottom: our brand logos, how many products are loaded and when the products API last updated.
 
 **Page header:** the view's title and **Export CSV** (the main table of the current view, with the filters applied). On a phone the intro text under it shows two lines until tapped, and the tiles sit two to a row.
@@ -377,7 +377,7 @@ Each product's detail view has an **Excel sheet** section showing that SKU's row
 
 ## Customer catalogs
 
-There are two customer catalogs, each at its own link with its own password: **Catalog 1** at `/catalog` (with prices by default) and **Catalog 2** at `/catalog2` (no prices by default). Give a customer whichever link fits. Both share the page below; everything in this section applies to each, with its own settings.
+There are three customer catalogs to start with, each at its own link with its own password: **Catalog 1** at `/catalog`, **Catalog 2** at `/catalog2` (no prices by default) and **Catalog 3** at `/catalog3`. **+ Add catalog** on Catalog management adds another at the next free number (`/catalog4`, …, up to 20), and **Remove catalog** deletes one with its settings, prices and password (at least one stays). A catalog can be given a name that only you see. Give a customer whichever link fits. They all share the page below; everything in this section applies to each, with its own settings.
 
 `/catalog` is the wholesale catalog for customers (`lib/catalog.js`, `catalog/index.html`), laid out like `american_seair_imports_wholesale_2025.xlsx`: brand logos, address and phone, then SKU, UPC, name, category, piece price and case price with a picture of each product, grouped under red category headings (Perfumes, Air Freshner, Deodorant, Car Perfume, Incense, Sunglasses, then Diffusers, Cosmetics, Health & Beauty, Electronics). Customers can search, filter by category, and download what they see as a PDF or an Excel file with the pictures in it. The page borrows the shared design system's tokens and components (buttons, inputs, lozenges) but keeps its own layout, always in the light theme.
 
@@ -389,7 +389,7 @@ There are two customer catalogs, each at its own link with its own password: **C
 - Customers sign in with `CATALOG_PASSWORD` (not the admin token). Sessions work like the dashboard's: 6 hours, tied to the browser, 10 wrong tries per 15 minutes per IP. Everyone, admins included, needs the catalog password: a dashboard sign-in doesn't open the catalog, and a catalog sign-in never opens the dashboard or `/api/*`.
 - Only the catalog fields leave the server (`/catalog/data`); costs, vendors, stock and sales stay private.
 - Clicking a product's picture opens a bigger view, with arrows to step through the products shown.
-- The **Catalog management** page (`public/catalog-admin.html` + `public/js/catalog-admin.js`, admin sign-in) controls it: turn the catalog on or off, show or hide piece and case prices, set the pricing rules (piece and case markup, and what prices round up to), include every API product except the ones you untick or only the ones you tick, and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set on that page (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG2_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
+- The **Catalog management** page (`public/catalog-admin.html` + `public/js/catalog-admin.js`, admin sign-in) controls it: turn the catalog on or off, show or hide piece and case prices, set the pricing rules (piece and case markup, and what prices round up to), include every API product except the ones you untick or only the ones you tick, and set your own piece price for any SKU. Each catalog has its own settings and its own password, which can be set on that page (stored hashed; it overrides `CATALOG_PASSWORD` / `CATALOG<N>_PASSWORD` on Render, and changing it signs that catalog's customers out). Settings are saved to `catalog-settings.json` in `COMPETITOR_DATA_DIR` (or `CATALOG_DATA_DIR`), so keep that on the Render disk. Open catalogs pick up changes within a minute, and hidden prices are never sent to customers. API: `GET`/`POST /api/catalog/settings` (admin sign-in).
 
 ## API reference
 
@@ -408,8 +408,11 @@ All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON
 | `GET /api/excel/row?sku=` | `{ sku, row, sheet, cells: [{ col, header, label, value, text, editable, reason, formula? }] }`. 404 if not on the sheet, 409 if on two rows. |
 | `POST /api/excel/edit` | `{ sku, editor, changes: [{ col, header, expected, value }] }` (up to 200). Returns `results` per cell with `ok` or `error`. |
 | `GET /api/excel/log` (`?limit=`, max 500) | Latest edits, newest first. |
+| `GET /api/catalog/list` | `{ catalogs: [{ id, name, url, enabled }] }`, for the side navigation. |
+| `POST /api/catalog/add` | Adds a catalog at the next free number; returns its `settings`. |
+| `POST /api/catalog/remove` | `{ catalog }`. Deletes it and its settings (at least one stays). |
 | `GET /api/catalog/settings` | Both catalogs' settings (no password hashes), whether settings persist, and every product with its catalog fields. |
-| `POST /api/catalog/settings` | `{ catalog: "1" \| "2", enabled, showPrices, showCasePrices, pieceMarkupPct, caseMarkupPct, roundTo, mode: "all" \| "selected", hidden[], added[], prices{sku: price}, newPassword?, clearPassword?, editor }`. |
+| `POST /api/catalog/settings` | `{ catalog: "<id>", name, enabled, showPrices, showCasePrices, pieceMarkupPct, caseMarkupPct, roundTo, mode: "all" \| "selected", hidden[], added[], prices{sku: price}, newPassword?, clearPassword?, editor }`. |
 
 Admin `POST`s to competitors and Excel also accept `?token=<ADMIN_TOKEN>`.
 
@@ -434,7 +437,7 @@ Everything is written to the data directory: `COMPETITOR_DATA_DIR`, which defaul
 |---|---|---|
 | `competitors.json` | Competitor runs | Per-SKU matches and candidates, run times, quota pause, Market Intelligence state |
 | `competitor-overrides.json` | Pin and Not a match | `{ sku: { ignore: [ids], pin: [ids] } }` |
-| `catalog-settings.json` | Catalog management | Per-catalog settings, including hashed passwords |
+| `catalog-settings.json` | Catalog management | Which catalogs exist (`_ids`) and each one's settings, including hashed passwords |
 | `excel-edits.jsonl` | Excel saves | One line per cell changed |
 
 The products list is never written to disk on the server.
@@ -449,7 +452,7 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 | `SESSION_HOURS` | 6 | How long a dashboard sign-in lasts on one browser. |
 | `PORT` | 3000 | Set by Render. |
 | `PRODUCTS_API` | hub `/api/open/products` | The products feed. |
-| `CATALOG_PASSWORD` / `CATALOG2_PASSWORD` | (none) | Catalog passwords. A password set in Catalog management overrides these. |
+| `CATALOG_PASSWORD`, `CATALOG<N>_PASSWORD` | (none) | Catalog passwords (`CATALOG2_PASSWORD`, `CATALOG3_PASSWORD`, …). A password set in Catalog management overrides these. |
 | `CATALOG_SESSION_HOURS` | `SESSION_HOURS` | How long a catalog sign-in lasts. |
 | `CATALOG_NEW_DAYS` | 30 | Products added within this many days get the NEW tag. |
 | `CATALOG_DATA_DIR` | `COMPETITOR_DATA_DIR` | Where catalog settings are saved. |

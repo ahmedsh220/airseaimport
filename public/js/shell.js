@@ -64,8 +64,7 @@
     nav.innerHTML = `<h2>Reports</h2>${VIEWS.map(([k, label]) => `<a href="/#${k}" data-view="${k}">${ICON[k]}<span>${label}</span></a>`).join("")}
       <h2>Catalog</h2>
       <a href="/catalog-admin.html" data-view="catalog-admin">${ICON.catalogAdmin}<span>Catalog management</span></a>
-      <a href="/catalog" target="_blank" rel="noopener">${ICON.catalog}<span>Catalog 1</span>${ICON.ext.replace("<svg", '<svg class="ext"')}</a>
-      <a href="/catalog2" target="_blank" rel="noopener">${ICON.catalog}<span>Catalog 2</span>${ICON.ext.replace("<svg", '<svg class="ext"')}</a>
+      <div id="navCatalogs"></div>
       <div class="brands" aria-label="Our brands">${BRANDS.map(([k, n, ext]) => `<span class="plate" title="${n}"><img src="/media/brand-${k}.${ext || "jpg"}" alt="${n}" loading="lazy"></span>`).join("")}</div>
       <div class="foot" id="navFoot"></div>`;
     const scrim = document.createElement("div"); scrim.className = "navscrim";
@@ -85,6 +84,18 @@
       document.dispatchEvent(new CustomEvent("themechange"));   // charts redraw in the new colors
     });
     if (!reports) setActive(page);
+    loadCatalogs();
+  }
+
+  // The customer catalogs, one link each (they open in a new tab). The owner adds and removes catalogs on
+  // Catalog management, which calls this again so the list stays current.
+  async function loadCatalogs() {
+    const el = document.getElementById("navCatalogs"); if (!el) return;
+    try {
+      const r = await fetch("/api/catalog/list", { cache: "no-store" }); if (!r.ok) return;
+      const { catalogs } = await r.json();
+      el.innerHTML = catalogs.map(c => `<a href="${ui.esc(c.url)}" target="_blank" rel="noopener" title="${ui.esc(c.url)}${c.enabled ? "" : " (turned off)"}">${ICON.catalog}<span>${ui.esc(c.name)}</span>${ICON.ext.replace("<svg", '<svg class="ext"')}</a>`).join("");
+    } catch {}
   }
 
   // Highlight the side nav item of the current view.
@@ -94,5 +105,5 @@
       if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     });
   }
-  window.shell = { mount, setActive, VIEWS: Object.fromEntries(VIEWS), OLD_VIEWS, ICON };
+  window.shell = { mount, setActive, loadCatalogs, VIEWS: Object.fromEntries(VIEWS), OLD_VIEWS, ICON };
 })();
