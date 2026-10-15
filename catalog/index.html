@@ -98,6 +98,16 @@
   .x { position: absolute; top: 8px; right: 8px; border-radius: 999px; width: 36px; height: 36px; padding: 0; font-size: 20px; line-height: 1; }
   #zoom .nav { position: absolute; top: 50%; transform: translateY(-50%); border-radius: 999px; width: 40px; height: 40px; padding: 0; font-size: 20px; background: rgba(255,255,255,.9); }
   #zoom .prev { left: 8px; } #zoom .next { right: 8px; }
+  /* Export window */
+  dialog#export { width: min(520px, calc(100vw - 24px)); }
+  #export .in { padding: 18px 18px 16px; position: relative; margin: 0; }
+  #export h2 { margin: 0 0 2px; font-size: 20px; } #export h4 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); }
+  .xopts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .xopt { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+  .xopt:has(input:checked) { border-color: var(--ds-border-selected); background: var(--ds-bg-selected); }
+  .xopt input { margin-top: 3px; } .xopt b { display: block; } .xopt small { display: block; color: var(--muted); font-size: 12px; line-height: 1.35; }
+  .xfoot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  @media (max-width: 480px) { .xopts { grid-template-columns: 1fr; } }
   dialog#cart { width: min(820px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; }
   #cart .in { padding: 18px 18px 16px; position: relative; }
   #cart h2 { margin: 0 0 4px; font-size: 20px; }
@@ -119,9 +129,10 @@
     .bar { gap: 6px; padding: 6px 10px; } .bar input[type=search] { flex-basis: 100%; max-width: none; } .bar .sp { display: none; }
     .bar button { padding: 5px 8px; font-size: 13px; } .filters { padding: 0 10px 8px; }
     /* Phone toolbar: search, then Filters, layout, Cart, PDF and Excel on one row, then the count and Sign out in small text. */
-    .bar #fBtn { order: 1; } .bar .seg { order: 2; } .bar #cartBtn { order: 3; margin-left: auto; } .bar #pdf { order: 4; } .bar #xlsx { order: 5; }
+    .bar #fBtn { order: 1; } .bar .seg { order: 2; } .bar #cartBtn { order: 3; margin-left: auto; } .bar #exportBtn { order: 4; }
     .bar #status { order: 6; flex: 1 0 60%; font-size: 12px; } .bar #signout { order: 7; min-height: 0; padding: 0; font-size: 12px; text-decoration: underline; background: none; }
     .stockpick .long { display: none; }
+    header.compact .stockpick { display: none; }   /* the stock choice scrolls away with the page instead of staying pinned */
     /* Filters panel: a tidy two-column form instead of a wrapped row. */
     .filters.open { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .filters select { width: 100%; min-width: 0; }
@@ -171,8 +182,7 @@
     <span id="status"></span>
     <span class="sp"></span>
     <button id="cartBtn" type="button">Cart<span class="badge" id="cartN" hidden></span></button>
-    <button class="primary" id="pdf">PDF</button>
-    <button class="primary" id="xlsx">Excel</button>
+    <button class="primary" id="exportBtn" type="button">Export</button>
     <a class="btn subtle" id="signout" href="/catalog/logout">Sign out</a>
   </div>
   <div class="stockpick">
@@ -204,6 +214,27 @@
   <div class="zimg"><img id="zImg" alt=""><button class="x" id="zClose" aria-label="Close">×</button>
     <button class="nav prev" id="zPrev" aria-label="Previous product">‹</button><button class="nav next" id="zNext" aria-label="Next product">›</button></div>
   <div class="zinfo"><div><b id="zName"></b><div class="meta" id="zMeta"></div></div><button class="add" id="zAdd" type="button">Add to cart</button></div>
+</dialog>
+
+<!-- Export: pick PDF or Excel and whether to download the whole catalog or only what's on screen. Both files
+     carry the company logo, brand logos, address and phone at the top, like the printed price list. -->
+<dialog id="export" aria-label="Export the catalog">
+  <form method="dialog" class="in">
+    <button class="x" value="cancel" aria-label="Close">×</button>
+    <h2>Export the catalog</h2>
+    <p class="meta">With our logo, brands, address and phone at the top, like the printed price list.</p>
+    <h4>Format</h4>
+    <div class="xopts">
+      <label class="xopt"><input type="radio" name="xfmt" value="pdf" checked><span><b>PDF</b><small>To print or send. Letter, landscape.</small></span></label>
+      <label class="xopt"><input type="radio" name="xfmt" value="xlsx"><span><b>Excel</b><small>A spreadsheet in the price list's layout.</small></span></label>
+    </div>
+    <h4>Products</h4>
+    <div class="xopts">
+      <label class="xopt"><input type="radio" name="xscope" value="all" checked><span><b>Whole catalog</b><small id="xAll"></small></span></label>
+      <label class="xopt"><input type="radio" name="xscope" value="shown"><span><b>Only what I'm viewing</b><small id="xShown"></small></span></label>
+    </div>
+    <div class="xfoot"><button value="cancel" class="subtle">Cancel</button><button value="go" class="primary" id="xGo">Download</button></div>
+  </form>
 </dialog>
 
 <dialog id="cart" aria-label="Your order">
@@ -270,8 +301,8 @@ function activeFilters() { return ["sec", "cat", "pMin", "pMax", "sort"].filter(
 const priceCols = () => [data.showPrices !== false && ["PIECE PRICE", i => i.piece], data.showCasePrices !== false && ["CASE PRICE", i => i.caseUnit]].filter(Boolean);
 const nCols = () => 7 + priceCols().length;
 // Items grouped under their section headings, in catalog order (one group when the customer sorts).
-function grouped(items) {
-  if (sorted()) return [["RESULTS", items]];
+function grouped(items, bySection = !sorted()) {
+  if (!bySection) return [["RESULTS", items]];
   const out = [];
   for (const s of data.sections) { const g = items.filter(i => i.section === s); if (g.length) out.push([s, g]); }
   return out;
@@ -321,7 +352,7 @@ async function load() {
 }
 load().catch(e => { $("rows").innerHTML = `<tr><td class="empty">${esc(e.message)}</td></tr>`; });
 // Pick up the owner's changes and new prices without a reload (skipped while an export is running).
-setInterval(() => { if (!$("pdf").disabled && document.visibilityState === "visible") load().catch(() => {}); }, 60e3);
+setInterval(() => { if (!$("exportBtn").disabled && document.visibilityState === "visible") load().catch(() => {}); }, 60e3);
 let t; $("q").addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 150); });
 ["sec", "cat", "onlyNew", "onlyPic", "onlyCart", "sort"].forEach(id => $(id).addEventListener("change", render));
 ["pMin", "pMax"].forEach(id => $(id).addEventListener("input", () => { clearTimeout(t); t = setTimeout(render, 250); }));
@@ -491,14 +522,27 @@ async function logos() {
 }
 const fileDate = () => new Date().toISOString().slice(0, 10);
 function save(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-async function run(btn, label, fn) {
-  const btns = [$("pdf"), $("xlsx")]; btns.forEach(b => b.disabled = true);
+async function run(label, fn) {
+  $("exportBtn").disabled = true;
   try { await fn(); } catch (e) { alert(`${label} failed: ${e.message}`); }
-  finally { btns.forEach(b => b.disabled = false); render(); }
+  finally { $("exportBtn").disabled = false; render(); }
 }
 
-$("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
-  const items = shown();
+// One Export button opens the export window; Download builds the chosen file.
+// "Whole catalog" is every product this catalog lists, in catalog order, ignoring the search, filters and stock choice.
+$("exportBtn").onclick = () => {
+  $("xAll").textContent = `All ${data.items.length.toLocaleString()} products, by category.`;
+  $("xShown").textContent = `The ${shown().length.toLocaleString()} products on screen now, with your search and filters.`;
+  $("export").showModal();
+};
+$("export").addEventListener("close", () => {
+  if ($("export").returnValue !== "go") return;
+  const f = new FormData($("export").querySelector("form")), whole = f.get("xscope") === "all";
+  const items = whole ? data.items : shown(), bySection = whole || !sorted();
+  if (f.get("xfmt") === "xlsx") run("Excel", () => buildExcel(items, bySection)); else run("PDF", () => buildPdf(items, bySection));
+});
+
+async function buildExcel(items, bySection) {
   await loadScript("https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js");
   const logo = await logos();
   $("status").textContent = "Excel: building the file…";
@@ -526,7 +570,7 @@ $("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
   ["", "SKU", "UPC", "NAME", "CATEGORY", ...pc.map(([h]) => h)].forEach((h, k) => Object.assign(ws.getRow(6).getCell(k + 1),
     { value: h, font: { ...font, bold: true, color: { argb: "FF156082" } }, alignment: { horizontal: k >= 5 ? "center" : "left", vertical: "middle" } }));
   let r = 7;
-  for (const [s, g] of grouped(items)) {
+  for (const [s, g] of grouped(items, bySection)) {
     const row = ws.getRow(r++); row.height = 30;
     for (let c = 1; c <= N; c++) row.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
     Object.assign(row.getCell(2), { value: s, font: { ...font, bold: true, color: { argb: "FFFFFFFF" } }, alignment: { vertical: "middle" } });
@@ -542,10 +586,9 @@ $("xlsx").onclick = () => run($("xlsx"), "Excel", async () => {
     }
   }
   save(new Blob([await wb.xlsx.writeBuffer()], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `fragrance-wholesaler-usa-catalog-${fileDate()}.xlsx`);
-});
+}
 
-$("pdf").onclick = () => run($("pdf"), "PDF", async () => {
-  const items = shown();
+async function buildPdf(items, bySection) {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js");
   const logo = await logos();
@@ -560,7 +603,7 @@ $("pdf").onclick = () => run($("pdf"), "PDF", async () => {
   doc.setFontSize(8); doc.setTextColor(93, 102, 117);
   if (priceCols().length) doc.text(`Prices as of ${new Date(data.fetchedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}. Prices are subject to change.`, W / 2, 148, { align: "center" });
   const pc = priceCols(), body = [];
-  for (const [s, g] of grouped(items)) {
+  for (const [s, g] of grouped(items, bySection)) {
     body.push([{ content: s, colSpan: 5 + pc.length, styles: { fillColor: [255, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 10, minCellHeight: 0 } }]);
     for (const i of g) body.push([i.isNew ? "NEW" : "", i.sku, i.upc, i.name, i.category, ...pc.map(([, f]) => money(f(i)))]);
   }
@@ -576,7 +619,7 @@ $("pdf").onclick = () => run($("pdf"), "PDF", async () => {
   const n = doc.getNumberOfPages();
   for (let k = 1; k <= n; k++) { doc.setPage(k); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Fragrance Wholesaler USA · ${PHONE} · Page ${k} of ${n}`, W / 2, H - 14, { align: "center" }); }
   doc.save(`fragrance-wholesaler-usa-catalog-${fileDate()}.pdf`);
-});
+}
 </script>
 </body>
 </html>
