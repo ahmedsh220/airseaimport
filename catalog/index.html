@@ -33,6 +33,15 @@
   .filters.open { display: flex; }
   .filters label { display: inline-flex; gap: 6px; align-items: center; }
   .filters input[type=number] { width: 86px; }
+  /* The New / photo / cart filters are toggle chips: the hidden checkbox still does the work. */
+  .filters .chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+  .filters .chk { position: relative; padding: 4px 12px; border: 1px solid var(--ds-border); border-radius: 999px; cursor: pointer; font-weight: 500; background: #fff; }
+  .filters .chk input { position: absolute; opacity: 0; pointer-events: none; }
+  .filters .chk:has(input:checked) { background: var(--ds-bg-selected); border-color: var(--ds-border-selected); color: var(--ds-text-selected); }
+  .filters .chk:has(input:checked)::before { content: "✓"; font-weight: 700; }
+  .filters .chk:has(input:focus-visible) { outline: 2px solid var(--ds-border-focused); outline-offset: 1px; }
+  /* Controls use the catalog's own narrow font, like the rest of the page. */
+  button, input, select, .btn { font-family: inherit; }
   .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--ds-bg-brand-bold); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
   .meta { color: var(--muted); font-size: 12px; }
   #status { color: var(--muted); font-size: 13px; }
@@ -106,6 +115,30 @@
     .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .tile .nm { font-size: 13px; } .tile .pr b { font-size: 15px; }
     .bar { gap: 6px; padding: 6px 10px; } .bar input[type=search] { flex-basis: 100%; max-width: none; } .bar .sp { display: none; }
     .bar button { padding: 5px 8px; font-size: 13px; } .filters { padding: 0 10px 8px; }
+    /* Phone toolbar: search, then Filters, layout, Cart, PDF and Excel on one row, then the count and Sign out in small text. */
+    .bar #fBtn { order: 1; } .bar .seg { order: 2; } .bar #cartBtn { order: 3; margin-left: auto; } .bar #pdf { order: 4; } .bar #xlsx { order: 5; }
+    .bar #status { order: 6; flex: 1 0 60%; font-size: 12px; } .bar #signout { order: 7; min-height: 0; padding: 0; font-size: 12px; text-decoration: underline; background: none; }
+    .stockpick .long { display: none; }
+    /* Filters panel: a tidy two-column form instead of a wrapped row. */
+    .filters.open { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .filters select { width: 100%; min-width: 0; }
+    .filters .pf { grid-column: 1 / -1; display: flex; gap: 8px; } .filters .pf label { flex: 1; min-width: 0; } .filters .pf input { flex: 1; width: 100%; min-width: 0; }
+    .filters .chips, .filters #sort, .filters #fClear { grid-column: 1 / -1; }
+    /* List view on a phone: each product is a compact card row (picture | name, SKU | prices and Add), so nothing scrolls sideways. */
+    .wrap { overflow-x: visible; }
+    #list, #list tbody { display: block; width: 100%; } #list thead { display: none; }
+    #list tr.sec { display: block; } #list tr.sec td { display: block; font-size: 14px; padding: 7px 10px; border-radius: 6px; }
+    #list tbody tr:not(.sec) { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) auto; column-gap: 10px; row-gap: 2px; align-items: center; padding: 10px 0; border-bottom: 1px solid #eceef1; }
+    #list td { border: 0; padding: 0; font-size: 13px; }
+    #list td.pic { grid-column: 1; grid-row: 1 / 4; align-self: start; } #list td.pic img, #list td.pic .none { width: 64px; height: 64px; object-fit: contain; }
+    #list td.new { grid-column: 1; grid-row: 1; align-self: start; z-index: 1; } #list td.new:empty { display: none; }
+    #list td.nm { grid-column: 2 / -1; grid-row: 1; font-weight: 600; line-height: 1.25; }
+    #list td.sku { grid-column: 2 / -1; grid-row: 2; color: var(--muted); font-size: 12px; }
+    #list td.upc, #list td.cat { display: none; }
+    #list td.price { grid-row: 3; text-align: left; white-space: normal; font-weight: 700; font-size: 14px; }
+    #list td.price::before { content: attr(data-h); display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
+    #list td.price small { display: none; }
+    #list td.add { grid-column: 4; grid-row: 3; }
     header.compact #status, header.compact #signout { display: none; } header.compact .brand { gap: 10px; } header.compact .brand .main { height: 32px; } header.compact .logos img { height: 24px; } header.compact .logos { gap: 8px; }
   }
 </style>
@@ -140,16 +173,16 @@
     <a class="btn subtle" id="signout" href="/catalog/logout">Sign out</a>
   </div>
   <div class="stockpick">
-    <span class="seg" role="group" aria-label="Which products to show"><button id="sIn" type="button">In stock now <span id="nIn"></span></button><button id="sAll" type="button">All products we carry <span id="nAll"></span></button></span>
+    <span class="seg" role="group" aria-label="Which products to show"><button id="sIn" type="button">In stock<span class="long">now</span> <span id="nIn"></span></button><button id="sAll" type="button">All products<span class="long">we carry</span> <span id="nAll"></span></button></span>
     <span class="meta"><span class="st in">In stock</span> on our shelf now, ships right away. <span class="st qoh">Available to order</span> held in our inventory, ask us for timing. <span class="st ask">Ask us</span> we carry it, check availability.</span>
   </div>
   <div class="filters" id="filters">
     <select id="sec"><option value="">All categories</option></select>
     <select id="cat"><option value="">All types</option></select>
     <span class="pf"><label>Price $<input type="number" id="pMin" min="0" step="1" placeholder="min"></label> <label>to <input type="number" id="pMax" min="0" step="1" placeholder="max"></label></span>
-    <label><input type="checkbox" id="onlyNew"> New only</label>
-    <label><input type="checkbox" id="onlyPic"> With photo</label>
-    <label><input type="checkbox" id="onlyCart"> In my cart</label>
+    <span class="chips"><label class="chk"><input type="checkbox" id="onlyNew"> New only</label>
+    <label class="chk"><input type="checkbox" id="onlyPic"> With photo</label>
+    <label class="chk"><input type="checkbox" id="onlyCart"> In my cart</label></span>
     <select id="sort"><option value="">Catalog order</option><option value="name">Name A–Z</option><option value="pa" class="pf">Price low to high</option><option value="pd" class="pf">Price high to low</option><option value="new">Newest first</option></select>
     <button type="button" id="fClear">Clear filters</button>
   </div>
@@ -266,7 +299,7 @@ function render() {
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${pic(i)}</td>
     <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}${stockTag(i)}</td><td class="cat">${esc(i.category)}</td>
-    ${pc.map(([h, f]) => `<td class="price">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}
+    ${pc.map(([h, f]) => `<td class="price" data-h="${h === "CASE PRICE" ? "Case, per piece" : "Piece"}">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}
     <td class="add">${addBtn(i)}</td></tr>`).join("")).join("");
 }
 
