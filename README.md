@@ -20,6 +20,7 @@ Contents
 13. [Settings (environment variables)](#settings-environment-variables)
 14. [What the browser stores](#what-the-browser-stores)
 15. [Troubleshooting](#troubleshooting)
+16. [Making changes](#making-changes)
 
 ## Run it
 
@@ -75,7 +76,7 @@ Plain Node `http` server, no framework, no build step. Pages are static HTML plu
 
 ### Request flow
 
-Every request first gets the security headers, and a `POST` from another site is refused (403). Then it goes through `auth.gate`, and each module is asked in turn whether the path is theirs; the first one that answers wins. An error anywhere answers 500 and is logged; it never stops the server.
+Every request first gets the security headers and is counted against its IP's rate limit (429 past it). A `POST` from another site is refused (403). Then it goes through `auth.gate`, and each module is asked in turn whether the path is theirs; the first one that answers wins. An error anywhere answers 500 and is logged; it never stops the server.
 
 ```
 request
@@ -124,6 +125,12 @@ How it works (`lib/auth.js`):
 - Any error inside a request answers 500 and is printed to the server log; one bad request can't take the server down.
 - Catalog sessions use the same design with a separate cookie per catalog (scoped to its path) and a key tied to that catalog's password. A catalog session never opens the dashboard, and a dashboard session never opens a catalog.
 
+**Known limits:**
+
+- The hub's own feed, `https://hub.fragrancewholesalerusa.com/api/open/products`, is open to anyone who knows the link. It lives in the hub, not in this repo, so locking it down has to happen there. This dashboard only reads it server-side and never sends it to a browser that isn't signed in.
+- Sign-in and rate-limit counters are kept in memory, so they reset on a restart or deploy, and each Render instance counts on its own. Run one instance.
+- The content security policy allows inline scripts, because every page has a few. It still blocks scripts from any other site and blocks pages from sending data anywhere but this server.
+
 What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set ones are stored as scrypt hashes), `EUKA_API_KEY`, `MS_CLIENT_SECRET`. Customers only ever receive catalog fields, never cost, vendor, stock counts or sales.
 
 ## Where the data comes from
@@ -143,7 +150,7 @@ The upstream API is slow and sometimes cuts responses off, so loading is defensi
 
 1. Call our `/api/products` (sign-in required; up to 2 tries, 60 seconds each). The browser never calls the hub itself. The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched. Data answers are sent `private, no-store`.
 2. Nothing is saved in the browser. If the server can't answer, the page says so.
-3. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again.
+3. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again. The server re-fetches at most every 30 seconds; a refresh asked for sooner gets the copy it just fetched.
 
 **On the server** (`products()` in `server.js`):
 
@@ -359,7 +366,17 @@ The **TikTok competitors** tab compares each SKU's TikTok price with up to 5 sam
   - Not available to the key (other 4xx): it's switched off for that run.
 - **Saving:** results are written every 10 SKUs. Results for SKUs no longer in the products API are dropped when a batch starts.
 
-**On the page:** hide a wrong match ("Not a match") or pin the right listing. Either one re-checks that SKU right away. Overrides are saved in `competitor-overrides.json`.
+**On the page** (the `competitorsHtml()` and `showCompetitors()` parts of `public/js/reports.js`):
+
+- **Status line:** which SKUs the next batch covers, how many SKUs have results, when the last batch finished and how many failed, and warnings for a used-up weekly quota, a bad Euka key, Market Intelligence being off, or results that will be lost on restart (no persistent disk).
+- **Search next 100:** starts the next batch. While it runs, the button is disabled and the page polls every 15 seconds, filling in results as each SKU is searched. Each click goes to the activity log as `COMPETITOR SEARCH`.
+- **Tiles:** SKUs with competitors, we're undercut, we're cheapest, average gap vs lowest, competitor below our floor, competitors on promotion, competitor units in 30 days. The undercut, cheapest and below-floor tiles filter the table.
+- **Compare to:** Sale price (what competitors charge now) or Regular price (their strike-through price when they're on promotion).
+- **Filters:** All, Undercut, We're cheapest, Comp below our floor, No match, No TikTok price.
+- **Table:** our price; lowest, median and highest competitor price; listings; on promo; gap vs lowest; competitor and our units in 30 days; our share; profit and PFT% at the lowest price; floor price; suggested price; when it was checked. The maths is in [TikTok competitor maths](#tiktok-competitor-maths).
+- **Clicking a product** opens its listings: each matched listing with price, strike-through, SKU price range, shipping, units, commission and our profit at that price. Near misses are listed under "Close but not matched", and hidden ones under "Hidden". From there:
+  - **Not a match** hides a listing for that SKU, and **Pin as match** (or pasting a TikTok link or product ID) pins one. Either re-checks the SKU right away. Overrides are saved in `competitor-overrides.json`.
+  - **Re-check now** searches just that SKU again. It doesn't move where the next batch starts.
 
 ## Editing the Excel sheet
 
@@ -440,7 +457,7 @@ Fields: time (UTC) | event | details | IP address | browser and device. Password
 
 ## API reference
 
-All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON.
+All `/api/*` routes need an admin session or `x-admin-token`. Responses are JSON. Every route is rate limited per IP (600 requests a minute, 60 a minute for `POST`), answering 429 with `retry-after: 60` past that. A wrong `x-admin-token` counts as a wrong sign-in, and after 10 in 15 minutes that IP gets 429 until the window ends. Bodies over the cap (100 KB, or 2 MB for catalog settings) are refused.
 
 | Method and path | What it does |
 |---|---|
@@ -571,3 +588,18 @@ Only view preferences, plus the sign-in cookie (HttpOnly). No product data, cost
 | Catalog settings, passwords or the activity log reset after a deploy | No persistent disk: add one and set `COMPETITOR_DATA_DIR` (see [Run it](#run-it)). |
 | "Cross-site request refused." (403) | A form or script on another site posted here. Use the dashboard's own pages. |
 | Lots of `SIGN IN FAILED` from one IP in the activity log | Someone is guessing. After 10 tries they're blocked for 15 minutes. Change `ADMIN_TOKEN` or the catalog password if you're worried. |
+| "Too many wrong tries" on a sign-in page | 10 wrong tries from this IP, or 200 from everyone together, in the last 15 minutes. Wait 15 minutes; a restart also clears it. |
+| "Too many requests. Wait a minute and try again." (429) | More than 600 requests (or 60 saves) a minute from one IP, usually a script in a loop. It clears after a minute. |
+| Competitors say "starting over from the top" | The last batch reached the end of the SKU list, so the next one starts at the first SKU again. |
+| A competitor batch stopped early | Euka's weekly quota ran out or the key was rejected. The next click starts from the first SKU it missed. |
+
+## Making changes
+
+- **No build and no dependencies.** Edit the files and restart `node server.js`. Pages and browser scripts are served with `no-cache`, so a reload picks up changes.
+- **Check before pushing:** `node --check` on every changed `.js` file (`for f in server.js lib/*.js public/js/*.js; do node --check "$f"; done`). There are no automated tests. Run it locally with a `.env` and click through the views you touched; leave `EUKA_API_KEY` and the `MS_*` variables empty unless you're working on those parts.
+- **Deploying:** merge to `main`. Render deploys every push to `main`.
+- **Where things go:** a new server feature is a module in `lib/` with a `handle(req, res, url)` that returns true when the path is its own, wired into `route()` in `server.js`. Read request bodies with `readJson` / `readForm` from `lib/http.js` and answer with `sendJson`, so the size caps apply. Anything a person changes goes to the activity log with `activity.log(EVENT, details, req)`, and new events belong in the [Activity log](#activity-log) table.
+- **Saving files:** write to the data directory (`COMPETITOR_DATA_DIR`) through a `.tmp` file and a rename, and give every new file a bound (see [Saved files](#saved-files)).
+- **Style:** plain Node and browser JavaScript, no framework. A comment above each function says why it exists. User-facing text is plain words.
+- **Keep this README in step:** a change to a page, an endpoint, a setting, a saved file or a formula updates its section here in the same commit, and a new setting also goes in `.env.example`.
+
