@@ -432,7 +432,7 @@ Fields: time (UTC) | event | details | IP address | browser and device. Password
 | `SERVER START` | Each boot or deploy, with where files are saved |
 
 - **Visits are grouped:** the same person (IP and browser) opening the same page again within 15 minutes is one line, not one per refresh.
-- **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. If it ever passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first.
+- **Retention:** entries older than 90 days (about 3 months, `ACTIVITY_LOG_DAYS`) are deleted when the server starts and every 6 hours after, so the file holds a rolling 3 months. The moment it passes 20 MB (`ACTIVITY_LOG_MAX_MB`), the oldest entries go first, so a flood of bad sign-ins can't fill the disk. Blocked sign-ins are logged once per IP and browser every 15 minutes.
 - **Reading it:** **Activity log** in the side navigation (`/activity.html`) shows the latest 500 entries (up to 2,000 with **Show more**), newest first, with search and an event filter. **Download log** saves the whole file.
 - **IP address** is the first address in `X-Forwarded-For` as Render passes it. Someone on a VPN or mobile network shows that network's address.
 - The file lives in `COMPETITOR_DATA_DIR`, so it survives deploys only on a Render persistent disk (see [Run it](#run-it)).
