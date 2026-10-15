@@ -206,7 +206,7 @@ On a phone the menu button opens the side navigation, and the filters and search
 | Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Platform mix, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Product master filtered to those products. |
 | Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), Platform mix (each platform's units, share, products selling and best seller), units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them. |
 | Reorder | Products at or under the trigger, grouped by supplier, cheapest vendor, top platform or tier (or not grouped), with cases, order quantity and order cost. Show: needs order, all selling, everything. The planning period sets the "Next N days" projections. The sheet's numbers can be changed here (see Settings below). |
-| Profit & Loss | Per platform: price rule, average profit per unit, 60-day weighted PFT%, 60-day units, revenue and profit, how many SKUs are under the minimum margin and how many lose money. Click a platform for its per-product P&L. Option: use live listing prices instead of the sheet's price formulas. |
+| Profit & Loss | Per platform: price rule, average profit per unit, 60-day weighted PFT%, 60-day units, revenue and profit, how many SKUs are under the minimum margin and how many lose money. Click a platform for its per-product P&L. A "Selling price used for profit" switch at the top picks the sheet's price formulas or live listing prices, explains what each means and counts how many live prices were found per platform. |
 | Product master | The workbook's main columns filled from the API, for every product. |
 | Vendors | Each supplier's price list: products quoted, how many they're cheapest on, latest price date. Click one to compare their prices with ours. |
 | TikTok competitors | See [TikTok competitors](#tiktok-competitors-euka). |
@@ -229,7 +229,7 @@ Clicking any product opens its **detail view**, which has:
 | Trigger (days of stock) | 28 | Reorder when days of stock is at or under this |
 | Min profit % | 18 | Margin warnings, competitor floor price |
 | Misc cost | $0.05 | Added to the total cost to ship |
-| Use live listing prices | off | P&L uses live listings instead of the sheet's price formulas |
+| Selling price used for profit (P&L) | Sheet formula | Live listing price uses each product's current listing price where there is one, the sheet's formula otherwise |
 
 ## Formulas
 
