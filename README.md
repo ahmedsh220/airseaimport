@@ -128,7 +128,7 @@ What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set on
 
 | Source | Code | Cache | Used for |
 |---|---|---|---|
-| Products API (`PRODUCTS_API`) | `server.js`, browser | Server: in memory, refreshed in the background when older than 5 minutes. Browser: last good copy in IndexedDB | Everything |
+| Products API (`PRODUCTS_API`) | `server.js` | In memory on the server, refreshed in the background when older than 5 minutes. The browser keeps no copy | Everything |
 | Euka Social and Market Intelligence | `lib/competitors.js` | `competitors.json` on disk, each SKU re-searched weekly by default | TikTok competitors tab |
 | Pricing workbook in OneDrive (Microsoft Graph) | `lib/excel.js` | Sheet layout 5 minutes; rows read live | Excel section of a product's detail view, write-back |
 | Hub storefront product list (`HUB_IMAGES_API`) | `lib/catalog.js` | In memory, 6 hours | Catalog pictures (last fallback) |
@@ -139,10 +139,9 @@ The upstream API is slow and sometimes cuts responses off, so loading is defensi
 
 **In the browser** (`load()` in `public/js/reports.js`):
 
-1. Ask the upstream API directly with a 45 second timeout. Browsers reach it over HTTP/2 and that usually works.
-2. If that fails, call our `/api/products` (up to 2 tries, 60 seconds each). The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched.
-3. A good response is saved to IndexedDB (`asi-dashboard` → `kv` → `products`). If both live routes fail, that saved copy is shown with a note saying how old it is.
-4. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again.
+1. Call our `/api/products` (sign-in required; up to 2 tries, 60 seconds each). The browser never calls the hub itself. The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched. Data answers are sent `private, no-store`.
+2. Nothing is saved in the browser. If the server can't answer, the page says so.
+3. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again.
 
 **On the server** (`products()` in `server.js`):
 
@@ -534,9 +533,10 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 
 ## What the browser stores
 
+Only view preferences, plus the sign-in cookie (HttpOnly). No product data, costs or tokens. Older leftovers (`asi-admin-token`, `asi-minmargin`, `asi-platforms-v2` and the `asi-dashboard` IndexedDB copy) are deleted on every page load by `shell.js`.
+
 | Key | Where | What |
 |---|---|---|
-| `asi-dashboard` / `products` | IndexedDB | Last good products list, shown if the API is down |
 | `asi-v4-state` | localStorage | Current view, planning period, platform, grouping, filters |
 | `asi-v4-settings` | localStorage | The sheet's numbers (see Settings) |
 | `asi-v4-hidden` | localStorage | Hidden columns in Product master and Items sold |
@@ -550,7 +550,7 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 |---|---|
 | "The dashboard is locked" (503) | `ADMIN_TOKEN` isn't set on Render. |
 | Everyone got signed out | `ADMIN_TOKEN` changed, the 6 hours ran out, or the browser's user agent changed (a browser update). |
-| "Couldn't load the products API" | The upstream API is down or cutting responses off. The page falls back to the server's copy, then the browser's saved copy. Try **Refresh data** in a minute. Server logs show each attempt (`Products fetch attempt …`). |
+| "Couldn't load the products API" | The upstream API is down or cutting responses off. The server falls back to its last good copy. Try **Refresh data** in a minute. Server logs show each attempt (`Products fetch attempt …`). |
 | Data says "last good copy from …" | The server is serving its stale copy while the upstream fails. |
 | Competitor results vanish after a deploy | `COMPETITOR_DATA_DIR` isn't on a persistent disk (the tab shows "Results reset when the server restarts"). |
 | "Euka's weekly limit is used up" | Searching resumes Monday 00:00 UTC on its own. |
