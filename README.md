@@ -155,7 +155,7 @@ Every signed-in page uses the shell in `public/js/shell.js`, styled by `public/c
 **Top bar**, left to right:
 
 - The Fragrance Wholesaler USA logo and name (links to Overview).
-- **Filters** (reports page only): **Platform** (each of the 14 channels with its logo and 60-day units), **Category** and **Tier** (`pricing_category`, each with its color dot: super, hero, green, new, dead, …). Choosing a platform focuses every view on it; clicking a bar in a platform chart does the same.
+- **Filters** (reports page only): **Platform** (each of the 14 channels with its logo and 60-day units), **Category** and **Tier** (`pricing_category`, each with its color dot: super, hero, green, new, dead, …). Choosing a platform focuses every view on it; clicking a platform in the Platform mix list does the same.
 - **Search** (SKU, name or UPC). Typing filters the current view and opens a dropdown of the 8 best matches (tier color, SKU, name, units on hand). Picking one opens that product's detail. While a search is on, the view starts with "Showing results for …" and a Clear search button.
 - **Reset** (shows while a filter or search is on) clears the filters and the search.
 - **Refresh**, the light/dark switch (Light, Dark or Match device, saved per browser) and **Sign out**.
@@ -178,8 +178,8 @@ On a phone the menu button opens the side navigation, and the filters and search
 
 | View | What it shows |
 |---|---|
-| Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Units by platform chart, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Product master filtered to those products. |
-| Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), units by platform chart, units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them. |
+| Overview | Tiles: projected sales for the next 30 days, reorder now (SKUs, cases, cost), runs out within 30 days, out of stock but still selling, stock value. Platform mix, running out first, and top sellers projected for 7 to 60 days. Clicking a tile opens Product master filtered to those products. |
+| Items sold | How many of each product sold in the last 60 days, exact from the API: tiles (units, products sold, top platform or the chosen platform's share, best seller), Platform mix (each platform's units, share, products selling and best seller), units by category (click one to filter), and a products table with one column per platform plus the 60-day total and per-day rate. Show sold products only or all of them. |
 | Reorder | Products at or under the trigger, grouped by supplier, cheapest vendor, top platform or tier (or not grouped), with cases, order quantity and order cost. Show: needs order, all selling, everything. The planning period sets the "Next N days" projections. The sheet's numbers can be changed here (see Settings below). |
 | Profit & Loss | Per platform: price rule, average profit per unit, 60-day weighted PFT%, 60-day units, revenue and profit, how many SKUs are under the minimum margin and how many lose money. Click a platform for its per-product P&L. Option: use live listing prices instead of the sheet's price formulas. |
 | Product master | The workbook's main columns filled from the API, for every product. |

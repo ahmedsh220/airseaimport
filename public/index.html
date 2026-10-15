@@ -50,6 +50,22 @@
   details.settings { font-size: 12px; } details.settings summary { cursor: pointer; color: var(--ds-link); display: inline; }
   details.settings .row { margin-top: 8px; } details.settings input[type=number] { width: 72px; }
   #status { padding: 64px 24px; text-align: center; color: var(--ds-text-subtlest); }
+  /* Platform mix list: logo and name, a bar scaled to the top platform, units and share, products selling, best seller. */
+  .pmix-head, .pmix-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(48px, 1.2fr) 104px 96px minmax(128px, 1.1fr); gap: 12px; align-items: center; }
+  .pmix-head { padding: 0 8px 6px; border-bottom: 1px solid var(--ds-border); color: var(--ds-text-subtlest); font: 600 12px/16px var(--ds-font); }
+  .pmix-row { width: 100%; min-height: 36px; padding: 4px 8px; background: none; border-radius: 4px; font-weight: 400; color: var(--ds-text); text-align: left; }
+  .pmix-row:hover { background: var(--ds-bg-subtle-hovered); }
+  .pmix-row.on { background: var(--ds-bg-selected); box-shadow: inset 2px 0 0 var(--ds-border-selected); }
+  .pm-name { display: flex; align-items: center; gap: 8px; font-weight: 500; min-width: 0; } .pm-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pm-bar { height: 10px; background: var(--ds-bg-neutral); border-radius: 0 4px 4px 0; overflow: hidden; }
+  .pm-bar i { display: block; height: 100%; background: var(--ds-chart-brand); border-radius: 0 4px 4px 0; }
+  .pm-num { text-align: right; font-variant-numeric: tabular-nums; } .pm-num b { font-weight: 600; } .pm-num small, .pm-skus small { color: var(--ds-text-subtlest); margin-left: 6px; font-size: 12px; }
+  .pm-skus { text-align: right; font-variant-numeric: tabular-nums; }
+  .pm-top { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ds-text-subtle); font-variant-numeric: tabular-nums; } .pm-top b { color: var(--ds-text); font-weight: 600; }
+  @media (max-width: 900px) {
+    .pmix-head, .pmix-row { grid-template-columns: minmax(96px, 1fr) minmax(40px, 1fr) 96px; gap: 8px; }
+    .pmix-head span:nth-child(n+4), .pm-skus, .pm-top { display: none; }
+  }
   /* Search: the "Showing results for" banner and the product suggestions dropdown. */
   .searchnote { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; padding: 8px 12px; border-radius: 6px;
     background: var(--ds-bg-information, var(--ds-bg-selected)); color: var(--ds-text); }

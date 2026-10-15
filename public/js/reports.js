@@ -481,7 +481,6 @@ function render() {
   Object.values(charts).forEach(c => c.destroy()); charts = {};
   lastTable = null;
   $("main").innerHTML = searchBanner() + VIEW_HTML()[ST.tab]();
-  if (ST.tab === "overview" || ST.tab === "sold") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
   $("csv").hidden = !lastTable;
   decorateTables();
@@ -557,7 +556,7 @@ function overviewHtml() {
     ${tile("stock", "Stock value", fmtUsd(sum(rows, r => r._value)), `${fmtInt(sum(rows, r => Math.max(0, r._qoh)))} units on hand`)}
   </section>
   <div class="grid">
-    <section class="card"><h3>Units sold by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
+    ${platformMixHtml()}
     <section class="card"><h3>Running out first</h3><p class="hint">Selling products with the fewest days of stock left. Red means at or under the ${SET.trigger}-day trigger.</p>
       ${table("soon", [PROD, { h: "Live inv", v: r => r._qoh }, { h: "Day ave", v: dayFor, t: "1" }, { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days) }, { h: "Order qty", v: r => r._orderQty }],
         rows.filter(r => r._days != null && (!ST.plat || r._ch[ST.plat] > 0)), { sort: 3, asc: true, size: 10, onRow: showDetail })}</section>
@@ -572,11 +571,31 @@ function overviewHtml() {
       top, { sort: 5 + PERIODS.indexOf(h), onRow: showDetail, main: "top-sellers" })}</section>`;
 }
 
+// Platform mix (Overview and Items sold): one row per platform with its logo, a bar, units, share of all units,
+// how many products sold there and its best seller. A list instead of a chart because TikTok outsells the rest so
+// heavily that small platforms vanish on a shared axis; the numbers and share stay readable for every row.
+// Clicking a row filters every view to that platform (click again to clear).
+function platformMixHtml() {
+  const list = Object.keys(CHANNELS).map(k => {
+    const selling = rows.filter(r => r._ch[k] > 0);
+    const top = selling.reduce((a, r) => !a || r._ch[k] > a._ch[k] ? r : a, null);
+    return { k, units: sum(rows, r => r._ch[k]), skus: selling.length, top };
+  }).sort((a, b) => b.units - a.units);
+  const total = sum(list, x => x.units), max = list[0]?.units || 0;
+  const row = x => `<button type="button" class="pmix-row${ST.plat === x.k ? " on" : ""}" data-plat="${x.k}" title="${ST.plat === x.k ? "Show all platforms" : `Filter every view to ${esc(CHANNELS[x.k])}`}">
+      <span class="pm-name">${platformLogo(x.k)}<span>${esc(CHANNELS[x.k])}</span></span>
+      <span class="pm-bar"><i style="width:${max ? Math.max(x.units ? 1.5 : 0, x.units / max * 100) : 0}%"></i></span>
+      <span class="pm-num"><b>${fmtInt(x.units)}</b><small>${total ? fmtPct(x.units / total) : "—"}</small></span>
+      <span class="pm-skus">${fmtInt(x.skus)} <small>products</small></span>
+      <span class="pm-top">${x.top ? `<b>${esc(x.top.sku)}</b> · ${fmtInt(x.top._ch[x.k])}` : '<span class="muted">no sales</span>'}</span></button>`;
+  return `<section class="card pmix"><h3>Platform mix, last 60 days</h3><p class="hint">Units sold on each platform, its share, how many products sold there and its best seller. Click a platform to filter every view to it.</p>
+    <div class="pmix-head"><span>Platform</span><span></span><span>Units · share</span><span>Selling</span><span>Best seller</span></div>
+    ${list.map(row).join("")}</section>`;
+}
+// Profit by platform chart (Profit & Loss).
 function drawPlatformChart(id, mode) {
   const el = $(id); if (!el || typeof Chart === "undefined") return;
-  const list = mode === "units"
-    ? Object.keys(CHANNELS).map(k => ({ k, label: CHANNELS[k], v: sum(rows, r => r._ch[k]) }))
-    : PL.map(x => ({ k: x.ch, label: x.label, v: sum(rows, r => r._pl[x.k].profit60 ?? 0) }));
+  const list = PL.map(x => ({ k: x.ch, label: x.label, v: sum(rows, r => r._pl[x.k].profit60 ?? 0) }));
   list.sort((a, b) => b.v - a.v);
   const accent = css("--ds-chart-brand"), muted = css("--ds-text-subtlest"), border = css("--ds-border");
   Chart.defaults.font.family = css("--ds-font");
@@ -585,8 +604,8 @@ function drawPlatformChart(id, mode) {
     data: { labels: list.map(x => x.label), datasets: [{ data: list.map(x => x.v),
       backgroundColor: list.map(x => x.k === ST.plat ? css("--ds-chart-warning") : x.v < 0 ? css("--ds-chart-danger") : accent) }] },
     options: { indexAxis: "y", maintainAspectRatio: false, animation: false, plugins: { legend: { display: false },
-        tooltip: { callbacks: { label: c => mode === "units" ? `${fmtInt(c.raw)} units` : fmtUsd(c.raw) } } },
-      scales: { x: { ticks: { color: muted, callback: v => mode === "units" ? fmtInt(v) : fmtUsd(v) }, grid: { color: border } }, y: { ticks: { color: muted }, grid: { display: false } } },
+        tooltip: { callbacks: { label: c => fmtUsd(c.raw) } } },
+      scales: { x: { ticks: { color: muted, callback: v => fmtUsd(v) }, grid: { color: border } }, y: { ticks: { color: muted }, grid: { display: false } } },
       onClick: (e, els) => { if (!els.length) return; const k = list[els[0].index].k; setTimeout(() => { ST.plat = ST.plat === k ? "" : k; render(); }); } },
   });
 }
@@ -622,7 +641,7 @@ function soldHtml() {
     ${kpi("Best seller", best ? esc(best.sku) : "—", best ? `${fmtInt(units(best))} units · ${esc(String(best.name || "").slice(0, 40))}` : "no sales")}
   </section>
   <div class="grid">
-    <section class="card"><h3>Units by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
+    ${platformMixHtml()}
     <section class="card"><h3>By category</h3><p class="hint">Units sold in the last 60 days${p ? ` on ${platName(p)}` : ""}.</p>
       ${table("soldcat", [{ h: "Category", v: x => x.name, l: true, f: x => `<b>${esc(x.name)}</b>` }, { h: "Products sold", v: x => x.skus, total: true },
         { h: "Units", v: x => x.units, total: true }, { h: "Share", v: x => total ? x.units / total : null, t: "pct" }], [...cats.values()],
@@ -1139,7 +1158,7 @@ function exportCsv() {
 // ---------- events ----------
 // One click listener for the whole page; each control is recognised by its data-* attribute or id.
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-tbl][data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,#clearSearch,[data-expand]");
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-plat],[data-cover],[data-vf],[data-h],[data-tbl][data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,#clearSearch,[data-expand]");
   if (!t) return;
   if (t.matches("#fPlat, #fCat, #fTier")) openFilter(t.id);                                  // top bar filters
   else if (t.id === "resetFilters") resetFilters();
@@ -1161,6 +1180,7 @@ document.addEventListener("click", e => {
     render(); window.scrollTo(0, 0);
   }
   else if (t.dataset.show) { ST.show = t.dataset.show; render(); }
+  else if (t.dataset.plat) { ST.plat = ST.plat === t.dataset.plat ? "" : t.dataset.plat; ST.groupPick = null; render(); }
   else if (t.dataset.pf) { ST.plFilter = t.dataset.pf; render(); }
   else if (t.dataset.cover) { ST.cover = +t.dataset.cover; render(); }
   else if (t.dataset.vf) { ST.vf = t.dataset.vf; render(); }
