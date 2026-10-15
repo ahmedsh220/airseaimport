@@ -1,7 +1,7 @@
 # airseaimport
 
 Reports dashboard for Air Sea Import / Fragrance Wholesaler USA. It reads the live product feed at
-`https://hub.fragrancewholesalerusa.com/api/open/products` and turns it into reorder, profit, vendor and stock reports. It also shows TikTok competitor prices from Euka, writes edits back into the pricing workbook in OneDrive, serves password-protected customer wholesale catalogs, and keeps an activity log of who came by and what changed. One Node web service, deployed on Render from `main`.
+the hub's products API (`PRODUCTS_API`) and turns it into reorder, profit, vendor and stock reports. It also shows TikTok competitor prices from Euka, writes edits back into the pricing workbook in OneDrive, serves password-protected customer wholesale catalogs, and keeps an activity log of who came by and what changed. One Node web service, deployed on Render from `main`.
 
 Contents
 
@@ -128,7 +128,7 @@ What never leaves the server: `ADMIN_TOKEN`, catalog passwords (dashboard-set on
 
 | Source | Code | Cache | Used for |
 |---|---|---|---|
-| Products API (`PRODUCTS_API`) | `server.js`, browser | Server: in memory, refreshed in the background when older than 5 minutes. Browser: last good copy in IndexedDB | Everything |
+| Products API (`PRODUCTS_API`) | `server.js` (the browser only calls `/api/products`) | Server: in memory, refreshed in the background when older than 5 minutes. Browser: last good copy in IndexedDB | Everything |
 | Euka Social and Market Intelligence | `lib/competitors.js` | `competitors.json` on disk, each SKU re-searched weekly by default | TikTok competitors tab |
 | Pricing workbook in OneDrive (Microsoft Graph) | `lib/excel.js` | Sheet layout 5 minutes; rows read live | Excel section of a product's detail view, write-back |
 | Hub storefront product list (`HUB_IMAGES_API`) | `lib/catalog.js` | In memory, 6 hours | Catalog pictures (last fallback) |
@@ -139,10 +139,9 @@ The upstream API is slow and sometimes cuts responses off, so loading is defensi
 
 **In the browser** (`load()` in `public/js/reports.js`):
 
-1. Ask the upstream API directly with a 45 second timeout. Browsers reach it over HTTP/2 and that usually works.
-2. If that fails, call our `/api/products` (up to 2 tries, 60 seconds each). The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched.
-3. A good response is saved to IndexedDB (`asi-dashboard` → `kv` → `products`). If both live routes fail, that saved copy is shown with a note saying how old it is.
-4. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again.
+1. Call our `/api/products` (up to 2 tries, 60 seconds each). It needs a signed-in session; the browser never calls the upstream API itself, so its address and its data don't show up in a visitor's network tab. The `x-source` header says `live` or `stale`, and `x-fetched-at` says when the server's copy was fetched.
+2. A good response is saved to IndexedDB (`asi-dashboard` → `kv` → `products`). If the server call fails, that saved copy is shown with a note saying how old it is. The sign-in page deletes it, so signing out or a session running out leaves no product data in the browser.
+3. **Refresh data** repeats this with `?refresh=1`, which makes the server fetch again.
 
 **On the server** (`products()` in `server.js`):
 
@@ -536,7 +535,7 @@ All of these are in `.env.example`. Only `ADMIN_TOKEN` is required.
 
 | Key | Where | What |
 |---|---|---|
-| `asi-dashboard` / `products` | IndexedDB | Last good products list, shown if the API is down |
+| `asi-dashboard` / `products` | IndexedDB | Last good products list, shown if the API is down. Deleted by the sign-in page |
 | `asi-v4-state` | localStorage | Current view, planning period, platform, grouping, filters |
 | `asi-v4-settings` | localStorage | The sheet's numbers (see Settings) |
 | `asi-v4-hidden` | localStorage | Hidden columns in Product master and Items sold |
