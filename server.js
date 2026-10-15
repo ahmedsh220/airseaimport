@@ -18,10 +18,13 @@ const auth = require("./lib/auth");
 const catalog = require("./lib/catalog");
 const competitors = require("./lib/competitors");
 const excel = require("./lib/excel");
+const { rateLimit } = require("./lib/http");
 
 const PORT = process.env.PORT || 3000;
 const API = process.env.PRODUCTS_API || "https://hub.fragrancewholesalerusa.com/api/open/products";
 const CACHE_MS = 5 * 60 * 1000; // the upstream is slow and sometimes cuts off; don't hit it more than needed
+// "Refresh data" re-fetches at most this often; a refresh asked for sooner gets the copy just fetched.
+const MIN_REFRESH_MS = 30 * 1000;
 const PUBLIC = path.join(__dirname, "public");
 // Every image (logos, icon) lives in media/ and is served at /media/.
 const MEDIA = path.join(__dirname, "media");
@@ -128,6 +131,7 @@ function refresh() {
 // Once a copy is in memory, pages never wait on the upstream API: an old copy is served right away
 // while a fresh one loads in the background. Only the very first load after a restart waits.
 async function products(force) {
+  if (force && Date.now() - cache.at < MIN_REFRESH_MS) force = false;
   if (cache.body && !force) {
     if (Date.now() - cache.at >= CACHE_MS) refresh().catch(() => {});
     return cache.body;
@@ -143,11 +147,17 @@ async function productList() {
 }
 
 // Sent with every response: no MIME sniffing, no framing by other sites, no full URLs leaked to other
-// sites, and browsers keep to https once they've seen it.
+// sites, and browsers keep to https once they've seen it. The content policy lets pages run only our own
+// scripts and the pinned chart/PDF/Excel libraries from cdnjs and jsDelivr, and talk only to this server, so
+// injected markup couldn't load outside code or send data elsewhere. Pictures may come from anywhere
+// (competitor listings show TikTok's images).
+const CSP = ["default-src 'self'", "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob: https:", "connect-src 'self'", "object-src 'none'",
+  "base-uri 'none'", "form-action 'self'", "frame-ancestors 'none'"].join("; ");
 function securityHeaders(req, res) {
   res.setHeader("x-content-type-options", "nosniff");
   res.setHeader("x-frame-options", "DENY");
-  res.setHeader("content-security-policy", "frame-ancestors 'none'");
+  res.setHeader("content-security-policy", CSP);
   res.setHeader("referrer-policy", "same-origin");
   if (req.headers["x-forwarded-proto"] === "https") res.setHeader("strict-transport-security", "max-age=15552000");
 }
@@ -157,12 +167,20 @@ function crossSite(req) {
   if (req.method === "GET" || req.method === "HEAD" || !req.headers.origin) return false;
   try { return new URL(req.headers.origin).host !== req.headers.host; } catch { return true; }
 }
+// Requests per IP per minute: everything (a catalog page loads a picture per product, so this is generous),
+// and changes (sign-ins, saves, Excel edits, competitor searches) on their own, tighter limit.
+const anyRequest = rateLimit(600), change = rateLimit(60);
+function tooMany(res) {
+  res.writeHead(429, { "content-type": "text/plain; charset=utf-8", "retry-after": "60", "cache-control": "no-store" });
+  res.end("Too many requests. Wait a minute and try again.");
+}
 // Dashboard pages whose visits go to the activity log.
 const VISITS = { "/index.html": ["REPORTS VISIT", "reports page"], "/catalog-admin.html": ["CATALOG MANAGEMENT VISIT", "Catalog management"] };
 
 async function route(req, res) {
   const url = new URL(req.url, "http://x");
   securityHeaders(req, res);
+  if (url.pathname !== "/healthz" && (anyRequest(req) || (req.method !== "GET" && req.method !== "HEAD" && change(req)))) return tooMany(res);
   if (crossSite(req)) { res.writeHead(403, { "content-type": "text/plain; charset=utf-8" }); res.end("Cross-site request refused."); return; }
   if (await auth.gate(req, res, url)) return;
   // Data answers are never kept by browsers or proxies, so nothing private outlives the session in a cache.
@@ -212,7 +230,6 @@ http.createServer((req, res) => {
   activity.start();
   // Warm the cache at boot so the first visitor after a restart doesn't wait on the upstream API.
   products(true).then(() => console.log("Products cache warmed"), e => console.warn(`Warm-up failed: ${e.message}`));
-  competitors.schedule(productList);
   // Keep trying in the background so a good copy is ready whenever the API answers in full.
   setInterval(() => {
     if (Date.now() - cache.at > CACHE_MS) refresh().catch(() => {});
