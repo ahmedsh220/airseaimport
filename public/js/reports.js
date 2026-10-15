@@ -953,10 +953,16 @@ function floorPrice(r) {
   const free = (r._Q + need) / 0.8;                       // under $30 the buyer pays shipping
   return free < 30 ? cents(free) : cents(Math.max(30, (r._Q + r._AG + need) / 0.8));
 }
+// A listing is on promotion when Euka reports a strike-through (original) price above the current one.
+// "Regular" compares against that original price, so a competitor's temporary sale doesn't drag ours down.
+const onPromo = m => !m.priceIsAvg && m.original > m.price + 0.005;
+const promoPct = m => onPromo(m) ? 1 - m.price / m.original : null;
+const basisPrice = m => ST.compBasis === "regular" && onPromo(m) ? m.original : m.price;
 function compRow(r) {
   const c = COMP?.skus?.[r.sku], m = c?.matches || [];
   // An average selling price (Market Intelligence only, several SKU prices) isn't a listed price.
-  const prices = m.filter(x => !x.priceIsAvg).map(x => x.price).filter(x => x > 0);
+  const prices = m.filter(x => !x.priceIsAvg).map(basisPrice).filter(x => x > 0);
+  const promo = m.filter(onPromo).length;
   const our = r._live.tiktok, low = prices.length ? Math.min(...prices) : null, high = prices.length ? Math.max(...prices) : null;
   const med = median(prices), sold30 = m.reduce((a, x) => a + (x.sold30 || 0), 0), our30 = (r._ch.tt || 0) / 2;
   const floor = floorPrice(r);
@@ -965,7 +971,7 @@ function compRow(r) {
   const suggest = target == null ? null : floor != null && target < floor ? floor : target;
   return { c, m, our, low, med, high, n: m.length, gap: our != null && low != null ? our - low : null,
     gapPct: our != null && low ? (our - low) / low : null, sold30, our30, share: sold30 + our30 > 0 ? our30 / (sold30 + our30) : null,
-    profitLow: ttProfit(r, low), pctLow: ttPct(r, low), floor, suggest, checkedAt: c?.checkedAt, error: c?.error };
+    profitLow: ttProfit(r, low), pctLow: ttPct(r, low), floor, suggest, checkedAt: c?.checkedAt, error: c?.error, promo };
 }
 const CF = { all: "All", undercut: "Undercut", cheapest: "We're cheapest", below: "Comp below our floor", nomatch: "No match", noprice: "No TikTok price" };
 function competitorsHtml() {
@@ -1002,6 +1008,7 @@ function competitorsHtml() {
     <button class="kpi" data-cf="cheapest"><div class="label">We're cheapest</div><div class="value">${fmtInt(cheapest.length)}</div><div class="sub">at or below every match</div></button>
     <div class="kpi"><div class="label">Average gap vs lowest</div><div class="value">${avgGap == null ? "—" : (avgGap > 0 ? "+" : "") + fmtPct(avgGap)}</div><div class="sub">our price vs cheapest competitor</div></div>
     <button class="kpi" data-cf="below"><div class="label">Competitor below our floor</div><div class="value">${fmtInt(below.length)}</div><div class="sub">can't match and keep ${SET.minMargin}% margin</div></button>
+    <div class="kpi"><div class="label">Competitors on promotion</div><div class="value">${fmtInt(sum(matched, o => o.x.promo))}</div><div class="sub">listings selling below their regular price</div></div>
     <div class="kpi"><div class="label">Competitor units, 30 days</div><div class="value">${fmtInt(sum(matched, o => o.x.sold30))}</div><div class="sub">across matched listings (Euka estimate)</div></div>
   </section>`;
   const cols = [PROD, TIER,
@@ -1010,6 +1017,7 @@ function competitorsHtml() {
     { h: "Median", v: o => o.x.med, t: "usd", grp: "Competitors" },
     { h: "Highest", v: o => o.x.high, t: "usd", grp: "Competitors" },
     { h: "Listings", v: o => o.x.n, grp: "Competitors" },
+    { h: "On promo", v: o => o.x.promo, grp: "Competitors", f: o => o.x.promo ? `<span class=warn>${o.x.promo}</span>` : "<span class=muted>0</span>", tip: "Matched listings selling below their regular (strike-through) price right now" },
     { h: "Gap vs lowest", v: o => o.x.gapPct, grp: "Position", f: o => o.x.gapPct == null ? "<span class=muted>—</span>"
       : `<span class="${o.x.gap > 0.005 ? "bad" : "good"}">${o.x.gap > 0 ? "+" : ""}${fmtUsd(o.x.gap)} (${fmtPct(o.x.gapPct)})</span>` },
     { h: "Comp units 30d", v: o => o.x.sold30, grp: "Demand", tip: "Units sold in the last 30 days by the matched listings (Euka)" },
@@ -1026,15 +1034,16 @@ function competitorsHtml() {
       ${mi}
       <button id="compRefresh" style="margin-left:8px" ${C.running ? "disabled" : ""} title="Searches SKUs not searched in the last ${C.minGapHours || 2} hours">Refresh all now</button></p>${kpis}
     <section class="card"><div class="head"><h3>Price comparison</h3>
-      <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div>
+      <div class="row"><label class="t">Compare to</label><div class="seg">${[["sale", "Sale price"], ["regular", "Regular price"]].map(([k, v]) => `<button data-cbasis="${k}" class="${(ST.compBasis || "sale") === k ? "active" : ""}" title="${k === "regular" ? "Ignore competitors' promotions: use their strike-through price when they show one" : "What competitors charge right now, promotions included"}">${v}</button>`).join("")}</div>
+      <div class="seg">${Object.entries(CF).map(([k, v]) => `<button data-cf="${k}" class="${f === k ? "active" : ""}">${v}</button>`).join("")}</div></div></div>
       <p class="hint">Click a product to see each competitor listing, pin the right one or hide a wrong match.</p>
-      ${table("comp", cols, shown, { sort: 7, onRow: o => showCompetitors(o.r), main: "tiktok-competitors", empty: f === "all" ? "No competitor data yet. The first refresh is running or hasn't started." : "Nothing in this group." })}</section>`;
+      ${table("comp", cols, shown, { sort: 8, onRow: o => showCompetitors(o.r), main: "tiktok-competitors", empty: f === "all" ? "No competitor data yet. The first refresh is running or hasn't started." : "Nothing in this group." })}</section>`;
 }
 function showCompetitors(r) {
   const x = compRow(r), ov = COMP?.overrides?.[r.sku] || {};
   const card = (m, near) => `<tr><td class="l wrap">${m.image ? `<img src="${esc(m.image)}" alt="" width="44" height="44" style="border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:8px">` : ""}
       <a href="https://www.tiktok.com/shop/pdp/${encodeURIComponent(m.id)}" target="_blank" rel="noopener">${esc((m.title || m.id).slice(0, 90))}</a><br><span class=muted>${esc(m.shop || "unknown shop")} · match ${Math.round(m.score * 100)}%${m.pinned ? " · pinned" : ""}${m.creators != null ? ` · ${fmtInt(m.creators)} creators, ${fmtInt(m.videos)} videos` : ""}${m.reviews ? ` · ${fmtInt(m.reviews)} reviews` : ""}</span></td>
-    <td>${m.priceIsAvg ? `<span class=muted title="Average selling price over 30 days; not counted in lowest/median">avg ${fmtUsd(m.price)}</span>` : fmtUsd(m.price)}${m.original > m.price ? `<br><span class=muted><s>${fmtUsd(m.original)}</s></span>` : ""}${m.minPrice != null && m.maxPrice > m.minPrice ? `<br><span class=muted title="Cheapest to dearest SKU on this listing">${fmtUsd(m.minPrice)}–${fmtUsd(m.maxPrice)}</span>` : ""}</td><td>${m.shipping ? fmtUsd(m.shipping) : m.shipping === 0 ? "free" : "—"}</td>
+    <td>${m.priceIsAvg ? `<span class=muted title="Average selling price over 30 days; not counted in lowest/median">avg ${fmtUsd(m.price)}</span>` : fmtUsd(m.price)}${onPromo(m) ? `<br><span class=muted><s>${fmtUsd(m.original)}</s></span> <span class="warn" title="On promotion: ${fmtPct(promoPct(m))} below its regular price">−${Math.round(promoPct(m) * 100)}%</span>` : ""}${m.minPrice != null && m.maxPrice > m.minPrice ? `<br><span class=muted title="Cheapest to dearest SKU on this listing">${fmtUsd(m.minPrice)}–${fmtUsd(m.maxPrice)}</span>` : ""}</td><td>${m.shipping ? fmtUsd(m.shipping) : m.shipping === 0 ? "free" : "—"}</td>
     <td>${fmtInt(m.sold30)}${m.growth != null ? `<br><span class="${m.growth >= 0 ? "good" : "bad"}">${m.growth > 0 ? "+" : ""}${Math.round(m.growth)}%</span>` : ""}</td><td>${fmtInt(m.sold)}</td><td>${m.commission != null ? `${+m.commission.toFixed(1)}%` : "—"}</td><td>${m.price != null ? money(ttProfit(r, m.price)) : "—"}</td>
     <td>${near ? `<button data-cact="pin" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Pin as match</button>`
       : `${m.pinned ? `<button data-cact="clear" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Unpin</button>` : ""} <button data-cact="ignore" data-id="${esc(m.id)}" data-sku="${esc(r.sku)}">Not a match</button>`}</td></tr>`;
@@ -1068,10 +1077,11 @@ async function compPost(pathname, body) {
   return out;
 }
 document.addEventListener("click", async e => {
-  const t = e.target.closest("[data-cf],[data-cact],#compRefresh");
+  const t = e.target.closest("[data-cf],[data-cbasis],[data-cact],#compRefresh");
   if (!t) return;
   e.stopPropagation();
   if (t.dataset.cf) { ST.compFilter = t.dataset.cf; render(); return; }
+  if (t.dataset.cbasis) { ST.compBasis = t.dataset.cbasis; render(); return; }
   t.disabled = true;
   if (t.id === "compRefresh") { const out = await compPost("/api/competitors/refresh"); if (out?.message) alert(out.message); if (out) { await loadCompetitors(); render(); } return; }
   const sku = t.dataset.sku, act = t.dataset.cact;
