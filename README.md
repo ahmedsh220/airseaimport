@@ -170,7 +170,7 @@ On a phone the menu button opens the side navigation, and the filters and search
 
 **Page header:** the view's title and **Export CSV** (the main table of the current view, with the filters applied). On a phone the intro text under it shows two lines until tapped, and the tiles sit two to a row.
 
-**Tables:** click a heading to sort. Long tables are paged (25, 50, 100 or 250 rows, 50 by default); totals always cover every row. Product master and Items sold have a **Columns** menu to hide columns, saved per browser.
+**Tables:** click a heading to sort. Every table is paged, so no row is cut off (50 rows a page by default, 10 for the small side tables such as Running out first; totals always cover every row). The expand button at the top right of each table card opens it in a large view (Esc or the button again closes it), where long names show in full. Product master and Items sold have a **Columns** menu to hide columns, saved per browser.
 
 **Plan for the next 7, 14, 30 or 60 days** shows on the Reorder view only. It's a projection (day ave × days), so it only belongs where you plan an order. Every other view shows the API's fixed counts, and projections there (Overview, Product master) use 30 days. Nothing on the page estimates past sales: the API has 60-day units per platform and the 90-day all-platform total the reorder math uses, and nothing shorter.
 

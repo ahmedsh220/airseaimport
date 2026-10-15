@@ -71,7 +71,7 @@
   // ---- Pagination ----
   // Page buttons with gaps (1 … 4 5 6 … 20) and a rows-per-page select. Buttons carry data-page / data-size for the page script.
   function pager(id, page, pages, total, size, sizes = [25, 50, 100, 250]) {
-    if (total <= Math.min(...sizes)) return "";
+    if (total <= Math.min(...sizes) && pages <= 1) return "";
     const nums = [...new Set([1, page - 1, page, page + 1, pages].filter(n => n >= 1 && n <= pages))].sort((a, b) => a - b);
     const btns = []; nums.forEach((n, i) => { if (i && n - nums[i - 1] > 1) btns.push(`<span>…</span>`); btns.push(`<button type="button" data-tbl="${id}" data-page="${n}" class="${n === page ? "active" : ""}">${n}</button>`); });
     const from = (page - 1) * size + 1, to = Math.min(total, page * size);

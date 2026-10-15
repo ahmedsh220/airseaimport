@@ -29,6 +29,19 @@
   td.prod { text-align: left; max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
   td.prod b { font-weight: 600; margin-right: 6px; } td.prod span { color: var(--ds-text-subtlest); }
   td.wrap { white-space: normal; min-width: 280px; }
+  /* Long text in wide tables is clipped to one line (hover shows it all); the large view shows it in full. */
+  .clip { display: inline-block; max-width: var(--w, 320px); overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+  /* Expand button at the top right of every card with a table, and the large view it opens. */
+  .card.has-expand { position: relative; }
+  .card.has-expand > .expand { position: absolute; top: 10px; right: 10px; z-index: 2; width: 32px; min-height: 32px; padding: 0; justify-content: center; }
+  .card.has-expand > .expand svg { width: 18px; height: 18px; }
+  .card.has-expand > h3, .card.has-expand > .head { padding-right: 40px; }
+  body.has-expanded { overflow: hidden; }
+  body.has-expanded::before { content: ""; position: fixed; inset: 0; z-index: 40; background: var(--ds-blanket); }
+  .card.expanded { position: fixed; inset: 24px; z-index: 41; margin: 0; overflow: auto; box-shadow: var(--ds-shadow-overlay); display: flex; flex-direction: column; }
+  .card.expanded .tablewrap { flex: 1; min-height: 0; }
+  .card.expanded td.prod { max-width: none; white-space: normal; }
+  .card.expanded .clip { max-width: none; white-space: normal; }
   /* Rows tinted by the product's tier, with a solid stripe on the left edge. */
   tbody tr[data-tier] td { background: color-mix(in srgb, var(--rowc) 7%, var(--ds-surface-raised)); }
   tbody tr[data-tier] td:first-child { box-shadow: inset 3px 0 0 var(--rowc); }
@@ -47,6 +60,7 @@
     .lead.open { display: block; }
     .chart { height: 240px; }
     .grid { gap: 12px; margin-bottom: 12px; }
+    .card.expanded { inset: 8px; padding: 12px; }
   }
 </style>
 </head>

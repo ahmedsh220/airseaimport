@@ -350,9 +350,10 @@ const soldLabel = () => ST.plat ? `${platName(ST.plat)} 60 days` : `Sold (${SET.
 //           l: left-aligned, prod: product cell, total: add a total in the footer, grp: column group header, tip: header tooltip,
 //           key: a stable name when the header text changes (column picker, tile sorts) }
 //   opts: { sort: column index, asc, onRow: row click handler, main: CSV file name (marks the view's main table),
-//           limit: show only the first N rows with no pagination (small side tables), height: max height of the scroll box,
+//           size: rows per page to start with (10 for the small side tables, 50 otherwise),
 //           hide: Set of hidden column keys, empty: message when there are no rows }
-// Rows are paged (25/50/100/250 per page) unless opts.limit is set; totals always cover every row.
+// Every table is paged, so no row is ever cut off; totals always cover every row. Each card holding a table also
+// gets an expand button (decorateTables) that opens it in a large view.
 const PAGE = {};   // table id → { page, size }
 function table(id, cols, list, opts = {}) {
   const s = SORT[id] || (SORT[id] = { i: opts.sort ?? -1, asc: !!opts.asc });
@@ -366,9 +367,10 @@ function table(id, cols, list, opts = {}) {
   if (opts.main) lastTable = { name: opts.main, cols: vis.map(x => x.c), list };
   if (!list.length) return `<div class="empty">${opts.empty || "Nothing matches the filters."}</div>`;
   // Which rows to draw: the first opts.limit, or the current page.
-  const pg = PAGE[id] || (PAGE[id] = { page: 1, size: 50 }), pages = Math.max(1, Math.ceil(list.length / pg.size));
+  const pg = PAGE[id] || (PAGE[id] = { page: 1, size: opts.size || 50 }), pages = Math.max(1, Math.ceil(list.length / pg.size));
   pg.page = Math.min(Math.max(1, pg.page), pages);
-  const start = opts.limit ? 0 : (pg.page - 1) * pg.size, shown = list.slice(start, opts.limit || start + pg.size);
+  const start = (pg.page - 1) * pg.size, shown = list.slice(start, start + pg.size);
+  const sizes = [...new Set([opts.size || 25, 25, 50, 100, 250])].sort((a, b) => a - b);
   const grp = cols.some(c => c.grp) ? `<tr class="grp">${groupHeads(vis.map(x => x.c))}</tr>` : "";
   const head = vis.map(({ c, i }) => `<th data-t="${id}" data-i="${i}" class="${c.l ? "l" : ""}${s.i === i ? " sorted" + (s.asc ? " asc" : "") : ""}" title="${esc(c.tip || "Sort")}" aria-sort="${s.i === i ? (s.asc ? "ascending" : "descending") : "none"}">${c.h}</th>`).join("");
   const body = shown.map((r, k) => { const t = rowTier(r);
@@ -377,8 +379,7 @@ function table(id, cols, list, opts = {}) {
     return `<td class="${c.prod ? "prod" : c.l ? "l" : ""}">${html}</td>`; }).join("")}</tr>`; }).join("");
   const foot = cols.some(c => c.total) ? `<tfoot><tr>${vis.map(({ c }, j) => `<td class="${c.l || c.prod ? "l" : ""}">${
     c.total ? (FMT[c.t || "int"])(sum(list, c.v)) : j === 0 ? `Total · ${list.length.toLocaleString()} rows` : ""}</td>`).join("")}</tr></tfoot>` : "";
-  const more = opts.limit && list.length > opts.limit ? `<p class="hint" style="margin:8px 0 0">Top ${opts.limit} of ${list.length.toLocaleString()}.</p>` : "";
-  return `<div class="tablewrap" data-scroll="${id}" style="${opts.height ? `max-height:${opts.height}` : ""}"><table><thead>${grp}<tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${more}${opts.limit ? "" : ui.pager(id, pg.page, pages, list.length, pg.size)}`;
+  return `<div class="tablewrap" data-scroll="${id}"><table><thead>${grp}<tr>${head}</tr></thead><tbody>${body}</tbody>${foot}</table></div>${ui.pager(id, pg.page, pages, list.length, pg.size, sizes)}`;
 }
 // Column picker for wide tables: a "Columns" dropdown with a checkbox per column, grouped like the table header.
 // Hidden column keys are saved per table in this browser.
@@ -449,15 +450,47 @@ function render() {
   if (ST.tab === "overview" || ST.tab === "sold") drawPlatformChart("chPlat", "units");
   if (ST.tab === "pl" && !ST.plat) drawPlatformChart("chPlProfit", "profit");
   $("csv").hidden = !lastTable;
+  decorateTables();
   document.querySelectorAll(".tablewrap[data-scroll]").forEach(el => { const s = scrolls[el.dataset.scroll]; if (s) [el.scrollTop, el.scrollLeft] = s; });
   window.scrollTo(window.scrollX, pageY);
   ui.menu.refresh();
 }
+// ---------- large table view ----------
+// Each card that holds a table gets an expand button at its top right. Expanding pins the card over the page
+// (with a dimmed backdrop) so the table gets the whole screen; sorting and paging keep working inside it.
+let EXPANDED = null;   // table id of the card shown large, kept across redraws
+const EXPAND_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>';
+const SHRINK_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14h6v6M20 10h-6V4M10 14l-7 7M14 10l7-7"/></svg>';
+function decorateTables() {
+  let found = false;
+  document.querySelectorAll("#main section.card").forEach(card => {
+    const w = card.querySelector(".tablewrap[data-scroll]"); if (!w) return;
+    const id = w.dataset.scroll, big = EXPANDED === id; found ||= big;
+    card.classList.add("has-expand"); card.classList.toggle("expanded", big);
+    card.insertAdjacentHTML("afterbegin", `<button type="button" class="subtle expand" data-expand="${id}" title="${big ? "Close the large view (Esc)" : "Open in a large view"}" aria-label="${big ? "Close large view" : "Open large view"}">${big ? SHRINK_ICON : EXPAND_ICON}</button>`);
+  });
+  if (!found) EXPANDED = null;
+  document.body.classList.toggle("has-expanded", !!EXPANDED);
+}
+// Small side tables page 10 rows at a time; the large view shows at least 50 and goes back when closed.
+let smallSize = null;
+function toggleExpand(id) {
+  const opening = EXPANDED !== id, pg = PAGE[id];
+  if (EXPANDED && EXPANDED !== id && smallSize) { PAGE[EXPANDED].size = smallSize; smallSize = null; }
+  EXPANDED = opening ? id : null;
+  if (opening && pg && pg.size < 50) { smallSize = pg.size; pg.size = 50; pg.page = 1; return render(); }
+  if (!opening && smallSize && pg) { pg.size = smallSize; pg.page = 1; smallSize = null; return render(); }
+  decorateTablesOnly();
+}
+// Re-mark the cards without redrawing the view (the buttons are replaced, the tables stay as they are).
+function decorateTablesOnly() { document.querySelectorAll("#main .card > .expand").forEach(b => b.remove()); decorateTables(); }
+document.addEventListener("keydown", e => { if (e.key === "Escape" && EXPANDED && !document.querySelector("dialog[open]") && !document.querySelector(".dd-menu:not([hidden])")) toggleExpand(EXPANDED); });
+
 // Switch view (side nav link or code), resetting the per-view drill-downs.
 function goTab(tab) {
   tab = shell.OLD_VIEWS[tab] || tab;
   if (!(tab in TABS)) return;
-  ST.tab = tab; ST.groupPick = null; ST.vendor = ""; ST.masterFilter = "";
+  ST.tab = tab; ST.groupPick = null; ST.vendor = ""; ST.masterFilter = ""; EXPANDED = null;
   if (all.length) render();
   window.scrollTo(0, 0);
 }
@@ -493,7 +526,7 @@ function overviewHtml() {
     <section class="card"><h3>Units sold by platform, last 60 days</h3><p class="hint">Click a bar to filter every view to that platform.</p><div class="chart"><canvas id="chPlat"></canvas></div></section>
     <section class="card"><h3>Running out first</h3><p class="hint">Selling products with the fewest days of stock left. Red means at or under the ${SET.trigger}-day trigger.</p>
       ${table("soon", [PROD, { h: "Live inv", v: r => r._qoh }, { h: "Day ave", v: dayFor, t: "1" }, { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days) }, { h: "Order qty", v: r => r._orderQty }],
-        rows.filter(r => r._days != null && (!ST.plat || r._ch[ST.plat] > 0)), { sort: 3, asc: true, limit: 12, onRow: showDetail, height: "320px" })}</section>
+        rows.filter(r => r._days != null && (!ST.plat || r._ch[ST.plat] > 0)), { sort: 3, asc: true, size: 10, onRow: showDetail })}</section>
   </div>
   <section class="card" id="topCard"><div class="head"><div><h3>Top sellers, projected next ${h} days</h3><p class="hint" style="margin:0">Sorted by projected units. Click a row for the full breakdown.</p></div></div>
     ${table("top", [PROD, TIER, { h: "Live inv", v: r => r._qoh },
@@ -559,7 +592,7 @@ function soldHtml() {
     <section class="card"><h3>By category</h3><p class="hint">Units sold in the last 60 days${p ? ` on ${platName(p)}` : ""}.</p>
       ${table("soldcat", [{ h: "Category", v: x => x.name, l: true, f: x => `<b>${esc(x.name)}</b>` }, { h: "Products sold", v: x => x.skus, total: true },
         { h: "Units", v: x => x.units, total: true }, { h: "Share", v: x => total ? x.units / total : null, t: "pct" }], [...cats.values()],
-        { sort: 2, onRow: x => { ST.cat = x.name === "No category" ? "" : x.name; apply(); }, height: "300px", empty: "No sales in the last 60 days." })}</section>
+        { sort: 2, onRow: x => { ST.cat = x.name === "No category" ? "" : x.name; apply(); }, size: 10, empty: "No sales in the last 60 days." })}</section>
   </div>
   <section class="card"><div class="head"><div><h3>Products</h3><p class="hint">Click a column to sort, a row for the full breakdown.</p></div>
     <div class="row">${columnPicker("sold", cols, ["Product"])}<div class="seg">${[["sold", `Sold (${fmtInt(sold.length)})`], ["all", `All products (${fmtInt(rows.length)})`]].map(([k, v]) => `<button data-ss="${k}" class="${ST.soldShow === k ? "active" : ""}">${v}</button>`).join("")}</div></div></div>
@@ -714,8 +747,8 @@ function masterCols() {
   const h = H();
   return [
     // A few SKUs in the API are long names; cut them so they don't stretch the column.
-    { h: "SKU #", v: r => r.sku, f: r => { const k = String(r.sku ?? ""); return k.length > 18 ? `<span title="${esc(k)}">${esc(k.slice(0, 16))}…</span>` : esc(k); }, l: true, grp: "" },
-    { h: "Product name", v: r => r.name, f: r => `<span title="${esc(r.name)}">${esc(String(r.name || "").slice(0, 48))}</span>`, l: true, grp: "" },
+    { h: "SKU #", v: r => r.sku, f: r => `<span class="clip" style="--w:150px" title="${esc(r.sku)}">${esc(r.sku)}</span>`, l: true, grp: "" },
+    { h: "Product name", v: r => r.name, f: r => `<span class="clip" title="${esc(r.name)}">${esc(r.name)}</span>`, l: true, grp: "" },
     { ...TIER, grp: "" },
     { h: "Days of stock", v: r => r._days, f: r => daysPill(r._days), grp: "Inventory" },
     { h: "Live inv", v: r => r._qoh, grp: "Inventory" },
@@ -1056,10 +1089,11 @@ function exportCsv() {
 // ---------- events ----------
 // One click listener for the whole page; each control is recognised by its data-* attribute or id.
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters");
+  const t = e.target.closest("[data-go],[data-ss],[data-show],[data-pf],[data-cover],[data-vf],[data-h],[data-page],[data-cols],th[data-t],tr[data-t],.dd-trigger,.lead,#ungroup,#unvendor,#resetSet,#clearMasterFilter,#resetFilters,[data-expand]");
   if (!t) return;
   if (t.matches("#fPlat, #fCat, #fTier")) openFilter(t.id);                                  // top bar filters
   else if (t.id === "resetFilters") resetFilters();
+  else if (t.dataset.expand) toggleExpand(t.dataset.expand);
   else if (t.id === "groupBy") ui.selectMenu(t, Object.entries(GROUPS).map(([k, v]) => ({ value: k, label: v[0] })), ST.group, v => { ST.group = v; ST.groupPick = null; render(); });
   else if (t.dataset.cols) openColumnPicker(t.dataset.cols);                                // "Columns" picker
   else if (t.dataset.page) { PAGE[t.dataset.tbl].page = +t.dataset.page; render(); t.closest(".card")?.scrollIntoView({ block: "nearest" }); }
