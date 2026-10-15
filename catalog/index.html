@@ -10,7 +10,7 @@
 <style>
   :root { --text: #14181f; --muted: #5d6675; --border: #d9dde3; --red: #e00000; --green: #d9ead3; --head: #156082; --bg: #fff; --soft: #f4f5f7; --hh: 0px; }
   * { box-sizing: border-box; } [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Aptos Narrow", "Arial Narrow", Arial, system-ui, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--ds-font); }
   /* Brand bar and toolbar stay pinned; the brand bar shrinks to one slim row once the list is scrolled. */
   /* Fixed, with a spacer holding its full height, so shrinking it never moves the page (it used to make the page jump back to the top). */
   header#top { position: fixed; top: 0; left: 0; right: 0; z-index: 6; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--border); backdrop-filter: blur(4px); }
@@ -40,8 +40,11 @@
   .filters .chk:has(input:checked) { background: var(--ds-bg-selected); border-color: var(--ds-border-selected); color: var(--ds-text-selected); }
   .filters .chk:has(input:checked)::before { content: "✓"; font-weight: 700; }
   .filters .chk:has(input:focus-visible) { outline: 2px solid var(--ds-border-focused); outline-offset: 1px; }
-  /* Controls use the catalog's own narrow font, like the rest of the page. */
   button, input, select, .btn { font-family: inherit; }
+  /* List view: under each name, the same tags as the tiles (stock, category, pieces per case). */
+  .tags { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 4px; align-items: center; }
+  .tags .chip { font: 500 11px/16px var(--ds-font); padding: 0 6px; border-radius: 3px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+  @media (min-width: 1201px) { .tags .chip.c { display: none; } }   /* the Category column shows it on wide screens */
   .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--ds-bg-brand-bold); color: #fff; font-size: 11px; line-height: 18px; text-align: center; margin-left: 4px; }
   .meta { color: var(--muted); font-size: 12px; }
   #status { color: var(--muted); font-size: 13px; }
@@ -73,7 +76,7 @@
   /* Stock status: ADS lozenges (success, warning, neutral). */
   .st { display: inline-block; font: 700 11px/16px var(--ds-font); padding: 0 4px; border-radius: 3px; white-space: nowrap; text-transform: uppercase; }
   .st.in { background: var(--ds-bg-success); color: var(--ds-text-success); } .st.qoh { background: var(--ds-bg-warning); color: var(--ds-text-warning); } .st.ask { background: var(--ds-bg-neutral); color: var(--ds-text-subtle); }
-  td.nm .st { margin-left: 6px; vertical-align: 1px; } .tile .st { align-self: flex-start; }
+  .tile .st { align-self: flex-start; }
   .stockpick { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 0 16px 8px; }
   .stockpick .seg button { padding: 6px 12px; } .stockpick .seg button b { font-weight: 700; }
   /* Phone: the two stock choices share the row instead of running off the edge. */
@@ -298,7 +301,7 @@ function render() {
   $("rows").innerHTML = groups.map(([s, g]) => (sorted() ? "" : `<tr class="sec"><td colspan="${nCols()}">${esc(s)}</td></tr>`) + g.map(i => `<tr>
     <td class="new">${i.isNew ? '<span class="tag">NEW</span>' : ""}</td>
     <td class="pic">${pic(i)}</td>
-    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}${stockTag(i)}</td><td class="cat">${esc(i.category)}</td>
+    <td class="sku">${esc(i.sku)}</td><td class="upc">${esc(i.upc)}</td><td class="nm">${esc(i.name)}<div class="tags">${stockTag(i)}<span class="chip c">${esc(i.category)}</span>${i.qty ? `<span class="chip">${i.qty} pcs / case</span>` : ""}</div></td><td class="cat">${esc(i.category)}</td>
     ${pc.map(([h, f]) => `<td class="price" data-h="${h === "CASE PRICE" ? "Case, per piece" : "Piece"}">${money(f(i))}${h === "CASE PRICE" && i.caseUnit != null && i.qty ? `<small>per piece, ${i.qty} pcs / case</small>` : ""}</td>`).join("")}
     <td class="add">${addBtn(i)}</td></tr>`).join("")).join("");
 }
